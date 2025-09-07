@@ -27,7 +27,7 @@ app.add_middleware(
 )
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 SECRET_KEY = "your-secret-key"  # Use env var later
-ENGINE = create_engine("sqlite:///connectsphere.db")
+ENGINE = create_engine("sqlite:///sphereconnect.db")  # Updated from connectsphere.db
 Base = declarative_base()
 
 class User(Base):
