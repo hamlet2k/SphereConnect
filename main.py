@@ -11,13 +11,12 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
 
-# Load environment variables
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Sphere-Connect API")
+app = FastAPI(title="SphereConnect API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -27,7 +26,7 @@ app.add_middleware(
 )
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 SECRET_KEY = "your-secret-key"  # Use env var later
-ENGINE = create_engine("sqlite:///sphereconnect.db")  # Updated from connectsphere.db
+ENGINE = create_engine("sqlite:///sphereconnect.db")
 Base = declarative_base()
 
 class User(Base):
@@ -65,13 +64,13 @@ def send_email(to_email: str, token: str):
     try:
         from email.mime.text import MIMEText
         from smtplib import SMTP
-        msg = MIMEText(f"Your token: {token}\nhttp://sphere-connect.org")
-        msg["Subject"] = "Sphere-Connect Registration"
-        msg["From"] = os.getenv("EMAIL_USER")  # From .env
+        msg = MIMEText(f"Your token: {token}\nhttp://localhost:3000")  # Updated URL
+        msg["Subject"] = "SphereConnect Registration"
+        msg["From"] = os.getenv("EMAIL_USER")
         msg["To"] = to_email
         with SMTP("smtp.gmail.com", 587) as server:
             server.starttls()
-            server.login(os.getenv("EMAIL_USER"), os.getenv("EMAIL_PASS"))  # From .env
+            server.login(os.getenv("EMAIL_USER"), os.getenv("EMAIL_PASS"))
             server.send_message(msg)
         logger.info(f"Email sent to {to_email}")
     except Exception as e:
@@ -80,6 +79,9 @@ def send_email(to_email: str, token: str):
 @app.post("/register")
 def register(request: RegisterRequest, db: Session = Depends(get_db)):
     try:
+        existing_user = db.query(User).filter(User.username == request.username).first()
+        if existing_user:
+            raise HTTPException(status_code=400, detail="Username already exists")
         db_user = User(username=request.username, email=request.email, password=request.password)
         db.add(db_user)
         db.commit()
@@ -88,7 +90,7 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
         return {"message": "Registered, check email"}
     except Exception as e:
         logger.error(f"Registration failed: {e}")
-        raise HTTPException(status_code=500, detail="Registration error")
+        raise HTTPException(status_code=500, detail=f"Registration error: {str(e)}")
 
 @app.post("/token")
 def login(request: LoginRequest, db: Session = Depends(get_db)):
