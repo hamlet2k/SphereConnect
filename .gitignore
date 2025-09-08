@@ -1,17 +1,21 @@
 # dependencies
-/node_modules  # Excludes frontend node_modules globally
+/node_modules
 /.pnp
 .pnp.js
 
 # testing
 /coverage
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
 
 # production
 /build
 
 # misc
 .DS_Store
-.env          # Project-wide env files
+.env
 .env.local
 .env.development.local
 .env.test.local
@@ -20,10 +24,22 @@
 # Python
 __pycache__/
 *.pyc
-env/          # Excludes the virtual environment
+env/
 
 # Database
-*.db          # Excludes all database files
+*.db
 
-# Editor directories and files
+# OS Files
+Thumbs.db
+Desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Editor and IDE files
 .vscode/
+.idea/
+*.swp
+*.swo
+*~
