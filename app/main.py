@@ -6,13 +6,15 @@ from fastapi.security import OAuth2PasswordBearer
 import jwt
 import logging
 from datetime import datetime, timedelta
-from sqlalchemy import create_engine, Column, Integer, String
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
+
+# Import our models and routes
+from .core.models import get_db, create_tables
+from .api.routes import router
 
 load_dotenv()
 
@@ -27,17 +29,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include the API routes
+app.include_router(router, prefix="/api", tags=["sphereconnect"])
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 SECRET_KEY = "your-secret-key"  # Use env var later
-ENGINE = create_engine("sqlite:///sphereconnect.db")
-Base = declarative_base()
 
-class User(Base):
-    __tablename__ = "users"
-    id = Column(Integer, primary_key=True)
-    username = Column(String, unique=True)
-    email = Column(String)
-    password = Column(String)  # Hash in production
+# Create all database tables
+create_tables()
 
 class RegisterRequest(BaseModel):
     username: str
@@ -47,16 +47,6 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     username: str
     password: str
-
-Base.metadata.create_all(bind=ENGINE)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=ENGINE)
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 def create_token(data: dict):
     to_encode = data.copy()
@@ -81,6 +71,7 @@ def send_email(to_email: str, token: str):
 
 @app.post("/register")
 def register(request: RegisterRequest, db: Session = Depends(get_db)):
+    from .core.models import User
     try:
         existing_user = db.query(User).filter(User.username == request.username).first()
         if existing_user:
@@ -97,6 +88,7 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
 
 @app.post("/token")
 def login(request: LoginRequest, db: Session = Depends(get_db)):
+    from .core.models import User
     user = db.query(User).filter(User.username == request.username).first()
     if user and user.password == request.password:
         token = create_token({"sub": request.username})

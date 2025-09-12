@@ -22,7 +22,7 @@ htmlcov/
 .env.development.local
 .env.test.local
 .env.production.local
-.watermark.ps
+.watermark.ps1
 
 # Python
 __pycache__/
