@@ -1,13 +1,19 @@
+# Save to F:\Projects\SphereConnect\app\core\models.py
 from sqlalchemy import Column, UUID, String, JSONB, ARRAY, Boolean, Integer
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
 Base = declarative_base()
 
+class Guild(Base):
+    __tablename__ = 'guilds'
+    id = Column(PG_UUID(as_uuid=True), primary_key=True)
+    name = Column(String, nullable=False)
+
 class Objective(Base):
     __tablename__ = 'objectives'
     id = Column(PG_UUID(as_uuid=True), primary_key=True)
-    guild_id = Column(PG_UUID(as_uuid=True), nullable=False)
+    guild_id = Column(PG_UUID(as_uuid=True), nullable=False, index=True)
     name = Column(String, nullable=False)
     description = Column(JSONB, nullable=False, default={"brief": "", "tactical": "", "classified": "", "metrics": {}})
     preferences = Column(ARRAY(String), default=[])
@@ -23,6 +29,7 @@ class Task(Base):
     __tablename__ = 'tasks'
     id = Column(PG_UUID(as_uuid=True), primary_key=True)
     objective_id = Column(PG_UUID(as_uuid=True), nullable=False)
+    guild_id = Column(PG_UUID(as_uuid=True), nullable=False, index=True)
     name = Column(String, nullable=False)
     description = Column(String)
     status = Column(String, default='Pending')
@@ -37,7 +44,7 @@ class Task(Base):
 class AICommander(Base):
     __tablename__ = 'ai_commanders'
     id = Column(PG_UUID(as_uuid=True), primary_key=True)
-    guild_id = Column(PG_UUID(as_uuid=True), nullable=False)
+    guild_id = Column(PG_UUID(as_uuid=True), nullable=False, index=True)
     name = Column(String, nullable=False, default='UEE Commander')
     phonetic = Column(String)
     system_prompt = Column(String, nullable=False, default='Act as a UEE Commander...')
