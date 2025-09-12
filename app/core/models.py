@@ -10,8 +10,25 @@ import os
 
 Base = declarative_base()
 
-# Database setup
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///sphereconnect.db")
+# Database setup - Load from .env.local for PostgreSQL
+env_local_path = os.path.join(os.path.dirname(__file__), '..', '..', '.env.local')
+if os.path.exists(env_local_path):
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(env_local_path)
+        print("✓ Loaded .env.local configuration from models.py")
+    except ImportError:
+        print("Warning: python-dotenv not installed, using environment variables")
+
+# PostgreSQL configuration from environment
+DB_USER = os.getenv('DB_USER', 'postgres')
+DB_PASS = os.getenv('DB_PASS', 'password')
+DB_HOST = os.getenv('DB_HOST', 'localhost')
+DB_PORT = os.getenv('DB_PORT', '5432')
+DB_NAME = os.getenv('DB_NAME', 'sphereconnect')
+
+# Create PostgreSQL engine
+DATABASE_URL = f'postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}'
 ENGINE = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=ENGINE)
 

@@ -2,7 +2,7 @@ fastapi
 uvicorn
 sqlalchemy
 psycopg2-binary  # For PostgreSQL, or sqlite3 if testing locally
-python-jwt       # For JWT
+PyJWT            # For JWT token handling
 emails           # For SMTP (optional, replace with sendgrid if preferred)
 flask
 flask-cors
