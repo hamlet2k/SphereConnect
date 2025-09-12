@@ -23,6 +23,9 @@ htmlcov/
 .env.test.local
 .env.production.local
 .watermark.ps1
+.watermark-duplicate.ps1
+.watermark-remove.ps1
+.watermark-replace.ps1
 
 # Python
 __pycache__/
