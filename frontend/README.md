@@ -1,3 +1,6 @@
+# Copyright 2025 [Your Legal Name]. All Rights Reserved.
+# Confidential - Do Not Distribute Without Permission.
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).

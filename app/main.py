@@ -1,3 +1,6 @@
+# Copyright 2025 [Your Legal Name]. All Rights Reserved.
+# Confidential - Do Not Distribute Without Permission.
+
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 import jwt

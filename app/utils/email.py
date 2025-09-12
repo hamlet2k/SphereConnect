@@ -1,3 +1,6 @@
+# Copyright 2025 [Your Legal Name]. All Rights Reserved.
+# Confidential - Do Not Distribute Without Permission.
+
 import smtplib
 import os
 from email.mime.text import MIMEText

@@ -1,3 +1,6 @@
+# Copyright 2025 [Your Legal Name]. All Rights Reserved.
+# Confidential - Do Not Distribute Without Permission.
+
 -- Save to F:\Projects\SphereConnect\db\schema\task_schema.sql
 CREATE TABLE tasks (
     id UUID PRIMARY KEY,

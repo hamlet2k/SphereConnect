@@ -1,7 +1,9 @@
-# Save to F:\Projects\SphereConnect\app\core\models.py
-from sqlalchemy import Column, UUID, String, JSONB, ARRAY, Boolean, Integer
+# Copyright 2025 [Your Legal Name]. All Rights Reserved.
+# Confidential - Do Not Distribute Without Permission.
+
+from sqlalchemy import Column, String, Boolean, Integer
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.dialects.postgresql import JSONB, ARRAY, UUID as PG_UUID
 
 Base = declarative_base()
 
@@ -47,5 +49,5 @@ class AICommander(Base):
     guild_id = Column(PG_UUID(as_uuid=True), nullable=False, index=True)
     name = Column(String, nullable=False, default='UEE Commander')
     phonetic = Column(String)
-    system_prompt = Column(String, nullable=False, default='Act as a UEE Commander...')
+    system_prompt = Column(String, nullable=False, default='Act as a UEE Commander, coordinating Star Citizen guild missions with formal, strategic responses.')
     user_prompt = Column(String, default='')

@@ -1,3 +1,6 @@
+# Copyright 2025 [Your Legal Name]. All Rights Reserved.
+# Confidential - Do Not Distribute Without Permission.
+
 # Update previous artifact to handle structured descriptions
 import requests
 import json

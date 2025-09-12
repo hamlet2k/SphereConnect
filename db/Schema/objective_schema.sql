@@ -1,3 +1,6 @@
+# Copyright 2025 [Your Legal Name]. All Rights Reserved.
+# Confidential - Do Not Distribute Without Permission.
+
 -- Save to F:\Projects\SphereConnect\db\schema\objective_schema.sql
 CREATE TABLE objectives (
     id UUID PRIMARY KEY,
