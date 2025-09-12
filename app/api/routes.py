@@ -1,4 +1,4 @@
-# Copyright 2025 [Your Legal Name]. All Rights Reserved.
+# Copyright 2025 Federico Arce. All Rights Reserved.
 # Confidential - Do Not Distribute Without Permission.
 
 from fastapi import APIRouter, Depends, HTTPException
