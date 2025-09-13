@@ -2,7 +2,7 @@ import sys
 import os
 import time
 from unittest.mock import Mock, patch
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'app'))
 
 from api.src.wingman_skill_poc import WingmanSkill
 

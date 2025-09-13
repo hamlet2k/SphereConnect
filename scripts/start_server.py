@@ -5,7 +5,7 @@ SphereConnect Server Startup Script
 This script starts the FastAPI server for ConnectSphere with Wingman-AI integration.
 
 Usage:
-    python start_server.py
+    python scripts/start_server.py
 
 The server will start on http://localhost:8000 with the following endpoints:
 - FastAPI: http://localhost:8000/docs (Swagger UI)
@@ -25,6 +25,12 @@ Wingman-AI Skill Endpoints:
 
 import uvicorn
 import os
+import sys
+
+# Add the project root to Python path so we can import app modules
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+
 from app.core.models import create_tables
 
 def main():

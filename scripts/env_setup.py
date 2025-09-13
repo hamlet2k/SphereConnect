@@ -59,5 +59,5 @@ if __name__ == "__main__":
     create_env_template()
     print("\n📖 Next steps:")
     print("1. Update .env.local with your PostgreSQL credentials")
-    print("2. Run: python test_data.py")
-    print("3. Start server: python start_server.py")
+    print("2. Run: python scripts/test_data.py")
+    print("3. Start server: python scripts/start_server.py")

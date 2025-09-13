@@ -8,9 +8,9 @@ This script safely removes test data created by test_data.py from the PostgreSQL
 It respects foreign key constraints by deleting in the correct order.
 
 Usage:
-    python purge_test_data.py              # Interactive mode with confirmation
-    python purge_test_data.py --force      # Skip confirmation prompts
-    python purge_test_data.py --dry-run    # Show what would be deleted without actually deleting
+    python scripts/purge_test_data.py              # Interactive mode with confirmation
+    python scripts/purge_test_data.py --force      # Skip confirmation prompts
+    python scripts/purge_test_data.py --dry-run    # Show what would be deleted without actually deleting
 """
 
 import sys
