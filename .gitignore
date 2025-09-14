@@ -51,3 +51,6 @@ logs/
 # Skill Dependencies
 wingman-ai/skills/api_request/dependencies/*
 wingman-ai/skills/sphereconnect/dependencies/*
+
+#Skill Messages
+wingman-ai/configs/*/*.last-message.txt
