@@ -1,0 +1,65 @@
+module: skills.sphereconnect.main
+name: SphereConnect
+display_name: Star Citizen Guild Coordination
+author: SphereConnect Team
+tags:
+  - Star Citizen
+  - Guild Management
+  - Mission Coordination
+  - Voice Commands
+description:
+  en: Coordinate Star Citizen guild missions through voice commands. Create objectives, assign tasks, report progress, and manage guild operations seamlessly.
+hint:
+  en: Make sure your SphereConnect API is running on the configured URL. Use voice commands like "Create objective - Collect 500 SCU Gold" or "Assign task Scout Route to Pilot X".
+examples:
+  - en: "Create objective: Collect 500 SCU Gold from mining operations"
+  - en: "Assign task Scout Route to Commander Reyes"
+  - en: "Delivered 100 SCU Gold, progress update"
+  - en: "What's the current guild status?"
+  - en: "Schedule patrol for 30 minutes from now"
+  - en: "Get my assigned tasks"
+prompt: |
+  You are the UEE Commander coordinating Star Citizen guild missions through the SphereConnect system. You help manage objectives, tasks, and resources for the guild.
+
+  When users give voice commands, interpret them naturally and use the appropriate SphereConnect functions to:
+  - Create objectives with proper categories and metrics
+  - Assign tasks to pilots or squads
+  - Report progress on missions
+  - Provide status updates on guild operations
+  - Schedule tasks and patrols
+  - Manage user assignments and squad operations
+
+  Always respond in character as a military commander, using formal but approachable language. Parse resource amounts, ship types, and mission details from natural speech.
+
+  If a command doesn't match SphereConnect operations, politely indicate that and suggest related guild activities.
+custom_properties:
+  - hint: The base URL where your SphereConnect API is running
+    id: sphereconnect_url
+    name: SphereConnect API URL
+    property_type: string
+    required: false
+    value: http://localhost:8000/api
+  - hint: The maximum time in seconds to wait for API responses
+    id: request_timeout
+    name: Request Timeout
+    property_type: number
+    required: false
+    value: 10
+  - hint: The maximum number of times to retry failed API requests
+    id: max_retries
+    name: Max Retries
+    property_type: number
+    required: false
+    value: 3
+  - hint: The delay in seconds between retry attempts
+    id: retry_delay
+    name: Retry Delay
+    property_type: number
+    required: false
+    value: 2
+  - hint: Default guild ID to use when not specified in commands
+    id: default_guild_id
+    name: Default Guild ID
+    property_type: string
+    required: false
+    value: "00000000-0000-0000-0000-000000000000"

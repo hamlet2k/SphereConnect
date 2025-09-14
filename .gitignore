@@ -12,8 +12,6 @@ htmlcov/
 
 # production
 /build
-/docs
-/prompts
 
 # misc
 .DS_Store
@@ -49,3 +47,7 @@ logs/
 *.swp
 *.swo
 *~
+
+# Skill Dependencies
+wingman-ai/skills/api_request/dependencies/*
+wingman-ai/skills/sphereconnect/dependencies/*

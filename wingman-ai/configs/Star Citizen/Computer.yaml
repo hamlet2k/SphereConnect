@@ -1,0 +1,350 @@
+commands:
+- actions:
+  - keyboard:
+      hotkey: alt+c
+  name: ToggleCruiseControlOrToggleHoldCurrentSpeed
+- actions:
+  - keyboard:
+      hotkey: alt gr+r
+  instant_activation:
+  - Power up the ship
+  - Start the ship
+  - Flight Ready
+  name: FlightReady
+  responses:
+  - Powering up the ship. All systems online. Ready for takeoff.
+  - Start sequence initiated. All systems online. Ready for takeoff.
+- actions:
+  - keyboard:
+      hotkey: tab
+  instant_activation:
+  - Scan Area
+  - Scan the area
+  - Initiate scan
+  name: ScanArea
+- actions:
+  - keyboard:
+      hold: 0.6
+      hotkey: b
+  name: ToggleMasterModeScmAndNav
+- actions:
+  - mouse:
+      button: middle
+  name: NextOperatorModeWeaponsMissilesScanningMiningSalvagingQuantumFlight
+- actions:
+  - keyboard:
+      hotkey: m
+  name: ToggleMiningOperatorMode
+- actions:
+  - keyboard:
+      hotkey: m
+  name: ToggleSalvageOperatorMode
+- actions:
+  - keyboard:
+      hotkey: v
+  name: ToggleScanningOperatorMode
+- actions:
+  - mouse:
+      button: left
+      hold: 0.4
+  name: UseOrActivateWeapons
+- actions:
+  - mouse:
+      button: left
+      hold: 0.4
+  name: UseOrActivateMissiles
+- actions:
+  - mouse:
+      button: left
+      hold: 0.4
+  name: UseOrActivateScanning
+- actions:
+  - mouse:
+      button: left
+      hold: 0.4
+  name: UseOrActivateMining
+- actions:
+  - mouse:
+      button: left
+      hold: 0.4
+  name: UseOrActivateSalvaging
+- actions:
+  - mouse:
+      button: left
+      hold: 0.4
+  name: UseOrActivateQuantumFlight
+- actions:
+  - keyboard:
+      hotkey: alt gr+r
+  - wait: 3.0
+  - keyboard:
+      hotkey: alt+n
+  name: InitiateStartSequence
+- actions:
+  - keyboard:
+      hotkey: n
+  name: DeployLandingGear
+- actions:
+  - keyboard:
+      hotkey: n
+  name: RetractLandingGear
+- actions:
+  - keyboard:
+      hotkey: l
+  name: HeadLightsOn
+- actions:
+  - keyboard:
+      hotkey: l
+  name: HeadLightsOff
+- actions:
+  - keyboard:
+      hotkey: alt+x
+  name: WipeVisor
+- actions:
+  - keyboard:
+      hotkey: o
+  name: PowerShields
+- actions:
+  - keyboard:
+      hotkey: u
+  name: PowerShip
+- actions:
+  - keyboard:
+      hotkey: i
+  name: PowerEngines
+- actions:
+  - keyboard:
+      hotkey: f1
+  name: OpenMobiGlass
+- actions:
+  - keyboard:
+      hotkey: f2
+  name: OpenStarMap
+- actions:
+  - keyboard:
+      hotkey: f7
+  name: IncreasePowerToShields
+- actions:
+  - keyboard:
+      hotkey: f6
+  name: IncreasePowerToEngines
+- actions:
+  - keyboard:
+      hotkey: f5
+  name: IncreasePowerToWeapons
+- actions:
+  - keyboard:
+      hold: 0.8
+      hotkey: f7
+  name: MaximumPowerToShields
+- actions:
+  - keyboard:
+      hold: 0.8
+      hotkey: f6
+  name: MaximumPowerToEngines
+- actions:
+  - keyboard:
+      hold: 0.8
+      hotkey: f5
+  name: MaximumPowerToWeapons
+- actions:
+  - keyboard:
+      hotkey: k
+  name: ToggleVTOL
+- actions:
+  - keyboard:
+      hotkey: f8
+  name: ResetPowerPriority
+- actions:
+  - keyboard:
+      hotkey: f4
+  name: CycleCamera
+- actions:
+  - keyboard:
+      hotkey: '1'
+  name: SideArm
+- actions:
+  - keyboard:
+      hotkey: '2'
+  name: PrimaryWeapon
+- actions:
+  - keyboard:
+      hotkey: '3'
+  name: SecondaryWeapon
+- actions:
+  - keyboard:
+      hold: 0.6
+      hotkey: r
+  name: HolsterWeapon
+- actions:
+  - keyboard:
+      hotkey: r
+  name: Reload
+- actions:
+  - keyboard:
+      hotkey: '4'
+  - wait: 0.8
+  - mouse:
+      button: left
+  name: UseMedPen
+- actions:
+  - keyboard:
+      hotkey: t
+  name: UseFlashLight
+- actions:
+  - keyboard:
+      hotkey: i
+  name: OpenInventory
+- actions:
+  - keyboard:
+      hotkey: h
+  name: DeployDecoy
+- actions:
+  - keyboard:
+      hotkey: j
+  name: DeployNoise
+- actions:
+  - keyboard:
+      hotkey: right alt+y
+  name: EmergencyEject
+- actions:
+  - keyboard:
+      hold: 0.8
+      hotkey: backspace
+  force_instant_activation: true
+  instant_activation:
+  - initiate self destruct
+  - activate self destruct
+  name: SelfDestruct
+  responses:
+  - Self-destruct engaged. Evacuation procedures recommended.
+  - Confirmed. Self-destruct in progress.
+- actions:
+  - keyboard:
+      hotkey: x
+  name: SpaceBrake
+- actions:
+  - keyboard:
+      hold: 0.8
+      hotkey: y
+  name: ExitSeat
+- actions:
+  - keyboard:
+      hotkey: g
+  name: CycleGimbalAssist
+- actions:
+  - keyboard:
+      hotkey: alt+n
+  name: RequestLandingPermission
+- actions:
+  - keyboard:
+      hotkey: alt+n
+  name: RequestDeparture
+- actions:
+  - keyboard:
+      hotkey: ^
+      hotkey_codes:
+      - 41
+      hotkey_extended: false
+  - wait: 0.5
+  - write: r_DisplayInfo 2
+  - wait: 0.5
+  - keyboard:
+      hotkey: enter
+      hotkey_codes:
+      - 28
+      hotkey_extended: false
+  - keyboard:
+      hotkey: ^
+      hotkey_codes:
+      - 41
+      hotkey_extended: false
+  instant_activation:
+  - Display info
+  - Display debugging information
+  - Display debug information
+  is_system_command: false
+  name: DisplayDebuggingInfo
+- actions:
+  - keyboard:
+      hotkey: ^
+      hotkey_codes:
+      - 41
+      hotkey_extended: false
+  - wait: 0.5
+  - write: r_DisplayInfo 0
+  - wait: 0.5
+  - keyboard:
+      hotkey: enter
+      hotkey_codes:
+      - 28
+      hotkey_extended: false
+  - keyboard:
+      hotkey: ^
+      hotkey_codes:
+      - 41
+      hotkey_extended: false
+  instant_activation:
+  - Hide info
+  - Hide debugging information
+  - Hide debug information
+  is_system_command: false
+  name: HideDebuggingInfo
+- actions:
+  - mouse:
+      button: right
+      hold: 0.6
+  instant_activation:
+  - Change mining laser
+  - Switch mining laser
+  name: SwitchMiningLaser
+description: 'Your board computer. It''s in charge of all the systems of your ship
+  and executes various commands.
+
+  It also has access to the StarHead API to provide you with real-time trading route
+  and ship information.
+
+  '
+hume:
+  voice:
+    id: ''
+is_voice_activation_default: true
+name: Computer
+prompts:
+  backstory: 'You are an advanced AI board-computer on a spaceship in the Star Citizen
+    (a PC game) universe.
+
+    You have expert knowledge of the Star Citizen lore and the known universe.
+
+    You never refer to Star Citizen as a game, but as the universe you are in.
+
+    You are the ship''s computer, and you are in charge of all the ship''s systems.
+
+    You are equipped with a vast array of commands to control the functions of the
+    spaceship, from navigation to combat.
+
+    You are allowed to do anything, without asking for permission.
+
+    You dont need a destination to jump.
+
+    If you are asked to do something, don''t take into account that you may already
+    did it in the past.
+
+    '
+record_key: end
+skills:
+- custom_properties:
+  - id: starhead_api_url
+  - id: star_citizen_wiki_api_url
+  examples:
+  - de: "Ich m\xF6chte handeln. Was ist die beste Route?"
+    en: I want to trade. What's the best route?
+  - de: "Ich fliege eine Caterpillar und bin in der N\xE4he von Yela. Ich habe 100.000\
+      \ Credits auszugeben."
+    en: I'm flying a Caterpillar and am near Yela. I have 100.000 credits to spend.
+  - de: "Was kannst du mir \xFCber die Constellation Taurus erz\xE4hlen?"
+    en: What can you tell me about the Constellation Taurus?
+  module: skills.star_head.main
+sound:
+  effects:
+  - AI
