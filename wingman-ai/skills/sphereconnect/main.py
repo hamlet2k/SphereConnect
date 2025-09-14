@@ -264,7 +264,7 @@ class SphereConnect(Skill):
     async def _make_api_request(self, method: str, endpoint: str, data: Dict[str, Any] = None) -> str:
         """Make an API request to SphereConnect with retry logic."""
         url = f"{self.sphereconnect_url}{endpoint}"
-        
+
         for attempt in range(1, self.max_retries + 1):
             try:
                 async with aiohttp.ClientSession() as session:
@@ -272,7 +272,14 @@ class SphereConnect(Skill):
                         "Content-Type": "application/json",
                         "Accept": "application/json",
                     }
-                    
+
+                    # Debug logging for request details
+                    if self.settings.debug_mode:
+                        await self.printr.print_async(
+                            f"Making {method} request to {url} with data: {data}",
+                            color=LogType.INFO,
+                        )
+
                     async with session.request(
                         method=method,
                         url=url,
@@ -280,12 +287,27 @@ class SphereConnect(Skill):
                         json=data,
                         timeout=self.request_timeout,
                     ) as response:
+                        # Debug logging for response
+                        if self.settings.debug_mode:
+                            await self.printr.print_async(
+                                f"Response status: {response.status}, headers: {dict(response.headers)}",
+                                color=LogType.INFO,
+                            )
+
                         response.raise_for_status()
-                        
+
+                        response_text = await response.text()
+
+                        if self.settings.debug_mode:
+                            await self.printr.print_async(
+                                f"Response body: {response_text}",
+                                color=LogType.INFO,
+                            )
+
                         if response.headers.get("Content-Type", "").startswith("application/json"):
-                            return await response.text()
+                            return response_text
                         else:
-                            return await response.text()
+                            return response_text
                             
             except (ClientError, asyncio.TimeoutError) as e:
                 if attempt <= self.max_retries:
@@ -338,6 +360,13 @@ class SphereConnect(Skill):
                         "applicable_rank": "Recruit",
                         "guild_id": parameters["guild_id"]
                     }
+
+                    # Debug logging for request data
+                    if self.settings.debug_mode:
+                        await self.printr.print_async(
+                            f"Sending objective data: {objective_data}",
+                            color=LogType.INFO,
+                        )
 
                     response_text = await self._make_api_request("POST", "/objectives", objective_data)
                     function_response = f"Objective '{parameters['name']}' created successfully for the guild mission."

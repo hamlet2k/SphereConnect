@@ -93,23 +93,17 @@ def parse_schedule_from_text(text: str) -> Dict[str, Any]:
 
     return schedule
 
-def create_adhoc_squad(db: Session, guild_id: str, user_id: str) -> str:
+def create_adhoc_squad(db: Session, guild_id: str, user_id: str = None) -> str:
     """Create an ad-hoc squad if none exists"""
-    # Check if user has an existing squad
-    existing_squad = db.query(Squad).filter(
-        Squad.guild_id == uuid.UUID(guild_id),
-        Squad.lead_id == uuid.UUID(user_id)
-    ).first()
-
-    if existing_squad:
-        return str(existing_squad.id)
+    # For ad-hoc, just create a new squad without checking existing
+    # Since user_id might be None or random
 
     # Create new ad-hoc squad
     squad = Squad(
         id=uuid.uuid4(),
         guild_id=uuid.UUID(guild_id),
         name=f"Ad-hoc Squad - {datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
-        lead_id=uuid.UUID(user_id)
+        lead_id=None  # Don't set lead_id for ad-hoc squad
     )
     db.add(squad)
     db.commit()
@@ -259,7 +253,7 @@ async def create_task(task: TaskCreate, db: Session = Depends(get_db)):
         # Create ad-hoc squad if not provided
         squad_id = task.squad_id
         if not squad_id:
-            squad_id = create_adhoc_squad(db, task.guild_id, str(uuid.uuid4()))
+            squad_id = create_adhoc_squad(db, task.guild_id, None)  # No user_id for ad-hoc
 
         new_task = Task(
             id=task_id,

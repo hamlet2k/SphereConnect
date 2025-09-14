@@ -16,7 +16,7 @@ if os.path.exists(env_local_path):
     try:
         from dotenv import load_dotenv
         load_dotenv(env_local_path)
-        print("✓ Loaded .env.local configuration from models.py")
+        print("Loaded .env.local configuration from models.py")
     except ImportError:
         print("Warning: python-dotenv not installed, using environment variables")
 
