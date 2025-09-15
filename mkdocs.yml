@@ -1,0 +1,170 @@
+site_name: SphereConnect Documentation
+site_description: AI-driven coordination for Star Citizen guilds
+site_author: SphereConnect Team
+site_url: https://docs.sphereconnect.com
+
+# Repository
+repo_name: your-org/sphereconnect
+repo_url: https://github.com/your-org/sphereconnect
+edit_uri: edit/main/docs/
+
+# Copyright
+copyright: Copyright &copy; 2024 SphereConnect Team
+
+# Theme
+theme:
+  name: material
+  language: en
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+  features:
+    - announce.dismiss
+    - content.action.edit
+    - content.action.view
+    - content.code.annotate
+    - content.code.copy
+    - content.code.select
+    - content.footnote.tooltips
+    - content.tabs.link
+    - content.tooltips
+    - header.autohide
+    - navigation.expand
+    - navigation.footer
+    - navigation.indexes
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.instant.progress
+    - navigation.prune
+    - navigation.sections
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.top
+    - navigation.tracking
+    - search.highlight
+    - search.share
+    - search.suggest
+    - toc.follow
+    - toc.integrate
+
+# Plugins
+plugins:
+  - search
+  - coverage:
+      page_name: test-coverage
+      html_report_dir: htmlcov
+      xml_report: coverage.xml
+
+# Extensions
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - meta
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      normalize_issue_symbols: true
+      repo_url_shorthand: true
+      user: your-org
+      repo: sphereconnect
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets:
+      check_paths: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+      combine_header_slug: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+# Navigation
+nav:
+  - Home: index.md
+  - Setup:
+      - Installation: setup/installation.md
+      - Configuration: setup/configuration.md
+      - Deployment: setup/deployment.md
+  - User Manual:
+      - Getting Started: user-manual/getting-started.md
+      - Voice Commands: user-manual/voice-commands.md
+      - Web Interface: user-manual/web-interface.md
+      - Troubleshooting: user-manual/troubleshooting.md
+  - API Reference:
+      - Authentication: api-reference/authentication.md
+      - Objectives: api-reference/objectives.md
+      - Tasks: api-reference/tasks.md
+      - Wingman-AI: api-reference/wingman-ai.md
+  - Developer Guide:
+      - Architecture: developer/architecture.md
+      - Database Schema: developer/database-schema.md
+      - Contribution: developer/contribution.md
+      - Testing: developer/testing.md
+      - Test Coverage: test-coverage.md
+  - Project:
+      - Proposal: project/proposal.md
+      - Plan: project/plan.md
+      - Changelog: project/changelog.md
+  - Tools:
+      - Purge Script: tools/purge-script.md
+
+# Additional CSS
+extra_css:
+  - stylesheets/extra.css
+
+# Additional JavaScript
+extra_javascript:
+  - javascripts/extra.js
+
+# Extra
+extra:
+  version:
+    provider: mike
+    default: latest
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/your-org/sphereconnect
+    - icon: fontawesome/brands/discord
+      link: https://discord.gg/sphereconnect
+  generator: false
+
+# Validation
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn

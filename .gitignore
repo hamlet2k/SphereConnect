@@ -44,9 +44,11 @@ logs/
 # Editor and IDE files
 .vscode/
 .idea/
+.kilocode/
 *.swp
 *.swo
 *~
+.kilocodemodes
 
 # Skill Dependencies
 wingman-ai/skills/api_request/dependencies/*

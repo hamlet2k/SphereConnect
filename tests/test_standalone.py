@@ -100,8 +100,8 @@ for cmd, expected in test_cases:
     intent, params = skill.parse_intent(cmd)
     is_correct = intent == expected
     correct_intents += 1 if is_correct else 0
-    status = '✓' if is_correct else '✗'
-    print(f'  {status} "{cmd[:30]}..." → {intent or "None"} (expected: {expected})')
+    status = '[PASS]' if is_correct else '[FAIL]'
+    print(f'  {status} "{cmd[:30]}..." -> {intent or "None"} (expected: {expected})')
 
 parsing_accuracy = (correct_intents / len(test_cases)) * 100
 
@@ -117,8 +117,8 @@ for text, expected in metric_tests:
     metrics = skill.parse_metrics_from_text(text)
     is_correct = metrics == expected
     correct_metrics += 1 if is_correct else 0
-    status = '✓' if is_correct else '✗'
-    print(f'  {status} "{text}" → {metrics} (expected: {expected})')
+    status = '[PASS]' if is_correct else '[FAIL]'
+    print(f'  {status} "{text}" -> {metrics} (expected: {expected})')
 
 metric_accuracy = (correct_metrics / len(metric_tests)) * 100
 
@@ -128,15 +128,15 @@ latency_ok = avg_latency < 2.0 and max_latency < 2.0
 accuracy_ok = overall_accuracy >= 90.0
 parsing_ok = parsing_accuracy >= 90.0
 
-print(f'  ✓ Latency < 2s: {"PASS" if latency_ok else "FAIL"}')
-print(f'  ✓ Overall Accuracy >= 90%: {"PASS" if accuracy_ok else "FAIL"} ({overall_accuracy:.1f}%)')
-print(f'  ✓ Intent Detection >= 90%: {"PASS" if parsing_ok else "FAIL"} ({parsing_accuracy:.1f}%)')
-print(f'  ✓ Metric Parsing: {"PASS" if metric_accuracy >= 80 else "FAIL"} ({metric_accuracy:.1f}%)')
+print(f'  [PASS] Latency < 2s: {"PASS" if latency_ok else "FAIL"}')
+print(f'  [PASS] Overall Accuracy >= 90%: {"PASS" if accuracy_ok else "FAIL"} ({overall_accuracy:.1f}%)')
+print(f'  [PASS] Intent Detection >= 90%: {"PASS" if parsing_ok else "FAIL"} ({parsing_accuracy:.1f}%)')
+print(f'  [PASS] Metric Parsing: {"PASS" if metric_accuracy >= 80 else "FAIL"} ({metric_accuracy:.1f}%)')
 
 all_passed = latency_ok and accuracy_ok and parsing_ok and metric_accuracy >= 80
 
 if all_passed:
-    print('\n🎉 ALL REQUIREMENTS MET!')
+    print('\n[SUCCESS] ALL REQUIREMENTS MET!')
     print('Wingman-AI skill is ready for production use.')
 else:
     print('\n⚠️ Some requirements not fully met.')

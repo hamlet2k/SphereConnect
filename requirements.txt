@@ -9,3 +9,6 @@ flask-cors
 pytest
 requests
 python-dotenv
+bcrypt           # For password and PIN hashing
+pyotp            # For TOTP MFA
+slowapi          # For rate limiting

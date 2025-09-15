@@ -8,7 +8,6 @@ CREATE TABLE objectives (
     name TEXT NOT NULL,
     description JSONB NOT NULL DEFAULT '{"brief": "", "tactical": "", "classified": "", "metrics": {}}',
     preferences TEXT[] DEFAULT '{}',
-    categories TEXT[] DEFAULT '{}',
     priority TEXT DEFAULT 'Medium',
     applicable_rank TEXT DEFAULT 'Recruit',
     progress JSONB DEFAULT '{}',

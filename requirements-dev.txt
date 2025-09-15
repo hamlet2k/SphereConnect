@@ -1,0 +1,24 @@
+# Development and testing dependencies for SphereConnect
+# Install with: pip install -r requirements-dev.txt
+
+# Testing framework
+pytest>=7.0.0
+pytest-cov>=4.0.0
+pytest-mock>=3.10.0
+
+# Code quality and linting
+black>=22.0.0
+flake8>=4.0.0
+mypy>=1.0.0
+
+# Documentation
+mkdocs>=1.4.0
+mkdocs-material>=9.0.0
+mkdocs-coverage>=0.2.0
+
+# Development tools
+pre-commit>=2.20.0
+
+# Additional testing utilities
+responses>=0.23.0
+freezegun>=1.2.0

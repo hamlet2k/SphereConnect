@@ -26,7 +26,10 @@ class TestWingmanSkill(unittest.TestCase):
         self.mock_response.json.return_value = {
             "id": "test-id",
             "message": "Success",
-            "tts_response": "Test response"
+            "tts_response": "Test response",
+            "system_prompt": "Act as a UEE Commander, coordinating Star Citizen guild missions with formal, strategic responses.",
+            "name": "UEE Commander",
+            "phonetic": "Uniform Echo Echo Commander"
         }
 
     def test_parse_intent_create_objective(self):
@@ -194,8 +197,15 @@ class TestWingmanSkill(unittest.TestCase):
         self.assertIn("tts", result)
         self.assertTrue(result["tts"])
 
-    def test_latency_performance(self):
+    @patch('api.src.wingman_skill_poc.requests.post')
+    @patch('api.src.wingman_skill_poc.requests.patch')
+    @patch('api.src.wingman_skill_poc.requests.get')
+    def test_latency_performance(self, mock_get, mock_patch, mock_post):
         """Test that responses are generated within 2 seconds"""
+        mock_post.return_value = self.mock_response
+        mock_patch.return_value = self.mock_response
+        mock_get.return_value = self.mock_response
+
         test_commands = [
             "Create objective: Collect 500 SCU Gold",
             "Assign task Scout Route to Pilot X",
@@ -309,13 +319,13 @@ def run_performance_test():
     accuracy_ok = accuracy >= 90.0
 
     print("\nRequirements Check:")
-    print(f"  Latency < 2s: {'✓' if latency_ok else '✗'}")
-    print(f"  Accuracy >= 90%: {'✓' if accuracy_ok else '✗'}")
+    print(f"  Latency < 2s: {'[PASS]' if latency_ok else '[FAIL]'}")
+    print(f"  Accuracy >= 90%: {'[PASS]' if accuracy_ok else '[FAIL]'}")
 
     if latency_ok and accuracy_ok:
-        print("\n🎉 All requirements met!")
+        print("\n[PASS] All requirements met!")
     else:
-        print("\n⚠️  Some requirements not met")
+        print("\n[FAIL] Some requirements not met")
 
     return {
         "avg_latency": avg_latency,
