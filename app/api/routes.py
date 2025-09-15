@@ -67,7 +67,6 @@ class TaskAssign(BaseModel):
     squad_id: Optional[str] = None
 
 class TaskSchedule(BaseModel):
-    task_id: str
     schedule: Dict[str, Any]
 
 class ProgressUpdate(BaseModel):
@@ -206,7 +205,9 @@ def verify_token(token: str) -> Optional[dict]:
         return payload
     except jwt.ExpiredSignatureError:
         return None
-    except jwt.JWTError:
+    except jwt.DecodeError:
+        return None
+    except jwt.PyJWTError:
         return None
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
@@ -644,6 +645,7 @@ async def get_objective(objective_id: str, db: Session = Depends(get_db)):
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid objective ID format")
 
+
 @router.patch("/objectives/{objective_id}")
 async def update_objective(objective_id: str, update: ObjectiveUpdate, db: Session = Depends(get_db)):
     """Update objective progress or description"""
@@ -802,6 +804,90 @@ async def schedule_task(task_id: str, schedule_data: TaskSchedule, db: Session =
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to schedule task: {str(e)}")
+
+@router.get("/objectives")
+async def get_objectives(guild_id: str = None, db: Session = Depends(get_db)):
+    """Get objectives for a guild"""
+    try:
+        if not guild_id:
+            raise HTTPException(status_code=400, detail="guild_id parameter required")
+
+        guild_uuid = uuid.UUID(guild_id)
+        objectives = db.query(Objective).filter(Objective.guild_id == guild_uuid).all()
+
+        return [
+            {
+                "id": str(obj.id),
+                "name": obj.name,
+                "description": obj.description,
+                "categories": obj.categories,
+                "priority": obj.priority,
+                "progress": obj.progress,
+                "guild_id": str(obj.guild_id)
+            }
+            for obj in objectives
+        ]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid guild ID format")
+
+@router.get("/guilds/{guild_id}/objectives/recent")
+async def get_recent_objectives(guild_id: str, limit: int = 5, db: Session = Depends(get_db)):
+    """Get recent objectives for a guild"""
+    try:
+        if not guild_id:
+            raise HTTPException(status_code=400, detail="guild_id parameter required")
+
+        guild_uuid = uuid.UUID(guild_id)
+        objectives = db.query(Objective).filter(
+            Objective.guild_id == guild_uuid
+        ).limit(limit).all()
+
+        return [
+            {
+                "id": str(obj.id),
+                "name": obj.name,
+                "description": obj.description,
+                "categories": obj.categories,
+                "priority": obj.priority,
+                "guild_id": str(obj.guild_id)
+            }
+            for obj in objectives
+        ]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid guild ID format")
+
+@router.get("/tasks")
+async def get_tasks(guild_id: str = None, assignee: str = None, db: Session = Depends(get_db)):
+    """Get tasks for a guild, optionally filtered by assignee"""
+    try:
+        if not guild_id:
+            raise HTTPException(status_code=400, detail="guild_id parameter required")
+
+        guild_uuid = uuid.UUID(guild_id)
+        query = db.query(Task).filter(Task.guild_id == guild_uuid)
+
+        if assignee:
+            assignee_uuid = uuid.UUID(assignee)
+            query = query.filter(Task.lead_id == assignee_uuid)
+
+        tasks = query.all()
+
+        return [
+            {
+                "id": str(task.id),
+                "name": task.name,
+                "description": task.description,
+                "status": task.status,
+                "priority": task.priority,
+                "progress": task.progress,
+                "schedule": task.schedule,
+                "guild_id": str(task.guild_id),
+                "lead_id": str(task.lead_id) if task.lead_id else None
+            }
+            for task in tasks
+        ]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ID format")
 
 @router.get("/guilds/{guild_id}/ai-commander")
 async def get_ai_commander(guild_id: str, db: Session = Depends(get_db)):

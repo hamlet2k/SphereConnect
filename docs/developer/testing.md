@@ -16,11 +16,11 @@ SphereConnect uses pytest for comprehensive testing with a focus on unit tests, 
 ```
 tests/
 ├── conftest.py              # Shared fixtures and configuration
-├── test_wingman_skill.py    # Wingman-AI core functionality tests
-├── test_standalone.py       # Performance and standalone tests
+├── test_standalone.py       # Standalone API performance and integration tests
 ├── test_auth.py            # Authentication system tests
 ├── test_data.py            # Database operations tests
-└── test_performance.py     # Performance benchmarking tests
+├── test_performance.py     # Performance benchmarking tests
+└── test_wingman_skill.py   # Legacy Wingman-AI tests (deprecated)
 ```
 
 ## Quick Start
@@ -67,6 +67,32 @@ tests/
     ├── __init__.py
     ├── test_api_endpoints.py
     └── test_database_operations.py
+```
+
+### Standalone API Testing
+
+The `test_standalone.py` file provides comprehensive testing for the SphereConnect API without Wingman AI dependencies:
+
+```python
+# Key features of test_standalone.py:
+- 9 comprehensive unit tests covering all API endpoints
+- Performance benchmarking with latency tracking
+- MVP requirement validation (<2s latency, 90%+ success rate)
+- Guild isolation testing for multi-tenant architecture
+- Authentication and error handling validation
+- Database operation verification
+```
+
+### Performance Test Results
+
+Current standalone API performance metrics:
+```
+Average Latency: 0.006s (Target: <2.0s) ✓
+Max Latency: 0.007s (Target: <2.0s) ✓
+Success Rate: 25.0% (Note: Limited by database schema issues)
+MVP Requirements Check:
+  Average Latency < 2s: [PASS]
+  Success Rate >= 90%: [FAIL] - Requires database schema fix
 ```
 
 ### Writing Unit Tests

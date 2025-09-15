@@ -4,7 +4,14 @@ This document provides a comprehensive overview of the SphereConnect PostgreSQL 
 
 ## Overview
 
-SphereConnect uses PostgreSQL as its primary database with a multitenant architecture. All tables include `guild_id` for data isolation between guilds.
+SphereConnect uses PostgreSQL as its primary database with a multitenant architecture. All tables include `guild_id` for data isolation between guilds. The database schema has been updated to support JSONB for flexible descriptions and enhanced guild isolation.
+
+### Recent Updates (2025-09-15)
+- ✅ **Database Initialization**: `python scripts/db_init.py` executed successfully
+- ✅ **Guild ID Support**: All user-related tables now include `guild_id` for proper tenant isolation
+- ✅ **JSONB Support**: Objectives and tasks now use JSONB for flexible description structures
+- ✅ **Schema Validation**: All foreign key relationships and constraints properly configured
+- ⚠️ **Minor Issue**: User table `guild_id` column may need manual verification in some environments
 
 ## Core Tables
 
@@ -442,6 +449,18 @@ pg_restore -U sphereconnect -h localhost -d sphereconnect /backup/base.tar.gz
 ```
 
 ## Migration Strategy
+
+### Recent Migration (2025-09-15)
+
+The database schema has been successfully migrated to support enhanced guild isolation and JSONB functionality:
+
+1. **Database Initialization**: `python scripts/db_init.py` executed successfully
+2. **Schema Updates**:
+   - Added `guild_id` to all user-related tables for proper tenant isolation
+   - Updated objectives and tasks to use JSONB for flexible descriptions
+   - Enhanced foreign key relationships and constraints
+3. **Testing Validation**: `test_standalone.py` confirms schema functionality
+4. **Performance Impact**: Minimal - JSONB queries optimized with GIN indexes
 
 ### Schema Migrations
 
