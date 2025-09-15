@@ -56,3 +56,6 @@ wingman-ai/skills/sphereconnect/dependencies/*
 
 #Skill Messages
 wingman-ai/configs/*/*.last-message.txt
+
+#Grok online chat context
+docs\project\mvp_grok.md

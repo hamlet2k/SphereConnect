@@ -56,38 +56,53 @@ def get_database_session():
     return SessionLocal()
 
 def find_test_data(session) -> Dict[str, List[Any]]:
-    """Find all test data created by test_data.py"""
+    """Find all test data created by test_data.py and test_standalone.py"""
     test_data = {
         'guilds': [],
+        'users': [],
         'commanders': [],
         'objectives': [],
         'tasks': []
     }
 
-    # Find test guilds (by name pattern)
-    test_guilds = session.query(Guild).filter(Guild.name == 'Test UEE Fleet').all()
-    test_data['guilds'] = test_guilds
+    # Find test guilds (by name patterns from both test scripts)
+    test_guild_patterns = ['Test UEE Fleet', 'Test Guild']
+    for pattern in test_guild_patterns:
+        test_guilds = session.query(Guild).filter(Guild.name == pattern).all()
+        test_data['guilds'].extend(test_guilds)
+
+    # Find test users (by name pattern)
+    test_users = session.query(User).filter(User.name == 'Test Pilot').all()
+    test_data['users'] = test_users
 
     # Find test AI commanders
-    for guild in test_guilds:
+    for guild in test_data['guilds']:
         commanders = session.query(AICommander).filter(
             and_(AICommander.guild_id == guild.id, AICommander.name == 'UEE Commander')
         ).all()
         test_data['commanders'].extend(commanders)
 
-    # Find test objectives
-    for guild in test_guilds:
-        objectives = session.query(Objective).filter(
-            and_(Objective.guild_id == guild.id, Objective.name == 'Collect 500 SCU Gold')
-        ).all()
-        test_data['objectives'].extend(objectives)
+    # Find test objectives (by various patterns)
+    objective_patterns = ['Collect 500 SCU Gold', 'Mine Platinum Ore', 'Test Mission', 'Mining Operation', 'Patrol Mission']
+    for guild in test_data['guilds']:
+        for pattern in objective_patterns:
+            objectives = session.query(Objective).filter(
+                and_(Objective.guild_id == guild.id, Objective.name == pattern)
+            ).all()
+            test_data['objectives'].extend(objectives)
 
-    # Find test tasks
+    # Find test tasks (by various patterns)
+    task_patterns = ['Scout Route', 'Scout Location', 'Assigned Task', 'Sector Patrol']
     for objective in test_data['objectives']:
-        tasks = session.query(Task).filter(
-            and_(Task.objective_id == objective.id, Task.name == 'Scout Route')
-        ).all()
-        test_data['tasks'].extend(tasks)
+        for pattern in task_patterns:
+            tasks = session.query(Task).filter(
+                and_(Task.objective_id == objective.id, Task.name == pattern)
+            ).all()
+            test_data['tasks'].extend(tasks)
+
+    # Remove duplicates
+    for key in test_data:
+        test_data[key] = list(set(test_data[key]))
 
     return test_data
 
@@ -143,7 +158,16 @@ def purge_test_data(session, test_data: Dict[str, List[Any]], dry_run: bool = Fa
                 print(f"📋 Would delete AI Commander: {commander.name} (ID: {commander.id})")
             deleted_count += 1
 
-        # 4. Delete guilds last
+        # 4. Delete users
+        for user in test_data['users']:
+            if not dry_run:
+                session.delete(user)
+                print(f"✓ Deleted user: {user.name} (ID: {user.id})")
+            else:
+                print(f"📋 Would delete user: {user.name} (ID: {user.id})")
+            deleted_count += 1
+
+        # 5. Delete guilds last
         for guild in test_data['guilds']:
             if not dry_run:
                 session.delete(guild)
