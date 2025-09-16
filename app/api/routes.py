@@ -22,7 +22,7 @@ import secrets
 import hashlib
 from ..core.models import (
     Objective, Task, Guild, Squad, AICommander, User, Rank, AccessLevel, UserSession,
-    get_db, create_tables
+    Invite, GuildRequest, get_db, create_tables
 )
 
 router = APIRouter()
@@ -78,13 +78,12 @@ class ProgressUpdate(BaseModel):
 class UserLogin(BaseModel):
     name: str
     password: str
-    guild_id: str
 
 class UserRegister(BaseModel):
     name: str
     password: str
     pin: str
-    guild_id: Optional[str] = None
+    invite_code: Optional[str] = None
     phonetic: Optional[str] = None
 
 class PinVerification(BaseModel):
@@ -93,9 +92,12 @@ class PinVerification(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str
     expires_in: int
     user: Dict[str, Any]
+    current_guild_id: str
+    guild_name: str
     requires_mfa: bool = False
 
 class TokenRefresh(BaseModel):
@@ -302,13 +304,10 @@ def get_totp_uri(secret: str, name: str, issuer: str = "SphereConnect") -> str:
 # Authentication Endpoints
 @router.post("/auth/login", response_model=TokenResponse)
 async def login(login_data: UserLogin, db: Session = Depends(get_db)):
-    """Authenticate user and return JWT token"""
+    """Authenticate user and return JWT tokens"""
     try:
-        # Find user by name and guild
-        user = db.query(User).filter(
-            User.name == login_data.name,
-            User.guild_id == uuid.UUID(login_data.guild_id)
-        ).first()
+        # Find user by name only (global authentication)
+        user = db.query(User).filter(User.name == login_data.name).first()
 
         if not user:
             raise HTTPException(
@@ -334,11 +333,27 @@ async def login(login_data: UserLogin, db: Session = Depends(get_db)):
         # Reset failed attempts on successful login
         reset_failed_attempts(db, user)
 
+        # Determine current guild (use personal guild if current_guild_id is null)
+        current_guild_id = user.current_guild_id
+        if not current_guild_id:
+            current_guild_id = user.guild_id  # Fall back to personal guild
+
+        # Get guild name
+        guild = db.query(Guild).filter(Guild.id == current_guild_id).first()
+        guild_name = guild.name if guild else "Unknown Guild"
+
         # Create access token
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
-            data={"sub": str(user.id), "guild_id": str(user.guild_id)},
+            data={"sub": str(user.id), "guild_id": str(current_guild_id)},
             expires_delta=access_token_expires
+        )
+
+        # Create refresh token (longer expiry)
+        refresh_token_expires = timedelta(days=7)
+        refresh_token = create_access_token(
+            data={"sub": str(user.id), "type": "refresh"},
+            expires_delta=refresh_token_expires
         )
 
         # Create session record
@@ -356,15 +371,18 @@ async def login(login_data: UserLogin, db: Session = Depends(get_db)):
 
         return TokenResponse(
             access_token=access_token,
+            refresh_token=refresh_token,
             token_type="bearer",
             expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             user={
                 "id": str(user.id),
                 "name": user.name,
                 "guild_id": str(user.guild_id),
-                "current_guild_id": str(user.current_guild_id) if user.current_guild_id else None,
+                "current_guild_id": str(current_guild_id),
                 "rank": str(user.rank) if user.rank else None
             },
+            current_guild_id=str(current_guild_id),
+            guild_name=guild_name,
             requires_mfa=bool(user.totp_secret)
         )
 
@@ -408,10 +426,29 @@ async def verify_pin_endpoint(pin_data: PinVerification, db: Session = Depends(g
             detail=f"PIN verification failed: {str(e)}"
         )
 
-@router.post("/auth/register")
+@router.post("/auth/register", status_code=status.HTTP_201_CREATED)
 async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
     """Register a new user and auto-create personal guild"""
     try:
+        # Input validation
+        if len(user_data.name) < 3:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Username must be at least 3 characters"
+            )
+
+        if len(user_data.password) < 8:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Password must be at least 8 characters"
+            )
+
+        if not re.match(r'^\d{6}$', user_data.pin):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="PIN must be exactly 6 digits"
+            )
+
         # Check if user already exists (globally, since personal guilds are unique per user)
         existing_user = db.query(User).filter(User.name == user_data.name).first()
 
@@ -420,6 +457,24 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
                 status_code=status.HTTP_409_CONFLICT,
                 detail="User already exists"
             )
+
+        # Handle invite code if provided
+        target_guild_id = None
+        if user_data.invite_code:
+            invite = db.query(Invite).filter(
+                Invite.code == user_data.invite_code,
+                Invite.expires_at > datetime.utcnow()
+            ).first()
+
+            if invite and invite.uses_left > 0:
+                target_guild_id = invite.guild_id
+                invite.uses_left -= 1
+                db.add(invite)
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid or expired invite code"
+                )
 
         # Hash password and PIN
         hashed_password = hash_password(user_data.password)
@@ -440,6 +495,40 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
         )
         db.add(personal_guild)
 
+        # Create default CO rank with access levels
+        co_rank = Rank(
+            id=uuid.uuid4(),
+            guild_id=personal_guild_id,
+            name="CO",
+            phonetic="Commander",
+            access_levels=["manage_users", "create_objective", "manage_objectives", "manage_tasks"]
+        )
+        db.add(co_rank)
+
+        # Create access levels for the guild
+        access_levels = [
+            AccessLevel(
+                id=uuid.uuid4(),
+                guild_id=personal_guild_id,
+                name="User Management",
+                user_actions=["manage_users", "view_users"]
+            ),
+            AccessLevel(
+                id=uuid.uuid4(),
+                guild_id=personal_guild_id,
+                name="Objective Management",
+                user_actions=["create_objective", "manage_objectives", "view_objectives"]
+            ),
+            AccessLevel(
+                id=uuid.uuid4(),
+                guild_id=personal_guild_id,
+                name="Task Management",
+                user_actions=["manage_tasks", "view_tasks"]
+            )
+        ]
+        for al in access_levels:
+            db.add(al)
+
         # Create new user
         new_user = User(
             id=uuid.uuid4(),
@@ -449,6 +538,7 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
             pin=hashed_pin,
             phonetic=user_data.phonetic,
             availability="offline",
+            rank=co_rank.id,  # Assign CO rank
             current_guild_id=personal_guild_id,  # Set to personal guild UUID
             max_guilds=3,
             is_system_admin=False
@@ -461,12 +551,24 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
         personal_guild.creator_id = new_user.id
         db.commit()
 
+        # If invite code was used, create guild request or join directly
+        if target_guild_id:
+            # Create a guild request for approval
+            guild_request = GuildRequest(
+                id=uuid.uuid4(),
+                user_id=new_user.id,
+                guild_id=target_guild_id,
+                status="pending"
+            )
+            db.add(guild_request)
+            db.commit()
+
         return {
             "message": "User registered successfully with personal guild",
             "user_id": str(new_user.id),
-            "personal_guild_id": str(personal_guild_id),
-            "current_guild_id": str(personal_guild_id),
-            "tts_response": f"User {user_data.name} registered successfully"
+            "guild_id": str(personal_guild_id),
+            "rank": "CO",
+            "invite_processed": bool(user_data.invite_code)
         }
 
     except HTTPException:
@@ -521,12 +623,12 @@ async def switch_guild(
 
 @router.post("/auth/refresh", response_model=TokenResponse)
 async def refresh_token(refresh_data: TokenRefresh, db: Session = Depends(get_db)):
-    """Refresh access token"""
+    """Refresh access token using refresh token"""
     try:
-        # Verify refresh token (simplified - in production use separate refresh tokens)
+        # Verify refresh token
         payload = verify_token(refresh_data.refresh_token)
 
-        if not payload:
+        if not payload or payload.get("type") != "refresh":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid refresh token"
@@ -541,23 +643,43 @@ async def refresh_token(refresh_data: TokenRefresh, db: Session = Depends(get_db
                 detail="User not found"
             )
 
+        # Determine current guild
+        current_guild_id = user.current_guild_id
+        if not current_guild_id:
+            current_guild_id = user.guild_id
+
+        # Get guild name
+        guild = db.query(Guild).filter(Guild.id == current_guild_id).first()
+        guild_name = guild.name if guild else "Unknown Guild"
+
         # Create new access token
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
-            data={"sub": str(user.id), "guild_id": str(user.guild_id)},
+            data={"sub": str(user.id), "guild_id": str(current_guild_id)},
             expires_delta=access_token_expires
+        )
+
+        # Create new refresh token
+        refresh_token_expires = timedelta(days=7)
+        new_refresh_token = create_access_token(
+            data={"sub": str(user.id), "type": "refresh"},
+            expires_delta=refresh_token_expires
         )
 
         return TokenResponse(
             access_token=access_token,
+            refresh_token=new_refresh_token,
             token_type="bearer",
             expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             user={
                 "id": str(user.id),
                 "name": user.name,
                 "guild_id": str(user.guild_id),
+                "current_guild_id": str(current_guild_id),
                 "rank": str(user.rank) if user.rank else None
-            }
+            },
+            current_guild_id=str(current_guild_id),
+            guild_name=guild_name
         )
 
     except HTTPException:
@@ -976,6 +1098,51 @@ async def get_guild(guild_id: str, db: Session = Depends(get_db)):
         }
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid guild ID format")
+
+@router.post("/invites")
+async def create_invite(invite_data: dict, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Create a new invite for a guild"""
+    try:
+        guild_uuid = uuid.UUID(invite_data["guild_id"])
+
+        # Verify user has access to the guild
+        if str(current_user.guild_id) != invite_data["guild_id"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: User does not belong to this guild"
+            )
+
+        # Generate unique invite code
+        import secrets
+        invite_code = secrets.token_urlsafe(8)
+
+        invite = Invite(
+            id=uuid.uuid4(),
+            guild_id=guild_uuid,
+            code=invite_code,
+            expires_at=invite_data.get("expires_at"),
+            uses_left=invite_data.get("uses_left", 1)
+        )
+
+        db.add(invite)
+        db.commit()
+
+        return {
+            "id": str(invite.id),
+            "code": invite_code,
+            "guild_id": str(invite.guild_id),
+            "expires_at": invite.expires_at.isoformat() if invite.expires_at else None,
+            "uses_left": invite.uses_left
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create invite: {str(e)}"
+        )
 
 @router.get("/guilds/{guild_id}/ai-commander")
 async def get_ai_commander(guild_id: str, db: Session = Depends(get_db)):
