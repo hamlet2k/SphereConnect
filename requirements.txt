@@ -12,3 +12,4 @@ python-dotenv
 bcrypt           # For password and PIN hashing
 pyotp            # For TOTP MFA
 slowapi          # For rate limiting
+pydantic-settings  # For configuration management

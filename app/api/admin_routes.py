@@ -1,0 +1,759 @@
+# Copyright 2025 Federico Arce. All Rights Reserved.
+# Confidential - Do Not Distribute Without Permission.
+
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from typing import Optional, List, Dict, Any
+import uuid
+from datetime import datetime
+
+from ..core.models import (
+    User, Rank, AccessLevel, Objective, Task, Squad, ObjectiveCategory, Guild,
+    get_db, create_tables
+)
+from .routes import get_current_user, verify_token
+
+router = APIRouter()
+security = HTTPBearer()
+
+# Pydantic models for admin operations
+class UserCreate(BaseModel):
+    name: str
+    password: str
+    pin: str
+    rank_id: Optional[str] = None
+    squad_id: Optional[str] = None
+    phonetic: Optional[str] = None
+    guild_id: str
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    rank_id: Optional[str] = None
+    squad_id: Optional[str] = None
+    availability: Optional[str] = None
+    phonetic: Optional[str] = None
+
+class RankCreate(BaseModel):
+    name: str
+    access_levels: List[str]
+    guild_id: str
+
+class RankUpdate(BaseModel):
+    name: Optional[str] = None
+    access_levels: Optional[List[str]] = None
+
+class AccessLevelCreate(BaseModel):
+    name: str
+    user_actions: List[str]
+    guild_id: str
+
+class AccessLevelUpdate(BaseModel):
+    name: Optional[str] = None
+    user_actions: Optional[List[str]] = None
+
+class ObjectiveCreate(BaseModel):
+    name: str
+    description: Optional[Dict[str, Any]] = {"brief": "", "tactical": "", "classified": "", "metrics": {}}
+    categories: Optional[List[str]] = []
+    priority: Optional[str] = "Medium"
+    applicable_rank: Optional[str] = "Recruit"
+    squad_id: Optional[str] = None
+    guild_id: str
+
+class ObjectiveUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[Dict[str, Any]] = None
+    categories: Optional[List[str]] = None
+    priority: Optional[str] = None
+    applicable_rank: Optional[str] = None
+    squad_id: Optional[str] = None
+
+class TaskCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    objective_id: str
+    priority: Optional[str] = "Medium"
+    self_assignment: Optional[bool] = True
+    max_assignees: Optional[int] = 5
+    squad_id: Optional[str] = None
+    guild_id: str
+
+class TaskUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    self_assignment: Optional[bool] = None
+    max_assignees: Optional[int] = None
+    squad_id: Optional[str] = None
+
+class SquadCreate(BaseModel):
+    name: str
+    lead_id: Optional[str] = None
+    guild_id: str
+
+class SquadUpdate(BaseModel):
+    name: Optional[str] = None
+    lead_id: Optional[str] = None
+
+class ObjectiveCategoryCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    guild_id: str
+
+class ObjectiveCategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+# RBAC Helper Functions
+def check_admin_access(user: User, db: Session) -> bool:
+    """Check if user has admin access for their guild"""
+    if not user.rank:
+        return False
+
+    rank = db.query(Rank).filter(Rank.id == user.rank).first()
+    if not rank:
+        return False
+
+    # Check if rank has admin access levels
+    admin_actions = ["manage_users", "manage_ranks", "manage_objectives", "manage_tasks", "manage_squads"]
+    return any(action in rank.access_levels for action in admin_actions)
+
+def check_access_level(user: User, required_actions: List[str], db: Session) -> bool:
+    """Check if user has required access levels"""
+    if not user.rank:
+        return False
+
+    rank = db.query(Rank).filter(Rank.id == user.rank).first()
+    if not rank:
+        return False
+
+    return all(action in rank.access_levels for action in required_actions)
+
+def require_admin_access(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Dependency to require admin access"""
+    if not check_admin_access(user, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    return user
+
+def require_access_level(required_actions: List[str]):
+    """Dependency factory for specific access levels"""
+    def dependency(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+        if not check_access_level(user, required_actions, db):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied. Required actions: {', '.join(required_actions)}"
+            )
+        return user
+    return dependency
+
+# User Management Endpoints
+@router.get("/users")
+async def get_users(
+    guild_id: str = Query(..., description="Guild ID for filtering"),
+    current_user: User = Depends(require_access_level(["view_users"])),
+    db: Session = Depends(get_db)
+):
+    """Get all users for a guild (admin only)"""
+    try:
+        # Verify user belongs to the guild
+        if str(current_user.guild_id) != guild_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: User does not belong to this guild"
+            )
+
+        users = db.query(User).filter(User.guild_id == uuid.UUID(guild_id)).all()
+
+        return [
+            {
+                "id": str(user.id),
+                "name": user.name,
+                "rank": str(user.rank) if user.rank else None,
+                "squad_id": str(user.squad_id) if user.squad_id else None,
+                "availability": user.availability,
+                "phonetic": user.phonetic,
+                "created_at": user.created_at.isoformat() if user.created_at else None
+            }
+            for user in users
+        ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve users: {str(e)}"
+        )
+
+@router.post("/users")
+async def create_user(
+    user_data: UserCreate,
+    current_user: User = Depends(require_access_level(["manage_users"])),
+    db: Session = Depends(get_db)
+):
+    """Create a new user (admin only)"""
+    try:
+        # Verify admin belongs to the guild
+        if str(current_user.guild_id) != user_data.guild_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Admin does not belong to this guild"
+            )
+
+        # Check if user already exists
+        existing_user = db.query(User).filter(
+            User.name == user_data.name,
+            User.guild_id == uuid.UUID(user_data.guild_id)
+        ).first()
+
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User already exists in this guild"
+            )
+
+        # Create new user
+        from .routes import hash_password, hash_pin
+
+        new_user = User(
+            id=uuid.uuid4(),
+            guild_id=uuid.UUID(user_data.guild_id),
+            name=user_data.name,
+            password=hash_password(user_data.password),
+            pin=hash_pin(user_data.pin),
+            rank=uuid.UUID(user_data.rank_id) if user_data.rank_id else None,
+            squad_id=uuid.UUID(user_data.squad_id) if user_data.squad_id else None,
+            phonetic=user_data.phonetic,
+            availability="offline"
+        )
+
+        db.add(new_user)
+        db.commit()
+
+        return {
+            "message": f"User '{user_data.name}' created successfully",
+            "user_id": str(new_user.id)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create user: {str(e)}"
+        )
+
+@router.put("/users/{user_id}")
+async def update_user(
+    user_id: str,
+    user_data: UserUpdate,
+    current_user: User = Depends(require_access_level(["manage_users"])),
+    db: Session = Depends(get_db)
+):
+    """Update a user (admin only)"""
+    try:
+        user_uuid = uuid.UUID(user_id)
+        user = db.query(User).filter(User.id == user_uuid).first()
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # Verify admin belongs to the same guild
+        if str(current_user.guild_id) != str(user.guild_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: User does not belong to your guild"
+            )
+
+        # Update fields
+        if user_data.name is not None:
+            user.name = user_data.name
+        if user_data.rank_id is not None:
+            user.rank = uuid.UUID(user_data.rank_id) if user_data.rank_id else None
+        if user_data.squad_id is not None:
+            user.squad_id = uuid.UUID(user_data.squad_id) if user_data.squad_id else None
+        if user_data.availability is not None:
+            user.availability = user_data.availability
+        if user_data.phonetic is not None:
+            user.phonetic = user_data.phonetic
+
+        db.commit()
+
+        return {
+            "message": "User updated successfully",
+            "user_id": str(user.id)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update user: {str(e)}"
+        )
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: str,
+    current_user: User = Depends(require_access_level(["manage_users"])),
+    db: Session = Depends(get_db)
+):
+    """Delete a user (admin only)"""
+    try:
+        user_uuid = uuid.UUID(user_id)
+        user = db.query(User).filter(User.id == user_uuid).first()
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # Verify admin belongs to the same guild
+        if str(current_user.guild_id) != str(user.guild_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: User does not belong to your guild"
+            )
+
+        # Prevent deleting self
+        if str(user.id) == str(current_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete your own account"
+            )
+
+        db.delete(user)
+        db.commit()
+
+        return {
+            "message": "User deleted successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete user: {str(e)}"
+        )
+
+# Rank Management Endpoints
+@router.get("/ranks")
+async def get_ranks(
+    guild_id: str = Query(..., description="Guild ID for filtering"),
+    current_user: User = Depends(require_access_level(["view_ranks"])),
+    db: Session = Depends(get_db)
+):
+    """Get all ranks for a guild"""
+    try:
+        if str(current_user.guild_id) != guild_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: User does not belong to this guild"
+            )
+
+        ranks = db.query(Rank).filter(Rank.guild_id == uuid.UUID(guild_id)).all()
+
+        return [
+            {
+                "id": str(rank.id),
+                "name": rank.name,
+                "access_levels": rank.access_levels,
+                "phonetic": rank.phonetic
+            }
+            for rank in ranks
+        ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve ranks: {str(e)}"
+        )
+
+@router.post("/ranks")
+async def create_rank(
+    rank_data: RankCreate,
+    current_user: User = Depends(require_access_level(["manage_ranks"])),
+    db: Session = Depends(get_db)
+):
+    """Create a new rank (admin only)"""
+    try:
+        if str(current_user.guild_id) != rank_data.guild_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Admin does not belong to this guild"
+            )
+
+        new_rank = Rank(
+            id=uuid.uuid4(),
+            guild_id=uuid.UUID(rank_data.guild_id),
+            name=rank_data.name,
+            access_levels=rank_data.access_levels
+        )
+
+        db.add(new_rank)
+        db.commit()
+
+        return {
+            "message": f"Rank '{rank_data.name}' created successfully",
+            "rank_id": str(new_rank.id)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create rank: {str(e)}"
+        )
+
+# Objective Management Endpoints
+@router.get("/objectives")
+async def get_objectives(
+    guild_id: str = Query(..., description="Guild ID for filtering"),
+    current_user: User = Depends(require_access_level(["view_objectives"])),
+    db: Session = Depends(get_db)
+):
+    """Get all objectives for a guild"""
+    try:
+        if str(current_user.guild_id) != guild_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: User does not belong to this guild"
+            )
+
+        objectives = db.query(Objective).filter(Objective.guild_id == uuid.UUID(guild_id)).all()
+
+        return [
+            {
+                "id": str(obj.id),
+                "name": obj.name,
+                "description": obj.description,
+                "categories": obj.categories,
+                "priority": obj.priority,
+                "progress": obj.progress,
+                "applicable_rank": obj.applicable_rank,
+                "squad_id": str(obj.squad_id) if obj.squad_id else None,
+                "lead_id": str(obj.lead_id) if obj.lead_id else None
+            }
+            for obj in objectives
+        ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve objectives: {str(e)}"
+        )
+
+@router.post("/objectives")
+async def create_objective(
+    objective_data: ObjectiveCreate,
+    current_user: User = Depends(require_access_level(["manage_objectives"])),
+    db: Session = Depends(get_db)
+):
+    """Create a new objective (admin only)"""
+    try:
+        if str(current_user.guild_id) != objective_data.guild_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Admin does not belong to this guild"
+            )
+
+        obj_id = uuid.uuid4()
+        new_objective = Objective(
+            id=obj_id,
+            guild_id=uuid.UUID(objective_data.guild_id),
+            name=objective_data.name,
+            description=objective_data.description,
+            categories=objective_data.categories,
+            priority=objective_data.priority,
+            applicable_rank=objective_data.applicable_rank,
+            squad_id=uuid.UUID(objective_data.squad_id) if objective_data.squad_id else None
+        )
+
+        db.add(new_objective)
+        db.commit()
+
+        return {
+            "message": f"Objective '{objective_data.name}' created successfully",
+            "objective_id": str(obj_id)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create objective: {str(e)}"
+        )
+
+# Task Management Endpoints
+@router.get("/tasks")
+async def get_tasks(
+    guild_id: str = Query(..., description="Guild ID for filtering"),
+    current_user: User = Depends(require_access_level(["view_tasks"])),
+    db: Session = Depends(get_db)
+):
+    """Get all tasks for a guild"""
+    try:
+        if str(current_user.guild_id) != guild_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: User does not belong to this guild"
+            )
+
+        tasks = db.query(Task).filter(Task.guild_id == uuid.UUID(guild_id)).all()
+
+        return [
+            {
+                "id": str(task.id),
+                "name": task.name,
+                "description": task.description,
+                "status": task.status,
+                "priority": task.priority,
+                "progress": task.progress,
+                "schedule": task.schedule,
+                "self_assignment": task.self_assignment,
+                "max_assignees": task.max_assignees,
+                "objective_id": str(task.objective_id),
+                "squad_id": str(task.squad_id) if task.squad_id else None,
+                "lead_id": str(task.lead_id) if task.lead_id else None
+            }
+            for task in tasks
+        ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve tasks: {str(e)}"
+        )
+
+@router.post("/tasks")
+async def create_task(
+    task_data: TaskCreate,
+    current_user: User = Depends(require_access_level(["manage_tasks"])),
+    db: Session = Depends(get_db)
+):
+    """Create a new task (admin only)"""
+    try:
+        if str(current_user.guild_id) != task_data.guild_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Admin does not belong to this guild"
+            )
+
+        task_id = uuid.uuid4()
+        new_task = Task(
+            id=task_id,
+            objective_id=uuid.UUID(task_data.objective_id),
+            guild_id=uuid.UUID(task_data.guild_id),
+            name=task_data.name,
+            description=task_data.description,
+            priority=task_data.priority,
+            self_assignment=task_data.self_assignment,
+            max_assignees=task_data.max_assignees,
+            squad_id=uuid.UUID(task_data.squad_id) if task_data.squad_id else None
+        )
+
+        db.add(new_task)
+        db.commit()
+
+        return {
+            "message": f"Task '{task_data.name}' created successfully",
+            "task_id": str(task_id)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create task: {str(e)}"
+        )
+
+# Squad Management Endpoints
+@router.get("/squads")
+async def get_squads(
+    guild_id: str = Query(..., description="Guild ID for filtering"),
+    current_user: User = Depends(require_access_level(["view_squads"])),
+    db: Session = Depends(get_db)
+):
+    """Get all squads for a guild"""
+    try:
+        if str(current_user.guild_id) != guild_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: User does not belong to this guild"
+            )
+
+        squads = db.query(Squad).filter(Squad.guild_id == uuid.UUID(guild_id)).all()
+
+        return [
+            {
+                "id": str(squad.id),
+                "name": squad.name,
+                "lead_id": str(squad.lead_id) if squad.lead_id else None
+            }
+            for squad in squads
+        ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve squads: {str(e)}"
+        )
+
+@router.post("/squads")
+async def create_squad(
+    squad_data: SquadCreate,
+    current_user: User = Depends(require_access_level(["manage_squads"])),
+    db: Session = Depends(get_db)
+):
+    """Create a new squad (admin only)"""
+    try:
+        if str(current_user.guild_id) != squad_data.guild_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Admin does not belong to this guild"
+            )
+
+        squad_id = uuid.uuid4()
+        new_squad = Squad(
+            id=squad_id,
+            guild_id=uuid.UUID(squad_data.guild_id),
+            name=squad_data.name,
+            lead_id=uuid.UUID(squad_data.lead_id) if squad_data.lead_id else None
+        )
+
+        db.add(new_squad)
+        db.commit()
+
+        return {
+            "message": f"Squad '{squad_data.name}' created successfully",
+            "squad_id": str(squad_id)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create squad: {str(e)}"
+        )
+
+# Access Level Management Endpoints
+@router.get("/access-levels")
+async def get_access_levels(
+    guild_id: str = Query(..., description="Guild ID for filtering"),
+    current_user: User = Depends(require_access_level(["view_access_levels"])),
+    db: Session = Depends(get_db)
+):
+    """Get all access levels for a guild"""
+    try:
+        if str(current_user.guild_id) != guild_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: User does not belong to this guild"
+            )
+
+        access_levels = db.query(AccessLevel).filter(AccessLevel.guild_id == uuid.UUID(guild_id)).all()
+
+        return [
+            {
+                "id": str(al.id),
+                "name": al.name,
+                "user_actions": al.user_actions
+            }
+            for al in access_levels
+        ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve access levels: {str(e)}"
+        )
+
+# Objective Category Management Endpoints
+@router.get("/objective-categories")
+async def get_objective_categories(
+    guild_id: str = Query(..., description="Guild ID for filtering"),
+    current_user: User = Depends(require_access_level(["view_categories"])),
+    db: Session = Depends(get_db)
+):
+    """Get all objective categories for a guild"""
+    try:
+        if str(current_user.guild_id) != guild_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: User does not belong to this guild"
+            )
+
+        categories = db.query(ObjectiveCategory).filter(ObjectiveCategory.guild_id == uuid.UUID(guild_id)).all()
+
+        return [
+            {
+                "id": str(cat.id),
+                "name": cat.name,
+                "description": cat.description
+            }
+            for cat in categories
+        ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve objective categories: {str(e)}"
+        )
+
+@router.post("/objective-categories")
+async def create_objective_category(
+    category_data: ObjectiveCategoryCreate,
+    current_user: User = Depends(require_access_level(["manage_categories"])),
+    db: Session = Depends(get_db)
+):
+    """Create a new objective category (admin only)"""
+    try:
+        if str(current_user.guild_id) != category_data.guild_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Admin does not belong to this guild"
+            )
+
+        category_id = uuid.uuid4()
+        new_category = ObjectiveCategory(
+            id=category_id,
+            guild_id=uuid.UUID(category_data.guild_id),
+            name=category_data.name,
+            description=category_data.description
+        )
+
+        db.add(new_category)
+        db.commit()
+
+        return {
+            "message": f"Objective category '{category_data.name}' created successfully",
+            "category_id": str(category_id)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create objective category: {str(e)}"
+        )
