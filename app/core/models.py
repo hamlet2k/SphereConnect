@@ -83,10 +83,24 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Guild management fields
+    current_guild_id = Column(String, default='personal')
+    max_guilds = Column(Integer, default=3)
+    is_system_admin = Column(Boolean, default=False)
+
 class Guild(Base):
     __tablename__ = 'guilds'
     id = Column(PG_UUID(as_uuid=True), primary_key=True)
     name = Column(String, nullable=False)
+    creator_id = Column(PG_UUID(as_uuid=True), ForeignKey('users.id'))
+    member_limit = Column(Integer, default=2)
+    billing_tier = Column(String, default='free')
+    is_solo = Column(Boolean, default=True)
+    is_deletable = Column(Boolean, default=True)
+    type = Column(String, default='game_star_citizen')
+
+    # Relationships
+    creator = relationship('User', foreign_keys=[creator_id])
 
 class Squad(Base):
     __tablename__ = 'squads'

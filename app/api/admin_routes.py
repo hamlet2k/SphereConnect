@@ -118,7 +118,7 @@ def check_admin_access(user: User, db: Session) -> bool:
         return False
 
     # Check if rank has admin access levels
-    admin_actions = ["manage_users", "manage_ranks", "manage_objectives", "manage_tasks", "manage_squads"]
+    admin_actions = ["manage_users", "manage_ranks", "manage_objectives", "manage_tasks", "manage_squads", "manage_guilds", "view_guilds"]
     return any(action in rank.access_levels for action in admin_actions)
 
 def check_access_level(user: User, required_actions: List[str], db: Session) -> bool:
@@ -756,4 +756,88 @@ async def create_objective_category(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create objective category: {str(e)}"
+        )
+
+# Guild Management Endpoints
+@router.get("/guilds")
+async def get_guilds(
+    current_user: User = Depends(require_access_level(["view_guilds"])),
+    db: Session = Depends(get_db)
+):
+    """Get all guilds (admin only)"""
+    try:
+        guilds = db.query(Guild).all()
+
+        return [
+            {
+                "id": str(guild.id),
+                "name": guild.name,
+                "creator_id": str(guild.creator_id) if guild.creator_id else None,
+                "member_limit": guild.member_limit,
+                "billing_tier": guild.billing_tier,
+                "is_solo": guild.is_solo,
+                "is_deletable": guild.is_deletable,
+                "type": guild.type
+            }
+            for guild in guilds
+        ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve guilds: {str(e)}"
+        )
+
+@router.delete("/guilds/{guild_id}")
+async def delete_guild(
+    guild_id: str,
+    current_user: User = Depends(require_access_level(["manage_guilds"])),
+    db: Session = Depends(get_db)
+):
+    """Delete a guild (admin only, with protection for personal guilds)"""
+    try:
+        guild_uuid = uuid.UUID(guild_id)
+        guild = db.query(Guild).filter(Guild.id == guild_uuid).first()
+
+        if not guild:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Guild not found"
+            )
+
+        # Check if guild is personal (is_solo=true) - cannot be deleted
+        if guild.is_solo:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Personal guilds cannot be deleted"
+            )
+
+        # Check if current user is the creator
+        if str(guild.creator_id) != str(current_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the guild creator can delete this guild"
+            )
+
+        # Check is_deletable flag
+        if not guild.is_deletable:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This guild cannot be deleted"
+            )
+
+        db.delete(guild)
+        db.commit()
+
+        return {
+            "message": "Guild deleted successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete guild: {str(e)}"
         )

@@ -32,6 +32,10 @@ API_PORT=8000
 
 # CORS Origins
 CORS_ORIGINS=http://localhost:3000
+
+# Guild Limits Configuration
+STAR_CITIZEN_FREE_MEMBERS=2
+DEFAULT_MAX_GUILDS=3
 """
 
     env_file_path = os.path.join(os.path.dirname(__file__), '.env.local')

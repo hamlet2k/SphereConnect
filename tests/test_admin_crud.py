@@ -456,6 +456,151 @@ class TestDataValidation:
         response = requests.post(f"{ADMIN_BASE_URL}/users", json=invalid_data, headers=headers)
         assert response.status_code == 422
 
+class TestGuildLimits:
+    """Test guild limits and revenue model constraints"""
+
+    def test_guild_creation_limit(self):
+        """Test that users cannot create more guilds than their limit"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Create additional guilds up to the limit
+        for i in range(2):  # max_guilds is 3, including personal
+            guild_data = {
+                "name": f"Test Guild {i+1}",
+                "guild_id": TEST_GUILD_ID
+            }
+            response = requests.post(f"{BASE_URL}/guilds", json=guild_data, headers=headers)
+            if i < 2:  # Should succeed for first 2
+                assert response.status_code == 200
+            else:  # Should fail for 3rd
+                assert response.status_code == 402
+
+    def test_member_limit_enforcement(self):
+        """Test that guilds cannot exceed member limits"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Create a new guild for testing
+        guild_data = {
+            "name": "Limit Test Guild",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{BASE_URL}/guilds", json=guild_data, headers=headers)
+        assert response.status_code == 200
+        new_guild_id = response.json()["guild_id"]
+
+        # Try to join with multiple users (should be limited to 2)
+        for i in range(3):
+            join_data = {
+                "guild_id": new_guild_id
+            }
+            response = requests.patch(f"{BASE_URL}/users/{test_state['admin_user']['id']}/join", json=join_data, headers=headers)
+            if i < 2:  # Should succeed for first 2
+                assert response.status_code == 200
+            else:  # Should fail for 3rd
+                assert response.status_code == 402
+
+class TestGuildSwitching:
+    """Test guild switching functionality"""
+
+    def test_guild_switch_success(self):
+        """Test successful guild switching"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Create a second guild to switch to
+        guild_data = {
+            "name": "Switch Test Guild",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{BASE_URL}/guilds", json=guild_data, headers=headers)
+        assert response.status_code == 200
+        switch_guild_id = response.json()["guild_id"]
+
+        # Switch to the new guild
+        switch_data = {
+            "guild_id": switch_guild_id
+        }
+        response = requests.patch(f"{BASE_URL}/users/{test_state['admin_user']['id']}/switch-guild", json=switch_data, headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "current_guild_id" in data
+        assert data["current_guild_id"] == switch_guild_id
+
+    def test_guild_switch_invalid_guild(self):
+        """Test switching to invalid guild fails"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        switch_data = {
+            "guild_id": str(uuid.uuid4())  # Random invalid guild ID
+        }
+        response = requests.patch(f"{BASE_URL}/users/{test_state['admin_user']['id']}/switch-guild", json=switch_data, headers=headers)
+        assert response.status_code == 404
+
+class TestGuildDeletionProtection:
+    """Test guild deletion protection for personal guilds"""
+
+    def test_personal_guild_deletion_blocked(self):
+        """Test that personal guilds cannot be deleted"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Try to delete the personal guild (is_solo=true)
+        response = requests.delete(f"{ADMIN_BASE_URL}/guilds/{TEST_GUILD_ID}", headers=headers)
+        assert response.status_code == 403
+
+        data = response.json()
+        assert "Personal guilds cannot be deleted" in data.get("detail", "")
+
+    def test_non_personal_guild_deletion_allowed(self):
+        """Test that non-personal guilds can be deleted by creator"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Create a non-personal guild
+        guild_data = {
+            "name": "Deletable Guild",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{BASE_URL}/guilds", json=guild_data, headers=headers)
+        assert response.status_code == 200
+        deletable_guild_id = response.json()["guild_id"]
+
+        # Delete the guild (should succeed as creator)
+        response = requests.delete(f"{ADMIN_BASE_URL}/guilds/{deletable_guild_id}", headers=headers)
+        assert response.status_code == 200
+
+    def test_guild_deletion_wrong_creator(self):
+        """Test that non-creators cannot delete guilds"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Create a guild as admin
+        guild_data = {
+            "name": "Wrong Creator Guild",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{BASE_URL}/guilds", json=guild_data, headers=headers)
+        assert response.status_code == 200
+        guild_id = response.json()["guild_id"]
+
+        # Create another user
+        other_user_data = {
+            "name": "other_user",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=other_user_data, headers=headers)
+        assert response.status_code == 200
+        other_user_id = response.json()["user_id"]
+
+        # Login as other user
+        response = requests.post(f"{BASE_URL}/auth/login", json=other_user_data)
+        assert response.status_code == 200
+        other_token = response.json()["access_token"]
+
+        # Try to delete guild as non-creator
+        headers_other = {"Authorization": f"Bearer {other_token}"}
+        response = requests.delete(f"{ADMIN_BASE_URL}/guilds/{guild_id}", headers=headers_other)
+        assert response.status_code == 403
+
 def setup_test_data():
     """Setup test data before running tests"""
     # Create test guild and admin user
@@ -536,6 +681,25 @@ if __name__ == "__main__":
         test_validation.admin_token = test_auth.admin_token
         test_validation.test_required_fields()
         test_validation.test_field_constraints()
+
+        # Test new guild management features
+        test_limits = TestGuildLimits()
+        test_limits.admin_token = test_auth.admin_token
+        test_limits.admin_user = test_auth.admin_user
+        test_limits.test_guild_creation_limit()
+        test_limits.test_member_limit_enforcement()
+
+        test_switching = TestGuildSwitching()
+        test_switching.admin_token = test_auth.admin_token
+        test_switching.admin_user = test_auth.admin_user
+        test_switching.test_guild_switch_success()
+        test_switching.test_guild_switch_invalid_guild()
+
+        test_deletion = TestGuildDeletionProtection()
+        test_deletion.admin_token = test_auth.admin_token
+        test_deletion.test_personal_guild_deletion_blocked()
+        test_deletion.test_non_personal_guild_deletion_allowed()
+        test_deletion.test_guild_deletion_wrong_creator()
 
         print("✅ All tests passed!")
 

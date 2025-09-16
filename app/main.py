@@ -23,6 +23,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from .core.models import get_db, create_tables
 from .api.routes import router
 from .api.admin_routes import router as admin_router
+from .api.middleware import GuildLimitMiddleware
 
 load_dotenv()
 
@@ -64,6 +65,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Guild limit middleware
+app.add_middleware(GuildLimitMiddleware)
 
 # Rate limiting setup (disabled for now to avoid configuration issues)
 # limiter = Limiter(key_func=get_remote_address)

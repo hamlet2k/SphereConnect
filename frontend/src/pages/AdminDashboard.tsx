@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-type ActiveTab = 'users' | 'ranks' | 'objectives' | 'tasks' | 'squads' | 'access-levels' | 'categories';
+type ActiveTab = 'users' | 'ranks' | 'objectives' | 'tasks' | 'squads' | 'access-levels' | 'categories' | 'guilds';
 
 interface User {
   id: string;
@@ -36,12 +36,24 @@ interface Task {
   schedule?: any;
 }
 
+interface Guild {
+  id: string;
+  name: string;
+  creator_id?: string;
+  member_limit: number;
+  billing_tier: string;
+  is_solo: boolean;
+  is_deletable: boolean;
+  type: string;
+}
+
 function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('users');
   const [users, setUsers] = useState<User[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [objectives, setObjectives] = useState<Objective[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [guilds, setGuilds] = useState<Guild[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const navigate = useNavigate();
@@ -57,6 +69,22 @@ function AdminDashboard() {
 
     // Load initial data based on active tab
     loadData();
+
+    // Load guilds for switcher
+    const loadGuilds = async () => {
+      try {
+        const headers = { 'Authorization': `Bearer ${token}` };
+        const guildsResponse = await fetch('http://localhost:8000/api/admin/guilds', { headers });
+        if (guildsResponse.ok) {
+          const guildsData = await guildsResponse.json();
+          setGuilds(guildsData);
+        }
+      } catch (error) {
+        console.error('Error loading guilds:', error);
+      }
+    };
+
+    loadGuilds();
   }, [activeTab, token, navigate]);
 
   const loadData = async () => {
@@ -92,6 +120,13 @@ function AdminDashboard() {
           if (tasksResponse.ok) {
             const tasksData = await tasksResponse.json();
             setTasks(tasksData);
+          }
+          break;
+        case 'guilds':
+          const guildsResponse = await fetch('http://localhost:8000/api/admin/guilds', { headers });
+          if (guildsResponse.ok) {
+            const guildsData = await guildsResponse.json();
+            setGuilds(guildsData);
           }
           break;
       }
@@ -315,6 +350,62 @@ function AdminDashboard() {
     </div>
   );
 
+  const renderGuildsTab = () => (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <h3 style={{ margin: 0 }}>Guilds Management</h3>
+        <button
+          style={{
+            padding: '8px 16px',
+            backgroundColor: '#3182ce',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          Create Guild
+        </button>
+      </div>
+
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#f7fafc' }}>
+              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Name</th>
+              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Type</th>
+              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Tier</th>
+              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Members</th>
+              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Personal</th>
+              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {guilds.map(guild => (
+              <tr key={guild.id}>
+                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>{guild.name}</td>
+                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>{guild.type}</td>
+                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>{guild.billing_tier}</td>
+                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>{guild.member_limit}</td>
+                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>{guild.is_solo ? 'Yes' : 'No'}</td>
+                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>
+                  <button style={{ marginRight: '8px', padding: '4px 8px', backgroundColor: '#3182ce', color: 'white', border: 'none', borderRadius: '4px' }}>
+                    Edit
+                  </button>
+                  {!guild.is_solo && guild.is_deletable && (
+                    <button style={{ padding: '4px 8px', backgroundColor: '#e53e3e', color: 'white', border: 'none', borderRadius: '4px' }}>
+                      Delete
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
   const renderContent = () => {
     switch (activeTab) {
       case 'users':
@@ -325,6 +416,8 @@ function AdminDashboard() {
         return renderObjectivesTab();
       case 'tasks':
         return renderTasksTab();
+      case 'guilds':
+        return renderGuildsTab();
       default:
         return <div>Select a tab to manage entities</div>;
     }
@@ -348,6 +441,51 @@ function AdminDashboard() {
         <h1 style={{ margin: 0, color: '#2d3748' }}>SphereConnect Admin</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <span>Welcome, {user.name}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <label htmlFor="guild-select" style={{ fontSize: '14px', color: '#4a5568' }}>Current Guild:</label>
+            <select
+              id="guild-select"
+              value={user.guild_id}
+              onChange={async (e) => {
+                const newGuildId = e.target.value;
+                try {
+                  const response = await fetch(`http://localhost:8000/api/users/${user.id}/switch-guild`, {
+                    method: 'PATCH',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ guild_id: newGuildId })
+                  });
+
+                  if (response.ok) {
+                    const result = await response.json();
+                    // Update local user state
+                    const updatedUser = { ...user, guild_id: newGuildId };
+                    localStorage.setItem('user', JSON.stringify(updatedUser));
+                    // Force re-render by updating state
+                    window.location.reload(); // Simple way to refresh the page with new guild context
+                  } else {
+                    setMessage('Failed to switch guild');
+                  }
+                } catch (error) {
+                  setMessage('Error switching guild');
+                }
+              }}
+              style={{
+                padding: '4px 8px',
+                border: '1px solid #e2e8f0',
+                borderRadius: '4px',
+                backgroundColor: 'white'
+              }}
+            >
+              {guilds.map(guild => (
+                <option key={guild.id} value={guild.id}>
+                  {guild.name} {guild.is_solo ? '(Personal)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
           <button
             onClick={handleLogout}
             style={{
@@ -474,6 +612,20 @@ function AdminDashboard() {
                   }}
                 >
                   📂 Categories
+                </button>
+                <button
+                  onClick={() => setActiveTab('guilds')}
+                  style={{
+                    padding: '12px 16px',
+                    backgroundColor: activeTab === 'guilds' ? '#3182ce' : 'transparent',
+                    color: activeTab === 'guilds' ? 'white' : '#4a5568',
+                    border: 'none',
+                    borderRadius: '4px',
+                    textAlign: 'left',
+                    cursor: 'pointer'
+                  }}
+                >
+                  🏰 Guilds
                 </button>
               </div>
             </div>

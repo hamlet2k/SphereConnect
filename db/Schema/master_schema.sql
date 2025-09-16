@@ -7,7 +7,14 @@
 -- Guilds
 CREATE TABLE guilds (
     id UUID PRIMARY KEY,
-    name TEXT NOT NULL
+    name TEXT NOT NULL,
+    creator_id UUID REFERENCES users(id),
+    member_limit INTEGER DEFAULT 2,
+    billing_tier TEXT DEFAULT 'free',
+    is_solo BOOLEAN DEFAULT true,
+    is_deletable BOOLEAN DEFAULT true,
+    type TEXT DEFAULT 'game_star_citizen',
+    CHECK (NOT (is_solo = true AND is_deletable = true))
 );
 
 -- Ranks
@@ -47,6 +54,9 @@ CREATE TABLE users (
     totp_secret VARCHAR(32),
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
+    current_guild_id TEXT DEFAULT 'personal',
+    max_guilds INTEGER DEFAULT 3,
+    is_system_admin BOOLEAN DEFAULT false,
     FOREIGN KEY (guild_id) REFERENCES guilds(id),
     FOREIGN KEY (rank) REFERENCES ranks(id),
     FOREIGN KEY (squad_id) REFERENCES squads(id)

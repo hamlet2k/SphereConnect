@@ -259,6 +259,30 @@ class SphereConnect(Skill):
                     },
                 },
             ),
+            (
+                "switch_guild",
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "switch_guild",
+                        "description": "Switch the user's current guild context to a different guild.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "guild_name": {
+                                    "type": "string",
+                                    "description": "The name of the guild to switch to",
+                                },
+                                "user_id": {
+                                    "type": "string",
+                                    "description": "The user identifier (required for switching)",
+                                },
+                            },
+                            "required": ["guild_name", "user_id"],
+                        },
+                    },
+                },
+            ),
         ]
 
     async def _make_api_request(self, method: str, endpoint: str, data: Dict[str, Any] = None) -> str:
@@ -328,7 +352,7 @@ class SphereConnect(Skill):
         function_response = "Error: SphereConnect command failed."
         instant_response = ""
 
-        if tool_name in ["create_objective", "assign_task", "report_progress", "get_guild_status", "schedule_task", "get_my_tasks"]:
+        if tool_name in ["create_objective", "assign_task", "report_progress", "get_guild_status", "schedule_task", "get_my_tasks", "switch_guild"]:
             benchmark.start_snapshot(f"SphereConnect: {tool_name}")
 
             if self.settings.debug_mode:
@@ -483,6 +507,42 @@ class SphereConnect(Skill):
 
                 except Exception as e:
                     function_response = f"Failed to get your tasks: {e}"
+
+            elif tool_name == "switch_guild":
+                try:
+                    # First, get all guilds to find the one by name
+                    guilds_response = await self._make_api_request("GET", "/admin/guilds")
+                    try:
+                        guilds = json.loads(guilds_response)
+                        target_guild = None
+
+                        # Find guild by name (case-insensitive)
+                        for guild in guilds:
+                            if guild.get("name", "").lower() == parameters["guild_name"].lower():
+                                target_guild = guild
+                                break
+
+                        if not target_guild:
+                            function_response = f"Guild '{parameters['guild_name']}' not found."
+                        else:
+                            # Switch to the found guild
+                            switch_data = {
+                                "guild_id": target_guild["id"]
+                            }
+
+                            response_text = await self._make_api_request(
+                                "PATCH",
+                                f"/users/{parameters['user_id']}/switch-guild",
+                                switch_data
+                            )
+
+                            function_response = f"Successfully switched to guild '{target_guild['name']}'."
+
+                    except json.JSONDecodeError:
+                        function_response = f"Failed to parse guild list: {guilds_response}"
+
+                except Exception as e:
+                    function_response = f"Failed to switch guild: {e}"
 
             if self.settings.debug_mode:
                 await self.printr.print_async(

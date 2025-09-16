@@ -108,6 +108,9 @@ class MFAVerify(BaseModel):
     user_id: str
     totp_code: str
 
+class GuildSwitch(BaseModel):
+    guild_id: str
+
 class AICommanderUpdate(BaseModel):
     system_prompt: Optional[str] = None
     user_prompt: Optional[str] = None
@@ -406,7 +409,7 @@ async def verify_pin_endpoint(pin_data: PinVerification, db: Session = Depends(g
 
 @router.post("/auth/register")
 async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
-    """Register a new user"""
+    """Register a new user and auto-create personal guild"""
     try:
         # Check if user already exists
         existing_user = db.query(User).filter(
@@ -424,23 +427,45 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
         hashed_password = hash_password(user_data.password)
         hashed_pin = hash_pin(user_data.pin)
 
+        # Auto-create personal guild
+        personal_guild_id = uuid.uuid4()
+        personal_guild = Guild(
+            id=personal_guild_id,
+            name=f"{user_data.name}'s Personal Guild",
+            creator_id=None,  # Will set after user creation
+            member_limit=2,
+            billing_tier='free',
+            is_solo=True,
+            is_deletable=False,
+            type='game_star_citizen'
+        )
+        db.add(personal_guild)
+
         # Create new user
         new_user = User(
             id=uuid.uuid4(),
-            guild_id=uuid.UUID(user_data.guild_id),
+            guild_id=personal_guild_id,  # Assign to personal guild
             name=user_data.name,
             password=hashed_password,
             pin=hashed_pin,
             phonetic=user_data.phonetic,
-            availability="offline"
+            availability="offline",
+            current_guild_id='personal',
+            max_guilds=3,
+            is_system_admin=False
         )
 
         db.add(new_user)
         db.commit()
 
+        # Update personal guild creator_id
+        personal_guild.creator_id = new_user.id
+        db.commit()
+
         return {
-            "message": "User registered successfully",
+            "message": "User registered successfully with personal guild",
             "user_id": str(new_user.id),
+            "personal_guild_id": str(personal_guild_id),
             "tts_response": f"User {user_data.name} registered successfully"
         }
 
@@ -451,6 +476,47 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Registration failed: {str(e)}"
+        )
+
+@router.patch("/users/{user_id}/switch-guild")
+async def switch_guild(
+    user_id: str,
+    switch_data: GuildSwitch,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Switch user's current guild context"""
+    try:
+        # Verify user owns this account
+        if str(current_user.id) != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Can only switch your own guild"
+            )
+
+        target_guild_id = uuid.UUID(switch_data.guild_id)
+
+        # Check if user is member of target guild
+        # For now, assume user can switch to any guild they're in
+        # In future, might need to check membership table
+
+        # Update current_guild_id
+        current_user.current_guild_id = str(target_guild_id)
+        db.commit()
+
+        return {
+            "message": "Guild switched successfully",
+            "current_guild_id": str(target_guild_id),
+            "tts_response": "Guild context switched"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Guild switch failed: {str(e)}"
         )
 
 @router.post("/auth/refresh", response_model=TokenResponse)
