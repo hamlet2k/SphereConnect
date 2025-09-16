@@ -47,11 +47,27 @@ def check_existing_schema(engine):
             print("Core tables missing - schema needs to be created")
             return False, "missing_tables"
 
-        # Check if users table has guild_id column (the issue we just fixed)
+        # Check if users table has required columns and correct types
         if 'users' in existing_tables:
-            columns = [col['name'] for col in inspector.get_columns('users')]
-            if 'guild_id' not in columns:
+            columns = inspector.get_columns('users')
+            column_names = [col['name'] for col in columns]
+
+            # Check for required columns
+            if 'guild_id' not in column_names:
                 print("WARNING: users table missing guild_id column - schema mismatch detected")
+                return False, "schema_mismatch"
+
+            # Check if current_guild_id is UUID type (not TEXT)
+            current_guild_col = next((col for col in columns if col['name'] == 'current_guild_id'), None)
+            if current_guild_col and 'UUID' not in str(current_guild_col['type']).upper():
+                print("WARNING: users.current_guild_id should be UUID type - schema mismatch detected")
+                return False, "schema_mismatch"
+
+        # Check if guilds table has is_active column
+        if 'guilds' in existing_tables:
+            columns = [col['name'] for col in inspector.get_columns('guilds')]
+            if 'is_active' not in columns:
+                print("WARNING: guilds table missing is_active column - schema mismatch detected")
                 return False, "schema_mismatch"
 
         print("Existing schema appears to be up to date")
@@ -97,9 +113,9 @@ def main():
                             conn.execute(text("SET CONSTRAINTS ALL DEFERRED"))
                         # Drop tables in dependency order
                         tables_to_drop = ['user_sessions', 'objective_categories_junction',
-                                        'tasks', 'objectives', 'ai_commanders', 'ranks',
-                                        'access_levels', 'objective_categories', 'squads',
-                                        'users', 'guilds']
+                                        'guild_requests', 'invites', 'tasks', 'objectives',
+                                        'ai_commanders', 'ranks', 'access_levels',
+                                        'objective_categories', 'squads', 'users', 'guilds']
                         for table in tables_to_drop:
                             try:
                                 conn.execute(text(f"DROP TABLE IF EXISTS {table} CASCADE"))

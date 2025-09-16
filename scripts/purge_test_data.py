@@ -33,7 +33,7 @@ else:
 
 from sqlalchemy import create_engine, and_
 from sqlalchemy.orm import sessionmaker
-from app.core.models import Base, Guild, Objective, Task, AICommander, create_tables
+from app.core.models import Base, Guild, User, Objective, Task, AICommander, Invite, GuildRequest, create_tables
 
 def get_database_session():
     """Create and return database session"""
@@ -62,18 +62,22 @@ def find_test_data(session) -> Dict[str, List[Any]]:
         'users': [],
         'commanders': [],
         'objectives': [],
-        'tasks': []
+        'tasks': [],
+        'invites': [],
+        'guild_requests': []
     }
 
     # Find test guilds (by name patterns from both test scripts)
-    test_guild_patterns = ['Test UEE Fleet', 'Test Guild']
+    test_guild_patterns = ['Test UEE Fleet', 'Test Guild', "Test User's Personal Guild"]
     for pattern in test_guild_patterns:
         test_guilds = session.query(Guild).filter(Guild.name == pattern).all()
         test_data['guilds'].extend(test_guilds)
 
     # Find test users (by name pattern)
-    test_users = session.query(User).filter(User.name == 'Test Pilot').all()
-    test_data['users'] = test_users
+    test_user_patterns = ['Test Pilot', 'testuser']
+    for pattern in test_user_patterns:
+        test_users = session.query(User).filter(User.name == pattern).all()
+        test_data['users'].extend(test_users)
 
     # Find test AI commanders
     for guild in test_data['guilds']:
@@ -92,13 +96,23 @@ def find_test_data(session) -> Dict[str, List[Any]]:
             test_data['objectives'].extend(objectives)
 
     # Find test tasks (by various patterns)
-    task_patterns = ['Scout Route', 'Scout Location', 'Assigned Task', 'Sector Patrol']
+    task_patterns = ['Scout Route', 'Scout Location', 'Assigned Task', 'Sector Patrol', 'Mine Gold Asteroid Alpha']
     for objective in test_data['objectives']:
         for pattern in task_patterns:
             tasks = session.query(Task).filter(
                 and_(Task.objective_id == objective.id, Task.name == pattern)
             ).all()
             test_data['tasks'].extend(tasks)
+
+    # Find test invites (by guild association)
+    for guild in test_data['guilds']:
+        invites = session.query(Invite).filter(Invite.guild_id == guild.id).all()
+        test_data['invites'].extend(invites)
+
+    # Find test guild requests (by user association)
+    for user in test_data['users']:
+        requests = session.query(GuildRequest).filter(GuildRequest.user_id == user.id).all()
+        test_data['guild_requests'].extend(requests)
 
     # Remove duplicates
     for key in test_data:
@@ -118,6 +132,8 @@ def display_test_data(test_data: Dict[str, List[Any]]):
             for i, item in enumerate(items, 1):
                 if hasattr(item, 'name'):
                     print(f"  {i}. {item.name} (ID: {item.id})")
+                elif hasattr(item, 'code'):
+                    print(f"  {i}. Code: {item.code} (ID: {item.id})")
                 else:
                     print(f"  {i}. ID: {item.id}")
 
@@ -131,7 +147,25 @@ def purge_test_data(session, test_data: Dict[str, List[Any]], dry_run: bool = Fa
 
     try:
         # Delete in reverse order of creation (respecting foreign keys)
-        # 1. Delete tasks first
+        # 1. Delete guild requests first (references users and guilds)
+        for request in test_data['guild_requests']:
+            if not dry_run:
+                session.delete(request)
+                print(f"✓ Deleted guild request: {request.id}")
+            else:
+                print(f"📋 Would delete guild request: {request.id}")
+            deleted_count += 1
+
+        # 2. Delete invites (references guilds)
+        for invite in test_data['invites']:
+            if not dry_run:
+                session.delete(invite)
+                print(f"✓ Deleted invite: {invite.code} (ID: {invite.id})")
+            else:
+                print(f"📋 Would delete invite: {invite.code} (ID: {invite.id})")
+            deleted_count += 1
+
+        # 3. Delete tasks (references objectives)
         for task in test_data['tasks']:
             if not dry_run:
                 session.delete(task)
@@ -140,7 +174,7 @@ def purge_test_data(session, test_data: Dict[str, List[Any]], dry_run: bool = Fa
                 print(f"📋 Would delete task: {task.name} (ID: {task.id})")
             deleted_count += 1
 
-        # 2. Delete objectives
+        # 4. Delete objectives (references guilds)
         for objective in test_data['objectives']:
             if not dry_run:
                 session.delete(objective)
@@ -149,7 +183,7 @@ def purge_test_data(session, test_data: Dict[str, List[Any]], dry_run: bool = Fa
                 print(f"📋 Would delete objective: {objective.name} (ID: {objective.id})")
             deleted_count += 1
 
-        # 3. Delete AI commanders
+        # 5. Delete AI commanders (references guilds)
         for commander in test_data['commanders']:
             if not dry_run:
                 session.delete(commander)
@@ -158,7 +192,7 @@ def purge_test_data(session, test_data: Dict[str, List[Any]], dry_run: bool = Fa
                 print(f"📋 Would delete AI Commander: {commander.name} (ID: {commander.id})")
             deleted_count += 1
 
-        # 4. Delete users
+        # 6. Delete users (references guilds)
         for user in test_data['users']:
             if not dry_run:
                 session.delete(user)
@@ -167,7 +201,7 @@ def purge_test_data(session, test_data: Dict[str, List[Any]], dry_run: bool = Fa
                 print(f"📋 Would delete user: {user.name} (ID: {user.id})")
             deleted_count += 1
 
-        # 5. Delete guilds last
+        # 7. Delete guilds last (referenced by many tables)
         for guild in test_data['guilds']:
             if not dry_run:
                 session.delete(guild)

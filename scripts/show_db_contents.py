@@ -35,7 +35,7 @@ else:
 from sqlalchemy.orm import sessionmaker
 from app.core.models import (
     Guild, User, Objective, Task, AICommander, Squad, Rank, AccessLevel,
-    ObjectiveCategory, UserSession, ENGINE
+    ObjectiveCategory, UserSession, Invite, GuildRequest, ENGINE
 )
 
 def get_database_session():
@@ -56,6 +56,8 @@ def get_summary_counts(session) -> Dict[str, int]:
         'access_levels': session.query(AccessLevel).count(),
         'objective_categories': session.query(ObjectiveCategory).count(),
         'user_sessions': session.query(UserSession).count(),
+        'invites': session.query(Invite).count(),
+        'guild_requests': session.query(GuildRequest).count(),
     }
     return counts
 
@@ -148,6 +150,39 @@ def display_detailed_contents(session, guild_filter: str = None):
             print(f"  - {cmdr.name} ({guild_name}) (ID: {cmdr.id})")
     else:
         print("  (No AI commanders found)")
+
+    # Invites
+    print("\nINVITES:")
+    invites = session.query(Invite).all()
+    if invites:
+        for invite in invites:
+            guild_name = "Unknown"
+            if invite.guild_id:
+                guild = session.query(Guild).filter(Guild.id == invite.guild_id).first()
+                if guild:
+                    guild_name = guild.name
+            print(f"  - Code: {invite.code} ({guild_name}) - Uses left: {invite.uses_left} (ID: {invite.id})")
+    else:
+        print("  (No invites found)")
+
+    # Guild Requests
+    print("\nGUILD REQUESTS:")
+    requests = session.query(GuildRequest).all()
+    if requests:
+        for req in requests:
+            user_name = "Unknown"
+            guild_name = "Unknown"
+            if req.user_id:
+                user = session.query(User).filter(User.id == req.user_id).first()
+                if user:
+                    user_name = user.name
+            if req.guild_id:
+                guild = session.query(Guild).filter(Guild.id == req.guild_id).first()
+                if guild:
+                    guild_name = guild.name
+            print(f"  - {user_name} -> {guild_name} (Status: {req.status}) (ID: {req.id})")
+    else:
+        print("  (No guild requests found)")
 
     print("="*80)
 

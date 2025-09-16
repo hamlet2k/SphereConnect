@@ -34,6 +34,7 @@ def seed_test_data():
             member_limit=2,
             billing_tier='free',
             is_solo=True,
+            is_active=True,  # New field
             is_deletable=False,
             type='game_star_citizen'
         )
@@ -48,7 +49,7 @@ def seed_test_data():
             pin=hash_pin("123456"),
             phonetic="Test User",
             availability="online",
-            current_guild_id='personal',
+            current_guild_id=personal_guild_id,  # Now UUID instead of string
             max_guilds=3,
             is_system_admin=False
         )
@@ -70,6 +71,7 @@ def seed_test_data():
                 member_limit=2,
                 billing_tier='free',
                 is_solo=False,
+                is_active=True,  # New field
                 is_deletable=True,
                 type='game_star_citizen'
             )
@@ -237,6 +239,7 @@ def seed_test_data():
         print("   Password: testpass123")
         print("   PIN: 123456")
         print(f"   Personal Guild ID: {personal_guild_id}")
+        print(f"   Current Guild ID: {personal_guild_id}")
 
     except Exception as e:
         db.rollback()
