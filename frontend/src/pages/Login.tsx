@@ -1,5 +1,6 @@
 import React, { useState, useEffect, FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useGuild } from '../contexts/GuildContext';
 
 type LoginStep = 'credentials' | 'pin' | 'mfa' | 'success';
 
@@ -30,6 +31,14 @@ function Login() {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const { setCurrentGuild } = useGuild();
+
+  useEffect(() => {
+    if (location.state?.message) {
+      setMessage(location.state.message);
+    }
+  }, [location.state]);
 
   // Auto-logoff timer
   useEffect(() => {
@@ -109,10 +118,27 @@ function Login() {
         setStep('mfa');
         setMessage('MFA required. Please enter your TOTP code.');
       } else {
-        // Store token and proceed
+        // Store token and user
         localStorage.setItem('token', data.access_token);
         localStorage.setItem('user', JSON.stringify(data.user));
         localStorage.setItem('lastActivity', Date.now().toString());
+
+        // Fetch current guild details and set context
+        const currentGuildId = data.user.current_guild_id;
+        if (currentGuildId) {
+          try {
+            const guildResponse = await fetch(`http://localhost:8000/api/guilds/${currentGuildId}`, {
+              headers: { 'Authorization': `Bearer ${data.access_token}` }
+            });
+            const guildData = await guildResponse.json();
+            if (guildResponse.ok) {
+              setCurrentGuild(currentGuildId, guildData.name);
+            }
+          } catch (err) {
+            console.error('Failed to fetch guild details:', err);
+          }
+        }
+
         setStep('success');
         setTimeout(() => navigate('/admin'), 1000);
       }

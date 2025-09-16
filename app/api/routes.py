@@ -84,7 +84,7 @@ class UserRegister(BaseModel):
     name: str
     password: str
     pin: str
-    guild_id: str
+    guild_id: Optional[str] = None
     phonetic: Optional[str] = None
 
 class PinVerification(BaseModel):
@@ -362,6 +362,7 @@ async def login(login_data: UserLogin, db: Session = Depends(get_db)):
                 "id": str(user.id),
                 "name": user.name,
                 "guild_id": str(user.guild_id),
+                "current_guild_id": str(user.current_guild_id) if user.current_guild_id else None,
                 "rank": str(user.rank) if user.rank else None
             },
             requires_mfa=bool(user.totp_secret)
@@ -411,16 +412,13 @@ async def verify_pin_endpoint(pin_data: PinVerification, db: Session = Depends(g
 async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
     """Register a new user and auto-create personal guild"""
     try:
-        # Check if user already exists
-        existing_user = db.query(User).filter(
-            User.name == user_data.name,
-            User.guild_id == uuid.UUID(user_data.guild_id)
-        ).first()
+        # Check if user already exists (globally, since personal guilds are unique per user)
+        existing_user = db.query(User).filter(User.name == user_data.name).first()
 
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="User already exists in this guild"
+                detail="User already exists"
             )
 
         # Hash password and PIN
@@ -436,6 +434,7 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
             member_limit=2,
             billing_tier='free',
             is_solo=True,
+            is_active=True,
             is_deletable=False,
             type='game_star_citizen'
         )
@@ -450,7 +449,7 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
             pin=hashed_pin,
             phonetic=user_data.phonetic,
             availability="offline",
-            current_guild_id='personal',
+            current_guild_id=personal_guild_id,  # Set to personal guild UUID
             max_guilds=3,
             is_system_admin=False
         )
@@ -466,6 +465,7 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
             "message": "User registered successfully with personal guild",
             "user_id": str(new_user.id),
             "personal_guild_id": str(personal_guild_id),
+            "current_guild_id": str(personal_guild_id),
             "tts_response": f"User {user_data.name} registered successfully"
         }
 
@@ -954,6 +954,28 @@ async def get_tasks(guild_id: str = None, assignee: str = None, db: Session = De
         ]
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid ID format")
+
+@router.get("/guilds/{guild_id}")
+async def get_guild(guild_id: str, db: Session = Depends(get_db)):
+    """Get guild details"""
+    try:
+        guild_uuid = uuid.UUID(guild_id)
+        guild = db.query(Guild).filter(Guild.id == guild_uuid).first()
+
+        if not guild:
+            raise HTTPException(status_code=404, detail="Guild not found")
+
+        return {
+            "id": str(guild.id),
+            "name": guild.name,
+            "member_limit": guild.member_limit,
+            "billing_tier": guild.billing_tier,
+            "is_solo": guild.is_solo,
+            "is_active": guild.is_active,
+            "type": guild.type
+        }
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid guild ID format")
 
 @router.get("/guilds/{guild_id}/ai-commander")
 async def get_ai_commander(guild_id: str, db: Session = Depends(get_db)):

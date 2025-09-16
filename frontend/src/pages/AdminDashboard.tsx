@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useGuild } from '../contexts/GuildContext';
 
 type ActiveTab = 'users' | 'ranks' | 'objectives' | 'tasks' | 'squads' | 'access-levels' | 'categories' | 'guilds';
 
@@ -57,6 +58,7 @@ function AdminDashboard() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const navigate = useNavigate();
+  const { currentGuildId, guildName, setCurrentGuild } = useGuild();
 
   const token = localStorage.getItem('token');
   const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -95,28 +97,28 @@ function AdminDashboard() {
       switch (activeTab) {
         case 'users':
           // Load users for the guild
-          const usersResponse = await fetch(`http://localhost:8000/api/admin/users?guild_id=${user.guild_id}`, { headers });
+          const usersResponse = await fetch(`http://localhost:8000/api/admin/users?guild_id=${currentGuildId}`, { headers });
           if (usersResponse.ok) {
             const usersData = await usersResponse.json();
             setUsers(usersData);
           }
           break;
         case 'ranks':
-          const ranksResponse = await fetch(`http://localhost:8000/api/admin/ranks?guild_id=${user.guild_id}`, { headers });
+          const ranksResponse = await fetch(`http://localhost:8000/api/admin/ranks?guild_id=${currentGuildId}`, { headers });
           if (ranksResponse.ok) {
             const ranksData = await ranksResponse.json();
             setRanks(ranksData);
           }
           break;
         case 'objectives':
-          const objectivesResponse = await fetch(`http://localhost:8000/api/admin/objectives?guild_id=${user.guild_id}`, { headers });
+          const objectivesResponse = await fetch(`http://localhost:8000/api/admin/objectives?guild_id=${currentGuildId}`, { headers });
           if (objectivesResponse.ok) {
             const objectivesData = await objectivesResponse.json();
             setObjectives(objectivesData);
           }
           break;
         case 'tasks':
-          const tasksResponse = await fetch(`http://localhost:8000/api/admin/tasks?guild_id=${user.guild_id}`, { headers });
+          const tasksResponse = await fetch(`http://localhost:8000/api/admin/tasks?guild_id=${currentGuildId}`, { headers });
           if (tasksResponse.ok) {
             const tasksData = await tasksResponse.json();
             setTasks(tasksData);
@@ -440,12 +442,12 @@ function AdminDashboard() {
       }}>
         <h1 style={{ margin: 0, color: '#2d3748' }}>SphereConnect Admin</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <span>Welcome, {user.name}</span>
+          <span>Logged in as {user.name} | {guildName}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <label htmlFor="guild-select" style={{ fontSize: '14px', color: '#4a5568' }}>Current Guild:</label>
             <select
               id="guild-select"
-              value={user.guild_id}
+              value={currentGuildId || ''}
               onChange={async (e) => {
                 const newGuildId = e.target.value;
                 try {
@@ -460,11 +462,16 @@ function AdminDashboard() {
 
                   if (response.ok) {
                     const result = await response.json();
-                    // Update local user state
-                    const updatedUser = { ...user, guild_id: newGuildId };
-                    localStorage.setItem('user', JSON.stringify(updatedUser));
-                    // Force re-render by updating state
-                    window.location.reload(); // Simple way to refresh the page with new guild context
+                    // Fetch new guild details
+                    const guildResponse = await fetch(`http://localhost:8000/api/guilds/${newGuildId}`, {
+                      headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (guildResponse.ok) {
+                      const guildData = await guildResponse.json();
+                      setCurrentGuild(newGuildId, guildData.name);
+                    }
+                    // Reload data for new guild
+                    loadData();
                   } else {
                     setMessage('Failed to switch guild');
                   }

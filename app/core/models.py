@@ -84,7 +84,7 @@ class User(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Guild management fields
-    current_guild_id = Column(String, default='personal')
+    current_guild_id = Column(PG_UUID(as_uuid=True), ForeignKey('guilds.id'), nullable=True)
     max_guilds = Column(Integer, default=3)
     is_system_admin = Column(Boolean, default=False)
 
@@ -96,6 +96,7 @@ class Guild(Base):
     member_limit = Column(Integer, default=2)
     billing_tier = Column(String, default='free')
     is_solo = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=True)
     is_deletable = Column(Boolean, default=True)
     type = Column(String, default='game_star_citizen')
 
@@ -170,6 +171,24 @@ class ObjectiveCategory(Base):
     guild_id = Column(PG_UUID(as_uuid=True), ForeignKey('guilds.id'), nullable=False, index=True)
     name = Column(String, nullable=False)
     description = Column(String)
+
+class Invite(Base):
+    __tablename__ = 'invites'
+    id = Column(PG_UUID(as_uuid=True), primary_key=True)
+    guild_id = Column(PG_UUID(as_uuid=True), ForeignKey('guilds.id'), nullable=False, index=True)
+    code = Column(String, nullable=False, unique=True)
+    expires_at = Column(DateTime)
+    uses_left = Column(Integer, default=1)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class GuildRequest(Base):
+    __tablename__ = 'guild_requests'
+    id = Column(PG_UUID(as_uuid=True), primary_key=True)
+    user_id = Column(PG_UUID(as_uuid=True), ForeignKey('users.id'), nullable=False, index=True)
+    guild_id = Column(PG_UUID(as_uuid=True), ForeignKey('guilds.id'), nullable=False, index=True)
+    status = Column(String, default='pending')  # pending, approved, denied
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class UserSession(Base):
     __tablename__ = 'user_sessions'

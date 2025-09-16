@@ -18,10 +18,11 @@ CREATE TABLE users (
     totp_secret VARCHAR(32),
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
-    current_guild_id TEXT DEFAULT 'personal',
+    current_guild_id UUID,
     max_guilds INTEGER DEFAULT 3,
     is_system_admin BOOLEAN DEFAULT false,
     FOREIGN KEY (guild_id) REFERENCES guilds(id),
     FOREIGN KEY (rank) REFERENCES ranks(id),
-    FOREIGN KEY (squad_id) REFERENCES squads(id)
+    FOREIGN KEY (squad_id) REFERENCES squads(id),
+    FOREIGN KEY (current_guild_id) REFERENCES guilds(id)
 );
