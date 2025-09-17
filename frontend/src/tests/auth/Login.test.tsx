@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
-import Login from '../pages/Login';
+import Login from '../../pages/Login';
 
 // Type declarations for Jest
 declare const jest: any;
@@ -22,7 +22,7 @@ jest.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
 
-jest.mock('../contexts/GuildContext', () => ({
+jest.mock('../../contexts/GuildContext', () => ({
   useGuild: () => ({
     setCurrentGuild: mockSetCurrentGuild,
   }),

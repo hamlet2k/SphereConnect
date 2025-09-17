@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
-import Register from '../pages/Register';
+import Register from '../../pages/Register';
 
 // Type declarations for Jest
 declare const jest: any;
