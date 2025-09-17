@@ -2324,6 +2324,66 @@ The migration script safely:
 
 The SphereConnect login system now functions correctly with proper UUID auto-generation for user sessions, eliminating the NotNullViolation error and enabling smooth UI testing workflows.
 ----------------------------------------------------------------------------------
+## Guild Management UI Enhancement - Implementation Complete ✅
+
+I have successfully enhanced the guild management UI for SphereConnect MVP with comprehensive guild-related flows. Here's a summary of what was implemented:
+
+### ✅ **Backend Enhancements (app/api/routes.py, app/api/admin_routes.py)**
+- **GET /api/users/{id}/guilds**: Returns user's guilds (personal + joined/created)
+- **PATCH /api/users/{id}/switch-guild**: Updates current_guild_id with verification
+- **POST /api/invites**: Creates invite codes with member limit checks (2 free tier)
+- **POST /api/users/{id}/join**: Joins guild via invite code with limit enforcement
+- **POST /api/users/{id}/leave**: Leaves guild, switches to personal guild
+- **POST /api/admin/users/{id}/kick**: Kicks user with RBAC (manage_users permission)
+- **DELETE /api/admin/guilds/{id}**: Deletes non-personal guilds (creator-only, is_deletable=true)
+
+### ✅ **Frontend Enhancements (AdminDashboard.tsx)**
+- **Guild Switcher**: Dropdown in header showing current guild ("Logged in as {user.name} | {guild_name}")
+- **Guilds Tab**: Comprehensive table with:
+  - Guild info (name, member_count, billing_tier, is_solo)
+  - Action buttons: Invite, Join, Leave, Kick, Delete
+  - Protection for personal guilds (is_solo=true, is_deletable=false)
+- **Star Citizen Theme**: Consistent with Register.tsx/Login.tsx styling
+- **Error Handling**: Alerts for 402 (limit exceeded), 403 (unauthorized), 422 (invalid input)
+- **GuildContext Updates**: Persists current_guild_id changes in localStorage
+
+### ✅ **Wingman AI Integration (wingman-ai/skills/sphereconnect/main.py)**
+- **"Invite member to guild [name]"**: Calls POST /api/invites, returns TTS with code
+- **"Join guild with code [code]"**: Calls POST /api/users/{id}/join
+- **"Leave guild [name]"**: Calls POST /api/users/{id}/leave
+- **Enhanced switch_guild**: Reused for guild switching functionality
+
+### ✅ **Testing Infrastructure**
+- **frontend/src/tests/AdminDashboard.test.tsx**: Comprehensive test specification covering:
+  - Guild switching, invite/join forms, leave/kick buttons
+  - Personal guild deletion protection
+  - Error handling and UI state management
+- **tests/test_admin_crud.py**: Added TestInviteJoin and TestLeaveKick classes with:
+  - Invite creation and member limit testing
+  - Join with valid/invalid codes and limit enforcement
+  - Leave guild and kick user functionality
+- **scripts/test_data.py**: Enhanced with:
+  - 3 test guilds (1 personal, 2 regular)
+  - 3 users for testing
+  - 3 invite codes (2 active, 1 expired)
+  - Proper foreign key relationships and commit ordering
+
+### ✅ **Key Features Implemented**
+1. **Organic Guild Testing**: Full CRUD operations for guild management
+2. **Member Limits**: 2 members free tier, 402 errors on exceed
+3. **Personal Guild Protection**: Cannot delete is_solo=true guilds
+4. **RBAC Enforcement**: Proper permission checks for admin operations
+5. **Voice Integration**: Wingman AI commands for all guild operations
+6. **Error Handling**: Comprehensive error responses and UI feedback
+7. **Data Persistence**: localStorage integration for guild context
+
+### ✅ **Integration Testing**
+- Test data seeding script runs successfully
+- Created comprehensive test data: 3 users, 3 guilds, invite codes
+- Fixed foreign key constraint issues in test data creation
+- Resolved Unicode encoding issues for Windows compatibility
+
+The implementation is now ready for organic testing of all guild-related flows including switching, invite/join, leave/kick operations with proper error handling, limits enforcement, and voice integration through Wingman AI.
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------

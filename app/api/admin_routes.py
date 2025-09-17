@@ -789,6 +789,64 @@ async def get_guilds(
             detail=f"Failed to retrieve guilds: {str(e)}"
         )
 
+@router.post("/users/{user_id}/kick")
+async def kick_user(
+    user_id: str,
+    kick_data: dict,
+    current_user: User = Depends(require_access_level(["manage_users"])),
+    db: Session = Depends(get_db)
+):
+    """Kick a user from their current guild (admin only)"""
+    try:
+        user_uuid = uuid.UUID(user_id)
+        user_to_kick = db.query(User).filter(User.id == user_uuid).first()
+
+        if not user_to_kick:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # Cannot kick yourself
+        if str(user_to_kick.id) == str(current_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Cannot kick yourself"
+            )
+
+        # Find user's personal guild
+        personal_guild = db.query(Guild).filter(
+            Guild.creator_id == user_to_kick.id,
+            Guild.is_solo == True
+        ).first()
+
+        if not personal_guild:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User's personal guild not found"
+            )
+
+        # Switch kicked user to their personal guild
+        user_to_kick.current_guild_id = str(personal_guild.id)
+
+        db.commit()
+
+        return {
+            "message": f"User kicked and switched to personal guild: {personal_guild.name}",
+            "user_id": str(user_to_kick.id),
+            "new_guild_id": str(personal_guild.id),
+            "guild_name": personal_guild.name
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to kick user: {str(e)}"
+        )
+
 @router.delete("/guilds/{guild_id}")
 async def delete_guild(
     guild_id: str,
@@ -826,6 +884,17 @@ async def delete_guild(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="This guild cannot be deleted"
             )
+
+        # Move any users in this guild to their personal guilds
+        users_in_guild = db.query(User).filter(User.current_guild_id == str(guild.id)).all()
+        for user in users_in_guild:
+            # Find user's personal guild
+            personal_guild = db.query(Guild).filter(
+                Guild.creator_id == user.id,
+                Guild.is_solo == True
+            ).first()
+            if personal_guild:
+                user.current_guild_id = str(personal_guild.id)
 
         db.delete(guild)
         db.commit()

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, FormEvent } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useGuild } from '../contexts/GuildContext';
+import { theme } from '../theme';
 
 type LoginStep = 'credentials' | 'pin' | 'mfa' | 'success';
 
@@ -265,10 +266,27 @@ function Login() {
   };
 
   const renderCredentialsForm = () => (
-    <form onSubmit={handleCredentialsSubmit} style={{ maxWidth: '400px', margin: '0 auto' }}>
-      <h2 style={{ textAlign: 'center', marginBottom: '24px' }}>SphereConnect Login</h2>
+    <form onSubmit={handleCredentialsSubmit} style={{
+      maxWidth: '400px',
+      margin: '0 auto',
+      backgroundColor: theme.colors.surface,
+      padding: theme.spacing[8],
+      borderRadius: theme.borderRadius.xl,
+      border: `1px solid ${theme.colors.border}`,
+      boxShadow: theme.shadows.lg
+    }}>
+      <h2 style={{
+        textAlign: 'center',
+        marginBottom: theme.spacing[6],
+        color: theme.colors.primary,
+        fontSize: theme.typography.fontSize['2xl'],
+        fontWeight: theme.typography.fontWeight.bold,
+        textShadow: theme.shadows.neon
+      }}>
+        SphereConnect Login
+      </h2>
 
-      <div style={{ marginBottom: '16px' }}>
+      <div style={{ marginBottom: theme.spacing[4] }}>
         <input
           type="text"
           value={username}
@@ -277,15 +295,28 @@ function Login() {
           required
           style={{
             width: '100%',
-            padding: '12px',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            fontSize: '16px'
+            padding: theme.spacing[3],
+            backgroundColor: theme.colors.background,
+            border: `2px solid ${theme.colors.border}`,
+            borderRadius: theme.borderRadius.lg,
+            color: theme.colors.text,
+            fontSize: theme.typography.fontSize.base,
+            fontFamily: theme.typography.fontFamily,
+            transition: 'all 0.2s ease-in-out',
+            outline: 'none'
+          }}
+          onFocus={(e) => {
+            e.target.style.borderColor = theme.colors.primary;
+            e.target.style.boxShadow = `0 0 0 3px ${theme.colors.primary}20`;
+          }}
+          onBlur={(e) => {
+            e.target.style.borderColor = theme.colors.border;
+            e.target.style.boxShadow = 'none';
           }}
         />
       </div>
 
-      <div style={{ marginBottom: '16px' }}>
+      <div style={{ marginBottom: theme.spacing[6] }}>
         <input
           type="password"
           value={password}
@@ -294,37 +325,101 @@ function Login() {
           required
           style={{
             width: '100%',
-            padding: '12px',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            fontSize: '16px'
+            padding: theme.spacing[3],
+            backgroundColor: theme.colors.background,
+            border: `2px solid ${theme.colors.border}`,
+            borderRadius: theme.borderRadius.lg,
+            color: theme.colors.text,
+            fontSize: theme.typography.fontSize.base,
+            fontFamily: theme.typography.fontFamily,
+            transition: 'all 0.2s ease-in-out',
+            outline: 'none'
+          }}
+          onFocus={(e) => {
+            e.target.style.borderColor = theme.colors.primary;
+            e.target.style.boxShadow = `0 0 0 3px ${theme.colors.primary}20`;
+          }}
+          onBlur={(e) => {
+            e.target.style.borderColor = theme.colors.border;
+            e.target.style.boxShadow = 'none';
           }}
         />
       </div>
-
 
       <button
         type="submit"
         disabled={isLoading}
         style={{
           width: '100%',
-          padding: '12px',
-          backgroundColor: isLoading ? '#ccc' : '#3182ce',
-          color: 'white',
+          padding: theme.spacing[3],
+          backgroundColor: isLoading ? theme.colors.surfaceHover : theme.colors.primary,
+          color: theme.colors.background,
           border: 'none',
-          borderRadius: '4px',
-          fontSize: '16px',
-          cursor: isLoading ? 'not-allowed' : 'pointer'
+          borderRadius: theme.borderRadius.lg,
+          fontSize: theme.typography.fontSize.lg,
+          fontWeight: theme.typography.fontWeight.semibold,
+          fontFamily: theme.typography.fontFamily,
+          cursor: isLoading ? 'not-allowed' : 'pointer',
+          transition: 'all 0.2s ease-in-out',
+          boxShadow: isLoading ? 'none' : theme.shadows.neon,
+          marginBottom: theme.spacing[4]
+        }}
+        onMouseEnter={(e) => {
+          if (!isLoading) {
+            (e.target as HTMLElement).style.backgroundColor = theme.colors.primaryHover;
+            (e.target as HTMLElement).style.transform = 'translateY(-1px)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!isLoading) {
+            (e.target as HTMLElement).style.backgroundColor = theme.colors.primary;
+            (e.target as HTMLElement).style.transform = 'translateY(0)';
+          }
         }}
       >
         {isLoading ? 'Logging in...' : 'Login'}
       </button>
 
+      {/* Registration CTA */}
+      <div style={{
+        textAlign: 'center',
+        marginBottom: theme.spacing[4]
+      }}>
+        <span style={{
+          color: theme.colors.textSecondary,
+          fontSize: theme.typography.fontSize.sm
+        }}>
+          Don't have an account?{' '}
+        </span>
+        <Link
+          to="/register"
+          style={{
+            color: theme.colors.primary,
+            textDecoration: 'none',
+            fontSize: theme.typography.fontSize.sm,
+            fontWeight: theme.typography.fontWeight.semibold,
+            transition: 'all 0.2s ease-in-out'
+          }}
+          onMouseEnter={(e) => {
+            (e.target as HTMLElement).style.color = theme.colors.primaryHover;
+            (e.target as HTMLElement).style.textShadow = theme.shadows.neon;
+          }}
+          onMouseLeave={(e) => {
+            (e.target as HTMLElement).style.color = theme.colors.primary;
+            (e.target as HTMLElement).style.textShadow = 'none';
+          }}
+        >
+          Register now
+        </Link>
+      </div>
+
       {message && (
         <p style={{
-          marginTop: '16px',
-          color: message.includes('Error') ? '#e53e3e' : '#38a169',
-          textAlign: 'center'
+          marginTop: theme.spacing[4],
+          color: message.includes('Error') ? theme.colors.error : theme.colors.success,
+          textAlign: 'center',
+          fontSize: theme.typography.fontSize.sm,
+          fontWeight: theme.typography.fontWeight.medium
         }}>
           {message}
         </p>
@@ -504,8 +599,10 @@ function Login() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: '#f7fafc',
-      padding: '20px'
+      backgroundColor: theme.colors.background,
+      backgroundImage: `radial-gradient(circle at 20% 50%, ${theme.colors.primary}10 0%, transparent 50%), radial-gradient(circle at 80% 20%, ${theme.colors.secondary}10 0%, transparent 50%)`,
+      padding: theme.spacing[4],
+      fontFamily: theme.typography.fontFamily
     }}>
       {step === 'credentials' && renderCredentialsForm()}
       {step === 'pin' && renderPinForm()}
@@ -516,6 +613,11 @@ function Login() {
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
+        }
+
+        /* Custom placeholder styling */
+        input::placeholder {
+          color: ${theme.colors.textMuted} !important;
         }
       `}</style>
     </div>

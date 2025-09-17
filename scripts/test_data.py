@@ -23,7 +23,7 @@ def seed_test_data():
     db = next(get_db())
 
     try:
-        print("🌱 Seeding test data...")
+        print("Seeding test data...")
 
         # Create test guild (personal guild for user)
         personal_guild_id = uuid.uuid4()
@@ -39,6 +39,7 @@ def seed_test_data():
             type='game_star_citizen'
         )
         db.add(personal_guild)
+        db.commit()  # Commit guild first
 
         # Create test user
         test_user = User(
@@ -49,7 +50,7 @@ def seed_test_data():
             pin=hash_pin("123456"),
             phonetic="Test User",
             availability="online",
-            current_guild_id=personal_guild_id,  # Now UUID instead of string
+            current_guild_id=personal_guild_id,  # Now safe to set
             max_guilds=3,
             is_system_admin=False
         )
@@ -190,7 +191,6 @@ def seed_test_data():
                 "classified": "High-value cargo operation",
                 "metrics": {"gold scu": 0}
             },
-            categories=["Economy"],
             priority="High",
             applicable_rank="Recruit",
             progress={},
@@ -199,6 +199,7 @@ def seed_test_data():
             squad_id=squad.id
         )
         db.add(objective)
+        db.commit()  # Commit objective first
 
         # Create sample task
         task = Task(
@@ -221,45 +222,86 @@ def seed_test_data():
         )
         db.add(task)
 
+        # Create invite codes for testing
+        from datetime import timedelta
+        from app.core.models import Invite
+
+        invite_codes = []
+        for i in range(3):
+            invite = Invite(
+                id=uuid.uuid4(),
+                guild_id=personal_guild_id,
+                code=f"TESTCODE{i+1}",
+                expires_at=datetime.utcnow() + timedelta(days=7),
+                uses_left=1 if i < 2 else 0,  # One expired invite
+                created_at=datetime.utcnow()
+            )
+            db.add(invite)
+            invite_codes.append(invite)
+
+        # Create additional test users for guild testing
+        test_users = []
+        for i in range(2):
+            test_user_extra = User(
+                id=uuid.uuid4(),
+                guild_id=personal_guild_id,
+                name=f"testuser{i+2}",
+                password=hash_password("testpass123"),
+                pin=hash_pin("123456"),
+                phonetic=f"Test User {i+2}",
+                availability="online",
+                current_guild_id=personal_guild_id,  # Now safe to set
+                max_guilds=3,
+                is_system_admin=False
+            )
+            db.add(test_user_extra)
+            test_users.append(test_user_extra)
+
         db.commit()
 
-        print("✅ Test data seeded successfully!")
-        print(f"   📊 Created 1 user with personal guild")
-        print(f"   🏰 Created {len(extra_guilds) + 1} total guilds")
-        print(f"   🎖️  Created 2 ranks")
-        print(f"   🔐 Created {len(access_levels)} access levels")
-        print(f"   🤖 Created 1 AI Commander")
-        print(f"   👥 Created 1 squad")
-        print(f"   📂 Created {len(categories)} objective categories")
-        print(f"   🎯 Created 1 objective")
-        print(f"   📋 Created 1 task")
+        print("Test data seeded successfully!")
+        print(f"   Created 1 main user + {len(test_users)} additional users")
+        print(f"   Created {len(extra_guilds) + 1} total guilds")
+        print(f"   Created 2 ranks")
+        print(f"   Created {len(access_levels)} access levels")
+        print(f"   Created 1 AI Commander")
+        print(f"   Created 1 squad")
+        print(f"   Created {len(categories)} objective categories")
+        print(f"   Created 1 objective")
+        print(f"   Created 1 task")
+        print(f"   Created {len(invite_codes)} invite codes")
         print()
-        print("🔑 Test User Credentials:")
+        print("Test User Credentials:")
         print("   Username: testuser")
         print("   Password: testpass123")
         print("   PIN: 123456")
         print(f"   Personal Guild ID: {personal_guild_id}")
         print(f"   Current Guild ID: {personal_guild_id}")
+        print()
+        print("Test Invite Codes:")
+        for i, invite in enumerate(invite_codes):
+            status = "active" if invite.uses_left > 0 else "expired"
+            print(f"   Code {i+1}: {invite.code} ({status}, {invite.uses_left} uses left)")
 
     except Exception as e:
         db.rollback()
-        print(f"❌ Failed to seed test data: {e}")
+        print(f"Failed to seed test data: {e}")
         import traceback
         traceback.print_exc()
     finally:
         db.close()
 
 if __name__ == "__main__":
-    print("🧪 SphereConnect Test Data Seeder")
+    print("SphereConnect Test Data Seeder")
     print("=" * 40)
 
     # Create tables if they don't exist
     try:
-        print("📋 Ensuring database tables exist...")
+        print("Ensuring database tables exist...")
         create_tables()
-        print("✅ Database tables ready")
+        print("Database tables ready")
     except Exception as e:
-        print(f"❌ Failed to create tables: {e}")
+        print(f"Failed to create tables: {e}")
         sys.exit(1)
 
     # Seed test data

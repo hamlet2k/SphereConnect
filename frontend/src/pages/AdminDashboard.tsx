@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGuild } from '../contexts/GuildContext';
+import { theme } from '../theme';
+import GuildList from '../components/GuildList';
+import InviteForm from '../components/InviteForm';
+import JoinForm from '../components/JoinForm';
 
 type ActiveTab = 'users' | 'ranks' | 'objectives' | 'tasks' | 'squads' | 'access-levels' | 'categories' | 'guilds';
 
@@ -59,6 +63,15 @@ function AdminDashboard() {
   const [message, setMessage] = useState('');
   const navigate = useNavigate();
   const { currentGuildId, guildName, setCurrentGuild } = useGuild();
+
+  // Modal states
+  const [inviteFormOpen, setInviteFormOpen] = useState(false);
+  const [joinFormOpen, setJoinFormOpen] = useState(false);
+  const [selectedGuildForInvite, setSelectedGuildForInvite] = useState<{id: string, name: string} | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [joinLoading, setJoinLoading] = useState(false);
+  const [inviteMessage, setInviteMessage] = useState('');
+  const [joinMessage, setJoinMessage] = useState('');
 
   const token = localStorage.getItem('token');
   const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -144,6 +157,185 @@ function AdminDashboard() {
     localStorage.removeItem('user');
     localStorage.removeItem('lastActivity');
     navigate('/login');
+  };
+
+  // Guild operation handlers
+  const handleGuildSwitch = async (guildId: string) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/users/${user.id}/switch-guild`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ guild_id: guildId })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        // Fetch new guild details
+        const guildResponse = await fetch(`http://localhost:8000/api/guilds/${guildId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (guildResponse.ok) {
+          const guildData = await guildResponse.json();
+          setCurrentGuild(guildId, guildData.name);
+        }
+        // Reload data for new guild
+        loadData();
+        setMessage('Successfully switched guild');
+      } else if (response.status === 402) {
+        setMessage('Guild limit reached. Upgrade to add more guilds.');
+      } else {
+        setMessage('Failed to switch guild');
+      }
+    } catch (error) {
+      setMessage('Error switching guild');
+    }
+  };
+
+  const handleInvite = (guildId: string) => {
+    const guild = guilds.find(g => g.id === guildId);
+    if (guild) {
+      setSelectedGuildForInvite({ id: guildId, name: guild.name });
+      setInviteFormOpen(true);
+    }
+  };
+
+  const handleInviteSubmit = async (guildId: string, inviteData: any) => {
+    setInviteLoading(true);
+    setInviteMessage('');
+
+    try {
+      const response = await fetch('http://localhost:8000/api/invites', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(inviteData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setInviteMessage('Invite created successfully!');
+        // Reload guilds to update member counts
+        loadData();
+        return result;
+      } else if (response.status === 402) {
+        setInviteMessage('Member limit reached. Upgrade to add more members.');
+        throw new Error('Member limit reached');
+      } else {
+        const error = await response.json();
+        setInviteMessage(error.detail || 'Failed to create invite');
+        throw new Error(error.detail || 'Failed to create invite');
+      }
+    } catch (error) {
+      throw error;
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  const handleJoin = () => {
+    setJoinFormOpen(true);
+  };
+
+  const handleJoinSubmit = async (inviteCode: string) => {
+    setJoinLoading(true);
+    setJoinMessage('');
+
+    try {
+      const response = await fetch(`http://localhost:8000/api/users/${user.id}/join`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ invite_code: inviteCode })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setJoinMessage('Successfully joined guild!');
+        // Reload guilds and switch to new guild
+        loadData();
+        if (result.current_guild_id) {
+          setCurrentGuild(result.current_guild_id, result.guild_name);
+        }
+        return result;
+      } else if (response.status === 402) {
+        setJoinMessage('Guild member limit reached. Cannot join at this time.');
+        throw new Error('Member limit reached');
+      } else if (response.status === 422) {
+        setJoinMessage('Invalid or expired invite code.');
+        throw new Error('Invalid invite code');
+      } else {
+        const error = await response.json();
+        setJoinMessage(error.detail || 'Failed to join guild');
+        throw new Error(error.detail || 'Failed to join guild');
+      }
+    } catch (error) {
+      throw error;
+    } finally {
+      setJoinLoading(false);
+    }
+  };
+
+  const handleLeave = async (guildId: string) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/users/${user.id}/leave`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ guild_id: guildId })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setMessage('Successfully left guild and switched to personal guild');
+        // Reload guilds and switch to personal guild
+        loadData();
+        if (result.current_guild_id) {
+          setCurrentGuild(result.current_guild_id, result.guild_name);
+        }
+      } else {
+        setMessage('Failed to leave guild');
+      }
+    } catch (error) {
+      setMessage('Error leaving guild');
+    }
+  };
+
+  const handleKick = async (userId: string) => {
+    // This would require admin permissions and user selection
+    // For now, just show a placeholder
+    setMessage('Kick functionality requires user selection - coming soon');
+  };
+
+  const handleDelete = async (guildId: string) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/admin/guilds/${guildId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        setMessage('Guild deleted successfully');
+        // Reload guilds
+        loadData();
+      } else if (response.status === 403) {
+        setMessage('Cannot delete personal guilds or guilds you do not own');
+      } else {
+        setMessage('Failed to delete guild');
+      }
+    } catch (error) {
+      setMessage('Error deleting guild');
+    }
   };
 
   const renderUsersTab = () => (
@@ -353,59 +545,18 @@ function AdminDashboard() {
   );
 
   const renderGuildsTab = () => (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h3 style={{ margin: 0 }}>Guilds Management</h3>
-        <button
-          style={{
-            padding: '8px 16px',
-            backgroundColor: '#3182ce',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Create Guild
-        </button>
-      </div>
-
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#f7fafc' }}>
-              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Name</th>
-              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Type</th>
-              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Tier</th>
-              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Members</th>
-              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Personal</th>
-              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {guilds.map(guild => (
-              <tr key={guild.id}>
-                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>{guild.name}</td>
-                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>{guild.type}</td>
-                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>{guild.billing_tier}</td>
-                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>{guild.member_limit}</td>
-                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>{guild.is_solo ? 'Yes' : 'No'}</td>
-                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>
-                  <button style={{ marginRight: '8px', padding: '4px 8px', backgroundColor: '#3182ce', color: 'white', border: 'none', borderRadius: '4px' }}>
-                    Edit
-                  </button>
-                  {!guild.is_solo && guild.is_deletable && (
-                    <button style={{ padding: '4px 8px', backgroundColor: '#e53e3e', color: 'white', border: 'none', borderRadius: '4px' }}>
-                      Delete
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <GuildList
+      guilds={guilds}
+      currentGuildId={currentGuildId || ''}
+      onGuildSwitch={handleGuildSwitch}
+      onInvite={handleInvite}
+      onJoin={handleJoin}
+      onLeave={handleLeave}
+      onKick={handleKick}
+      onDelete={handleDelete}
+      loading={loading}
+      message={message}
+    />
   );
 
   const renderContent = () => {
@@ -430,60 +581,76 @@ function AdminDashboard() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f7fafc' }}>
+    <div style={{
+      minHeight: '100vh',
+      backgroundColor: theme.colors.background,
+      backgroundImage: `radial-gradient(circle at 20% 50%, ${theme.colors.primary}10 0%, transparent 50%), radial-gradient(circle at 80% 20%, ${theme.colors.secondary}10 0%, transparent 50%)`,
+      fontFamily: theme.typography.fontFamily
+    }}>
       {/* Header */}
       <div style={{
-        backgroundColor: 'white',
-        borderBottom: '1px solid #e2e8f0',
-        padding: '16px 24px',
+        backgroundColor: theme.colors.surface,
+        borderBottom: `1px solid ${theme.colors.border}`,
+        padding: theme.spacing[4],
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'center'
+        alignItems: 'center',
+        boxShadow: theme.shadows.md
       }}>
-        <h1 style={{ margin: 0, color: '#2d3748' }}>SphereConnect Admin</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <span>Logged in as {user.name} | {guildName}</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <label htmlFor="guild-select" style={{ fontSize: '14px', color: '#4a5568' }}>Current Guild:</label>
+        <h1 style={{
+          margin: 0,
+          color: theme.colors.primary,
+          fontSize: theme.typography.fontSize['2xl'],
+          fontWeight: theme.typography.fontWeight.bold,
+          textShadow: theme.shadows.neon
+        }}>
+          SphereConnect Admin
+        </h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing[4] }}>
+          <span style={{
+            color: theme.colors.text,
+            fontSize: theme.typography.fontSize.sm,
+            fontWeight: theme.typography.fontWeight.medium
+          }}>
+            Logged in as {user.name} | {guildName}
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing[2] }}>
+            <label
+              htmlFor="guild-select"
+              style={{
+                fontSize: theme.typography.fontSize.sm,
+                color: theme.colors.textSecondary,
+                fontWeight: theme.typography.fontWeight.medium
+              }}
+            >
+              Current Guild:
+            </label>
             <select
               id="guild-select"
               value={currentGuildId || ''}
               onChange={async (e) => {
                 const newGuildId = e.target.value;
-                try {
-                  const response = await fetch(`http://localhost:8000/api/users/${user.id}/switch-guild`, {
-                    method: 'PATCH',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ guild_id: newGuildId })
-                  });
-
-                  if (response.ok) {
-                    const result = await response.json();
-                    // Fetch new guild details
-                    const guildResponse = await fetch(`http://localhost:8000/api/guilds/${newGuildId}`, {
-                      headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    if (guildResponse.ok) {
-                      const guildData = await guildResponse.json();
-                      setCurrentGuild(newGuildId, guildData.name);
-                    }
-                    // Reload data for new guild
-                    loadData();
-                  } else {
-                    setMessage('Failed to switch guild');
-                  }
-                } catch (error) {
-                  setMessage('Error switching guild');
-                }
+                await handleGuildSwitch(newGuildId);
               }}
               style={{
-                padding: '4px 8px',
-                border: '1px solid #e2e8f0',
-                borderRadius: '4px',
-                backgroundColor: 'white'
+                padding: `${theme.spacing[1]} ${theme.spacing[2]}`,
+                backgroundColor: theme.colors.background,
+                border: `2px solid ${theme.colors.border}`,
+                borderRadius: theme.borderRadius.lg,
+                color: theme.colors.text,
+                fontSize: theme.typography.fontSize.sm,
+                fontFamily: theme.typography.fontFamily,
+                cursor: 'pointer',
+                outline: 'none',
+                transition: 'all 0.2s ease-in-out'
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = theme.colors.primary;
+                e.target.style.boxShadow = `0 0 0 3px ${theme.colors.primary}20`;
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = theme.colors.border;
+                e.target.style.boxShadow = 'none';
               }}
             >
               {guilds.map(guild => (
@@ -496,12 +663,24 @@ function AdminDashboard() {
           <button
             onClick={handleLogout}
             style={{
-              padding: '8px 16px',
-              backgroundColor: '#e53e3e',
-              color: 'white',
+              padding: `${theme.spacing[2]} ${theme.spacing[4]}`,
+              backgroundColor: theme.colors.error,
+              color: theme.colors.text,
               border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer'
+              borderRadius: theme.borderRadius.lg,
+              fontSize: theme.typography.fontSize.sm,
+              fontWeight: theme.typography.fontWeight.semibold,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease-in-out',
+              boxShadow: `0 0 10px ${theme.colors.error}40`
+            }}
+            onMouseEnter={(e) => {
+              (e.target as HTMLElement).style.backgroundColor = '#C53030';
+              (e.target as HTMLElement).style.transform = 'translateY(-1px)';
+            }}
+            onMouseLeave={(e) => {
+              (e.target as HTMLElement).style.backgroundColor = theme.colors.error;
+              (e.target as HTMLElement).style.transform = 'translateY(0)';
             }}
           >
             Logout
@@ -512,26 +691,53 @@ function AdminDashboard() {
       <div style={{ display: 'flex' }}>
         {/* Sidebar */}
         <div style={{
-          width: '250px',
-          backgroundColor: 'white',
-          borderRight: '1px solid #e2e8f0',
-          padding: '24px 0',
-          minHeight: 'calc(100vh - 80px)'
+          width: '280px',
+          backgroundColor: theme.colors.surface,
+          borderRight: `1px solid ${theme.colors.border}`,
+          padding: `${theme.spacing[6]} 0`,
+          minHeight: 'calc(100vh - 80px)',
+          boxShadow: theme.shadows.md
         }}>
           <nav>
-            <div style={{ padding: '8px 24px', marginBottom: '8px' }}>
-              <h3 style={{ margin: '0 0 16px 0', color: '#4a5568' }}>Management</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <div style={{ padding: `0 ${theme.spacing[6]}`, marginBottom: theme.spacing[2] }}>
+              <h3 style={{
+                margin: `0 0 ${theme.spacing[4]} 0`,
+                color: theme.colors.primary,
+                fontSize: theme.typography.fontSize.lg,
+                fontWeight: theme.typography.fontWeight.bold,
+                textShadow: theme.shadows.neon
+              }}>
+                Management
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing[1] }}>
                 <button
                   onClick={() => setActiveTab('users')}
                   style={{
-                    padding: '12px 16px',
-                    backgroundColor: activeTab === 'users' ? '#3182ce' : 'transparent',
-                    color: activeTab === 'users' ? 'white' : '#4a5568',
+                    padding: `${theme.spacing[3]} ${theme.spacing[4]}`,
+                    backgroundColor: activeTab === 'users' ? theme.colors.primary : 'transparent',
+                    color: activeTab === 'users' ? theme.colors.background : theme.colors.textSecondary,
                     border: 'none',
-                    borderRadius: '4px',
+                    borderRadius: theme.borderRadius.lg,
                     textAlign: 'left',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    fontSize: theme.typography.fontSize.sm,
+                    fontWeight: theme.typography.fontWeight.medium,
+                    fontFamily: theme.typography.fontFamily,
+                    transition: 'all 0.2s ease-in-out',
+                    width: '100%',
+                    boxShadow: activeTab === 'users' ? theme.shadows.neon : 'none'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (activeTab !== 'users') {
+                      (e.target as HTMLElement).style.backgroundColor = theme.colors.surfaceHover;
+                      (e.target as HTMLElement).style.color = theme.colors.text;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (activeTab !== 'users') {
+                      (e.target as HTMLElement).style.backgroundColor = 'transparent';
+                      (e.target as HTMLElement).style.color = theme.colors.textSecondary;
+                    }
                   }}
                 >
                   👥 Users
@@ -539,13 +745,31 @@ function AdminDashboard() {
                 <button
                   onClick={() => setActiveTab('ranks')}
                   style={{
-                    padding: '12px 16px',
-                    backgroundColor: activeTab === 'ranks' ? '#3182ce' : 'transparent',
-                    color: activeTab === 'ranks' ? 'white' : '#4a5568',
+                    padding: `${theme.spacing[3]} ${theme.spacing[4]}`,
+                    backgroundColor: activeTab === 'ranks' ? theme.colors.primary : 'transparent',
+                    color: activeTab === 'ranks' ? theme.colors.background : theme.colors.textSecondary,
                     border: 'none',
-                    borderRadius: '4px',
+                    borderRadius: theme.borderRadius.lg,
                     textAlign: 'left',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    fontSize: theme.typography.fontSize.sm,
+                    fontWeight: theme.typography.fontWeight.medium,
+                    fontFamily: theme.typography.fontFamily,
+                    transition: 'all 0.2s ease-in-out',
+                    width: '100%',
+                    boxShadow: activeTab === 'ranks' ? theme.shadows.neon : 'none'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (activeTab !== 'ranks') {
+                      (e.target as HTMLElement).style.backgroundColor = theme.colors.surfaceHover;
+                      (e.target as HTMLElement).style.color = theme.colors.text;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (activeTab !== 'ranks') {
+                      (e.target as HTMLElement).style.backgroundColor = 'transparent';
+                      (e.target as HTMLElement).style.color = theme.colors.textSecondary;
+                    }
                   }}
                 >
                   🎖️ Ranks
@@ -553,13 +777,31 @@ function AdminDashboard() {
                 <button
                   onClick={() => setActiveTab('objectives')}
                   style={{
-                    padding: '12px 16px',
-                    backgroundColor: activeTab === 'objectives' ? '#3182ce' : 'transparent',
-                    color: activeTab === 'objectives' ? 'white' : '#4a5568',
+                    padding: `${theme.spacing[3]} ${theme.spacing[4]}`,
+                    backgroundColor: activeTab === 'objectives' ? theme.colors.primary : 'transparent',
+                    color: activeTab === 'objectives' ? theme.colors.background : theme.colors.textSecondary,
                     border: 'none',
-                    borderRadius: '4px',
+                    borderRadius: theme.borderRadius.lg,
                     textAlign: 'left',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    fontSize: theme.typography.fontSize.sm,
+                    fontWeight: theme.typography.fontWeight.medium,
+                    fontFamily: theme.typography.fontFamily,
+                    transition: 'all 0.2s ease-in-out',
+                    width: '100%',
+                    boxShadow: activeTab === 'objectives' ? theme.shadows.neon : 'none'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (activeTab !== 'objectives') {
+                      (e.target as HTMLElement).style.backgroundColor = theme.colors.surfaceHover;
+                      (e.target as HTMLElement).style.color = theme.colors.text;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (activeTab !== 'objectives') {
+                      (e.target as HTMLElement).style.backgroundColor = 'transparent';
+                      (e.target as HTMLElement).style.color = theme.colors.textSecondary;
+                    }
                   }}
                 >
                   🎯 Objectives
@@ -567,13 +809,31 @@ function AdminDashboard() {
                 <button
                   onClick={() => setActiveTab('tasks')}
                   style={{
-                    padding: '12px 16px',
-                    backgroundColor: activeTab === 'tasks' ? '#3182ce' : 'transparent',
-                    color: activeTab === 'tasks' ? 'white' : '#4a5568',
+                    padding: `${theme.spacing[3]} ${theme.spacing[4]}`,
+                    backgroundColor: activeTab === 'tasks' ? theme.colors.primary : 'transparent',
+                    color: activeTab === 'tasks' ? theme.colors.background : theme.colors.textSecondary,
                     border: 'none',
-                    borderRadius: '4px',
+                    borderRadius: theme.borderRadius.lg,
                     textAlign: 'left',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    fontSize: theme.typography.fontSize.sm,
+                    fontWeight: theme.typography.fontWeight.medium,
+                    fontFamily: theme.typography.fontFamily,
+                    transition: 'all 0.2s ease-in-out',
+                    width: '100%',
+                    boxShadow: activeTab === 'tasks' ? theme.shadows.neon : 'none'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (activeTab !== 'tasks') {
+                      (e.target as HTMLElement).style.backgroundColor = theme.colors.surfaceHover;
+                      (e.target as HTMLElement).style.color = theme.colors.text;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (activeTab !== 'tasks') {
+                      (e.target as HTMLElement).style.backgroundColor = 'transparent';
+                      (e.target as HTMLElement).style.color = theme.colors.textSecondary;
+                    }
                   }}
                 >
                   📋 Tasks
@@ -581,13 +841,31 @@ function AdminDashboard() {
                 <button
                   onClick={() => setActiveTab('squads')}
                   style={{
-                    padding: '12px 16px',
-                    backgroundColor: activeTab === 'squads' ? '#3182ce' : 'transparent',
-                    color: activeTab === 'squads' ? 'white' : '#4a5568',
+                    padding: `${theme.spacing[3]} ${theme.spacing[4]}`,
+                    backgroundColor: activeTab === 'squads' ? theme.colors.primary : 'transparent',
+                    color: activeTab === 'squads' ? theme.colors.background : theme.colors.textSecondary,
                     border: 'none',
-                    borderRadius: '4px',
+                    borderRadius: theme.borderRadius.lg,
                     textAlign: 'left',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    fontSize: theme.typography.fontSize.sm,
+                    fontWeight: theme.typography.fontWeight.medium,
+                    fontFamily: theme.typography.fontFamily,
+                    transition: 'all 0.2s ease-in-out',
+                    width: '100%',
+                    boxShadow: activeTab === 'squads' ? theme.shadows.neon : 'none'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (activeTab !== 'squads') {
+                      (e.target as HTMLElement).style.backgroundColor = theme.colors.surfaceHover;
+                      (e.target as HTMLElement).style.color = theme.colors.text;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (activeTab !== 'squads') {
+                      (e.target as HTMLElement).style.backgroundColor = 'transparent';
+                      (e.target as HTMLElement).style.color = theme.colors.textSecondary;
+                    }
                   }}
                 >
                   👨‍👩‍👧‍👦 Squads
@@ -595,13 +873,31 @@ function AdminDashboard() {
                 <button
                   onClick={() => setActiveTab('access-levels')}
                   style={{
-                    padding: '12px 16px',
-                    backgroundColor: activeTab === 'access-levels' ? '#3182ce' : 'transparent',
-                    color: activeTab === 'access-levels' ? 'white' : '#4a5568',
+                    padding: `${theme.spacing[3]} ${theme.spacing[4]}`,
+                    backgroundColor: activeTab === 'access-levels' ? theme.colors.primary : 'transparent',
+                    color: activeTab === 'access-levels' ? theme.colors.background : theme.colors.textSecondary,
                     border: 'none',
-                    borderRadius: '4px',
+                    borderRadius: theme.borderRadius.lg,
                     textAlign: 'left',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    fontSize: theme.typography.fontSize.sm,
+                    fontWeight: theme.typography.fontWeight.medium,
+                    fontFamily: theme.typography.fontFamily,
+                    transition: 'all 0.2s ease-in-out',
+                    width: '100%',
+                    boxShadow: activeTab === 'access-levels' ? theme.shadows.neon : 'none'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (activeTab !== 'access-levels') {
+                      (e.target as HTMLElement).style.backgroundColor = theme.colors.surfaceHover;
+                      (e.target as HTMLElement).style.color = theme.colors.text;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (activeTab !== 'access-levels') {
+                      (e.target as HTMLElement).style.backgroundColor = 'transparent';
+                      (e.target as HTMLElement).style.color = theme.colors.textSecondary;
+                    }
                   }}
                 >
                   🔐 Access Levels
@@ -609,13 +905,31 @@ function AdminDashboard() {
                 <button
                   onClick={() => setActiveTab('categories')}
                   style={{
-                    padding: '12px 16px',
-                    backgroundColor: activeTab === 'categories' ? '#3182ce' : 'transparent',
-                    color: activeTab === 'categories' ? 'white' : '#4a5568',
+                    padding: `${theme.spacing[3]} ${theme.spacing[4]}`,
+                    backgroundColor: activeTab === 'categories' ? theme.colors.primary : 'transparent',
+                    color: activeTab === 'categories' ? theme.colors.background : theme.colors.textSecondary,
                     border: 'none',
-                    borderRadius: '4px',
+                    borderRadius: theme.borderRadius.lg,
                     textAlign: 'left',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    fontSize: theme.typography.fontSize.sm,
+                    fontWeight: theme.typography.fontWeight.medium,
+                    fontFamily: theme.typography.fontFamily,
+                    transition: 'all 0.2s ease-in-out',
+                    width: '100%',
+                    boxShadow: activeTab === 'categories' ? theme.shadows.neon : 'none'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (activeTab !== 'categories') {
+                      (e.target as HTMLElement).style.backgroundColor = theme.colors.surfaceHover;
+                      (e.target as HTMLElement).style.color = theme.colors.text;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (activeTab !== 'categories') {
+                      (e.target as HTMLElement).style.backgroundColor = 'transparent';
+                      (e.target as HTMLElement).style.color = theme.colors.textSecondary;
+                    }
                   }}
                 >
                   📂 Categories
@@ -623,13 +937,31 @@ function AdminDashboard() {
                 <button
                   onClick={() => setActiveTab('guilds')}
                   style={{
-                    padding: '12px 16px',
-                    backgroundColor: activeTab === 'guilds' ? '#3182ce' : 'transparent',
-                    color: activeTab === 'guilds' ? 'white' : '#4a5568',
+                    padding: `${theme.spacing[3]} ${theme.spacing[4]}`,
+                    backgroundColor: activeTab === 'guilds' ? theme.colors.primary : 'transparent',
+                    color: activeTab === 'guilds' ? theme.colors.background : theme.colors.textSecondary,
                     border: 'none',
-                    borderRadius: '4px',
+                    borderRadius: theme.borderRadius.lg,
                     textAlign: 'left',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    fontSize: theme.typography.fontSize.sm,
+                    fontWeight: theme.typography.fontWeight.medium,
+                    fontFamily: theme.typography.fontFamily,
+                    transition: 'all 0.2s ease-in-out',
+                    width: '100%',
+                    boxShadow: activeTab === 'guilds' ? theme.shadows.neon : 'none'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (activeTab !== 'guilds') {
+                      (e.target as HTMLElement).style.backgroundColor = theme.colors.surfaceHover;
+                      (e.target as HTMLElement).style.color = theme.colors.text;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (activeTab !== 'guilds') {
+                      (e.target as HTMLElement).style.backgroundColor = 'transparent';
+                      (e.target as HTMLElement).style.color = theme.colors.textSecondary;
+                    }
                   }}
                 >
                   🏰 Guilds
@@ -640,19 +972,32 @@ function AdminDashboard() {
         </div>
 
         {/* Main Content */}
-        <div style={{ flex: 1, padding: '24px' }}>
+        <div style={{
+          flex: 1,
+          padding: theme.spacing[6],
+          backgroundColor: theme.colors.background
+        }}>
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '40px' }}>
+            <div style={{
+              textAlign: 'center',
+              padding: theme.spacing[10]
+            }}>
               <div style={{
                 width: '40px',
                 height: '40px',
-                border: '4px solid #f3f3f3',
-                borderTop: '4px solid #3182ce',
+                border: `4px solid ${theme.colors.surfaceHover}`,
+                borderTop: `4px solid ${theme.colors.primary}`,
                 borderRadius: '50%',
                 animation: 'spin 1s linear infinite',
-                margin: '0 auto 16px'
+                margin: `0 auto ${theme.spacing[4]}`
               }}></div>
-              <p>Loading...</p>
+              <p style={{
+                color: theme.colors.textSecondary,
+                fontSize: theme.typography.fontSize.base,
+                margin: 0
+              }}>
+                Loading...
+              </p>
             </div>
           ) : (
             renderContent()
@@ -660,17 +1005,49 @@ function AdminDashboard() {
 
           {message && (
             <div style={{
-              marginTop: '24px',
-              padding: '12px',
-              backgroundColor: message.includes('Error') ? '#fed7d7' : '#c6f6d5',
-              color: message.includes('Error') ? '#c53030' : '#276749',
-              borderRadius: '4px'
+              marginTop: theme.spacing[6],
+              padding: theme.spacing[3],
+              backgroundColor: message.includes('Error') || message.includes('Failed') ?
+                `${theme.colors.error}20` : `${theme.colors.success}20`,
+              border: `1px solid ${message.includes('Error') || message.includes('Failed') ?
+                theme.colors.error : theme.colors.success}`,
+              borderRadius: theme.borderRadius.lg,
+              color: message.includes('Error') || message.includes('Failed') ?
+                theme.colors.error : theme.colors.success,
+              fontSize: theme.typography.fontSize.sm,
+              fontWeight: theme.typography.fontWeight.medium
             }}>
               {message}
             </div>
           )}
         </div>
       </div>
+
+      {/* Modals */}
+      <InviteForm
+        guildId={selectedGuildForInvite?.id || ''}
+        guildName={selectedGuildForInvite?.name || ''}
+        isOpen={inviteFormOpen}
+        onClose={() => {
+          setInviteFormOpen(false);
+          setSelectedGuildForInvite(null);
+          setInviteMessage('');
+        }}
+        onInvite={handleInviteSubmit}
+        loading={inviteLoading}
+        message={inviteMessage}
+      />
+
+      <JoinForm
+        isOpen={joinFormOpen}
+        onClose={() => {
+          setJoinFormOpen(false);
+          setJoinMessage('');
+        }}
+        onJoin={handleJoinSubmit}
+        loading={joinLoading}
+        message={joinMessage}
+      />
 
       <style>{`
         @keyframes spin {

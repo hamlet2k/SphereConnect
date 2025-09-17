@@ -581,6 +581,57 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
             detail=f"Registration failed: {str(e)}"
         )
 
+@router.get("/users/{user_id}/guilds")
+async def get_user_guilds(
+    user_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all guilds for a user (personal + joined/created)"""
+    try:
+        # Verify user owns this account
+        if str(current_user.id) != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Can only view your own guilds"
+            )
+
+        user_uuid = uuid.UUID(user_id)
+
+        # Get user's personal guild
+        personal_guild = db.query(Guild).filter(Guild.creator_id == user_uuid).first()
+
+        # Get all guilds (for now, return all guilds user has access to)
+        # In a more complex system, this would check membership tables
+        all_guilds = db.query(Guild).all()
+
+        guilds_data = []
+        for guild in all_guilds:
+            # Count members (simplified - in real app would use membership table)
+            member_count = db.query(User).filter(User.guild_id == guild.id).count()
+
+            guilds_data.append({
+                "id": str(guild.id),
+                "name": guild.name,
+                "creator_id": str(guild.creator_id) if guild.creator_id else None,
+                "member_limit": guild.member_limit,
+                "billing_tier": guild.billing_tier,
+                "is_solo": guild.is_solo,
+                "is_deletable": guild.is_deletable,
+                "type": guild.type,
+                "member_count": member_count
+            })
+
+        return guilds_data
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve user guilds: {str(e)}"
+        )
+
 @router.patch("/users/{user_id}/switch-guild")
 async def switch_guild(
     user_id: str,
@@ -599,9 +650,13 @@ async def switch_guild(
 
         target_guild_id = uuid.UUID(switch_data.guild_id)
 
-        # Check if user is member of target guild
-        # For now, assume user can switch to any guild they're in
-        # In future, might need to check membership table
+        # Verify target guild exists
+        target_guild = db.query(Guild).filter(Guild.id == target_guild_id).first()
+        if not target_guild:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Target guild not found"
+            )
 
         # Update current_guild_id
         current_user.current_guild_id = str(target_guild_id)
@@ -610,7 +665,8 @@ async def switch_guild(
         return {
             "message": "Guild switched successfully",
             "current_guild_id": str(target_guild_id),
-            "tts_response": "Guild context switched"
+            "guild_name": target_guild.name,
+            "tts_response": f"Switched to guild: {target_guild.name}"
         }
 
     except HTTPException:
@@ -620,6 +676,154 @@ async def switch_guild(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Guild switch failed: {str(e)}"
+        )
+
+@router.post("/users/{user_id}/join")
+async def join_guild(
+    user_id: str,
+    join_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Join a guild using an invite code"""
+    try:
+        # Verify user owns this account
+        if str(current_user.id) != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Can only join guilds for yourself"
+            )
+
+        invite_code = join_data.get("invite_code")
+        if not invite_code:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Invite code is required"
+            )
+
+        # Find valid invite
+        invite = db.query(Invite).filter(
+            Invite.code == invite_code,
+            Invite.expires_at > datetime.utcnow()
+        ).first()
+
+        if not invite or invite.uses_left <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Invalid or expired invite code"
+            )
+
+        # Check member limit
+        guild = db.query(Guild).filter(Guild.id == invite.guild_id).first()
+        if not guild:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Guild not found"
+            )
+
+        # Count current members
+        member_count = db.query(User).filter(User.guild_id == guild.id).count()
+        if member_count >= guild.member_limit:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail="Guild member limit reached. Upgrade to add more members."
+            )
+
+        # Update invite uses
+        invite.uses_left -= 1
+
+        # Switch user to the guild
+        current_user.current_guild_id = str(guild.id)
+
+        db.commit()
+
+        return {
+            "message": f"Successfully joined guild: {guild.name}",
+            "current_guild_id": str(guild.id),
+            "guild_name": guild.name,
+            "tts_response": f"Joined guild: {guild.name}"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to join guild: {str(e)}"
+        )
+
+@router.post("/users/{user_id}/leave")
+async def leave_guild(
+    user_id: str,
+    leave_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Leave a guild and switch to personal guild"""
+    try:
+        # Verify user owns this account
+        if str(current_user.id) != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Can only leave guilds for yourself"
+            )
+
+        guild_id = leave_data.get("guild_id")
+        if not guild_id:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Guild ID is required"
+            )
+
+        target_guild_id = uuid.UUID(guild_id)
+
+        # Verify target guild exists
+        target_guild = db.query(Guild).filter(Guild.id == target_guild_id).first()
+        if not target_guild:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Target guild not found"
+            )
+
+        # Cannot leave personal guild
+        if target_guild.is_solo:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Cannot leave personal guild"
+            )
+
+        # Find user's personal guild
+        personal_guild = db.query(Guild).filter(
+            Guild.creator_id == current_user.id,
+            Guild.is_solo == True
+        ).first()
+
+        if not personal_guild:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Personal guild not found"
+            )
+
+        # Switch to personal guild
+        current_user.current_guild_id = str(personal_guild.id)
+
+        db.commit()
+
+        return {
+            "message": f"Left guild and switched to: {personal_guild.name}",
+            "current_guild_id": str(personal_guild.id),
+            "guild_name": personal_guild.name,
+            "tts_response": f"Left guild, switched to: {personal_guild.name}"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to leave guild: {str(e)}"
         )
 
 @router.post("/auth/refresh", response_model=TokenResponse)

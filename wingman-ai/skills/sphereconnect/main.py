@@ -283,6 +283,88 @@ class SphereConnect(Skill):
                     },
                 },
             ),
+            (
+                "invite_to_guild",
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "invite_to_guild",
+                        "description": "Create an invite code for a specific guild to share with potential members.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "guild_name": {
+                                    "type": "string",
+                                    "description": "The name of the guild to create an invite for",
+                                },
+                                "user_id": {
+                                    "type": "string",
+                                    "description": "The user identifier (required for creating invites)",
+                                },
+                                "expires_hours": {
+                                    "type": "number",
+                                    "description": "Number of hours until the invite expires (default: 24)",
+                                    "default": 24,
+                                },
+                                "max_uses": {
+                                    "type": "number",
+                                    "description": "Maximum number of uses for this invite (default: 1)",
+                                    "default": 1,
+                                },
+                            },
+                            "required": ["guild_name", "user_id"],
+                        },
+                    },
+                },
+            ),
+            (
+                "join_guild",
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "join_guild",
+                        "description": "Join a guild using an invite code provided by a guild member.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "invite_code": {
+                                    "type": "string",
+                                    "description": "The invite code to join the guild",
+                                },
+                                "user_id": {
+                                    "type": "string",
+                                    "description": "The user identifier (required for joining)",
+                                },
+                            },
+                            "required": ["invite_code", "user_id"],
+                        },
+                    },
+                },
+            ),
+            (
+                "leave_guild",
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "leave_guild",
+                        "description": "Leave the current guild and switch back to personal guild.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "guild_name": {
+                                    "type": "string",
+                                    "description": "The name of the guild to leave",
+                                },
+                                "user_id": {
+                                    "type": "string",
+                                    "description": "The user identifier (required for leaving)",
+                                },
+                            },
+                            "required": ["guild_name", "user_id"],
+                        },
+                    },
+                },
+            ),
         ]
 
     async def _make_api_request(self, method: str, endpoint: str, data: Dict[str, Any] = None) -> str:
@@ -352,7 +434,7 @@ class SphereConnect(Skill):
         function_response = "Error: SphereConnect command failed."
         instant_response = ""
 
-        if tool_name in ["create_objective", "assign_task", "report_progress", "get_guild_status", "schedule_task", "get_my_tasks", "switch_guild"]:
+        if tool_name in ["create_objective", "assign_task", "report_progress", "get_guild_status", "schedule_task", "get_my_tasks", "switch_guild", "invite_to_guild", "join_guild", "leave_guild"]:
             benchmark.start_snapshot(f"SphereConnect: {tool_name}")
 
             if self.settings.debug_mode:
@@ -543,6 +625,114 @@ class SphereConnect(Skill):
 
                 except Exception as e:
                     function_response = f"Failed to switch guild: {e}"
+
+            elif tool_name == "invite_to_guild":
+                try:
+                    # First, get all guilds to find the one by name
+                    guilds_response = await self._make_api_request("GET", "/admin/guilds")
+                    try:
+                        guilds = json.loads(guilds_response)
+                        target_guild = None
+
+                        # Find guild by name (case-insensitive)
+                        for guild in guilds:
+                            if guild.get("name", "").lower() == parameters["guild_name"].lower():
+                                target_guild = guild
+                                break
+
+                        if not target_guild:
+                            function_response = f"Guild '{parameters['guild_name']}' not found."
+                        else:
+                            # Create invite for the found guild
+                            invite_data = {
+                                "guild_id": target_guild["id"],
+                                "expires_at": None,  # Will be set by expires_hours
+                                "uses_left": parameters.get("max_uses", 1)
+                            }
+
+                            # Set expiration if provided
+                            if parameters.get("expires_hours"):
+                                from datetime import datetime, timedelta
+                                expires_at = datetime.utcnow() + timedelta(hours=int(parameters["expires_hours"]))
+                                invite_data["expires_at"] = expires_at.isoformat()
+
+                            response_text = await self._make_api_request("POST", "/invites", invite_data)
+
+                            try:
+                                invite_info = json.loads(response_text)
+                                invite_code = invite_info.get("code", "unknown")
+                                function_response = f"Invite created for guild '{target_guild['name']}'. Code: {invite_code}. Share this code with potential members."
+                            except json.JSONDecodeError:
+                                function_response = f"Invite created successfully. Response: {response_text}"
+
+                    except json.JSONDecodeError:
+                        function_response = f"Failed to parse guild list: {guilds_response}"
+
+                except Exception as e:
+                    function_response = f"Failed to create invite: {e}"
+
+            elif tool_name == "join_guild":
+                try:
+                    join_data = {
+                        "invite_code": parameters["invite_code"]
+                    }
+
+                    response_text = await self._make_api_request(
+                        "POST",
+                        f"/users/{parameters['user_id']}/join",
+                        join_data
+                    )
+
+                    try:
+                        join_info = json.loads(response_text)
+                        guild_name = join_info.get("guild_name", "Unknown Guild")
+                        function_response = f"Successfully joined guild '{guild_name}'."
+                    except json.JSONDecodeError:
+                        function_response = f"Successfully joined guild. Response: {response_text}"
+
+                except Exception as e:
+                    function_response = f"Failed to join guild: {e}"
+
+            elif tool_name == "leave_guild":
+                try:
+                    # First, get all guilds to find the one by name
+                    guilds_response = await self._make_api_request("GET", "/admin/guilds")
+                    try:
+                        guilds = json.loads(guilds_response)
+                        target_guild = None
+
+                        # Find guild by name (case-insensitive)
+                        for guild in guilds:
+                            if guild.get("name", "").lower() == parameters["guild_name"].lower():
+                                target_guild = guild
+                                break
+
+                        if not target_guild:
+                            function_response = f"Guild '{parameters['guild_name']}' not found."
+                        else:
+                            # Leave the found guild
+                            leave_data = {
+                                "guild_id": target_guild["id"]
+                            }
+
+                            response_text = await self._make_api_request(
+                                "POST",
+                                f"/users/{parameters['user_id']}/leave",
+                                leave_data
+                            )
+
+                            try:
+                                leave_info = json.loads(response_text)
+                                new_guild_name = leave_info.get("guild_name", "Personal Guild")
+                                function_response = f"Left guild '{target_guild['name']}' and switched to '{new_guild_name}'."
+                            except json.JSONDecodeError:
+                                function_response = f"Successfully left guild '{target_guild['name']}'."
+
+                    except json.JSONDecodeError:
+                        function_response = f"Failed to parse guild list: {guilds_response}"
+
+                except Exception as e:
+                    function_response = f"Failed to leave guild: {e}"
 
             if self.settings.debug_mode:
                 await self.printr.print_async(

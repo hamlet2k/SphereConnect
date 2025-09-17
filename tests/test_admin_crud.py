@@ -782,6 +782,202 @@ class TestLogin:
         assert "current_guild_id" in data
         assert "guild_name" in data
 
+class TestInviteJoin:
+    """Test invite creation and guild joining functionality"""
+
+    def test_invite_creation_success(self):
+        """Test successful invite creation"""
+        headers = {"Authorization": f"Bearer {self.admin_token}"}
+
+        invite_data = {
+            "guild_id": TEST_GUILD_ID,
+            "expires_at": (datetime.utcnow() + timedelta(days=1)).isoformat(),
+            "uses_left": 1
+        }
+
+        response = requests.post(f"{BASE_URL}/invites", json=invite_data, headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "code" in data
+        assert "guild_id" in data
+        assert "uses_left" in data
+        assert data["uses_left"] == 1
+
+        # Store invite code for join test
+        self.invite_code = data["code"]
+
+    def test_invite_member_limit_exceeded(self):
+        """Test invite creation fails when member limit exceeded"""
+        headers = {"Authorization": f"Bearer {self.admin_token}"}
+
+        # Create a guild at member limit (2 members)
+        guild_data = {
+            "name": "Full Guild",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{BASE_URL}/guilds", json=guild_data, headers=headers)
+        assert response.status_code == 200
+        full_guild_id = response.json()["guild_id"]
+
+        # Add a second member to reach limit
+        user_data = {
+            "name": "second_member",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": full_guild_id
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=user_data, headers=headers)
+        assert response.status_code == 200
+
+        # Try to create invite (should fail with 402)
+        invite_data = {
+            "guild_id": full_guild_id,
+            "uses_left": 1
+        }
+        response = requests.post(f"{BASE_URL}/invites", json=invite_data, headers=headers)
+        assert response.status_code == 402
+
+    def test_join_with_valid_invite(self):
+        """Test joining guild with valid invite code"""
+        if not hasattr(self, 'invite_code'):
+            pytest.skip("No invite code available from previous test")
+
+        headers = {"Authorization": f"Bearer {self.admin_token}"}
+
+        join_data = {
+            "invite_code": self.invite_code
+        }
+
+        response = requests.post(f"{BASE_URL}/users/{self.admin_user['id']}/join", json=join_data, headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "current_guild_id" in data
+        assert "guild_name" in data
+        assert "message" in data
+
+    def test_join_with_invalid_invite(self):
+        """Test joining fails with invalid invite code"""
+        headers = {"Authorization": f"Bearer {self.admin_token}"}
+
+        join_data = {
+            "invite_code": "invalid-code-12345"
+        }
+
+        response = requests.post(f"{BASE_URL}/users/{self.admin_user['id']}/join", json=join_data, headers=headers)
+        assert response.status_code == 422
+
+    def test_join_member_limit_exceeded(self):
+        """Test joining fails when guild member limit exceeded"""
+        headers = {"Authorization": f"Bearer {self.admin_token}"}
+
+        # Create a full guild
+        guild_data = {
+            "name": "Full Guild 2",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{BASE_URL}/guilds", json=guild_data, headers=headers)
+        assert response.status_code == 200
+        full_guild_id = response.json()["guild_id"]
+
+        # Fill the guild
+        for i in range(2):
+            user_data = {
+                "name": f"member_{i}",
+                "password": "testpass123",
+                "pin": "123456",
+                "guild_id": full_guild_id
+            }
+            response = requests.post(f"{ADMIN_BASE_URL}/users", json=user_data, headers=headers)
+            assert response.status_code == 200
+
+        # Create invite for full guild
+        invite_data = {
+            "guild_id": full_guild_id,
+            "uses_left": 1
+        }
+        response = requests.post(f"{BASE_URL}/invites", json=invite_data, headers=headers)
+        assert response.status_code == 200
+        invite_code = response.json()["code"]
+
+        # Try to join (should fail with 402)
+        join_data = {
+            "invite_code": invite_code
+        }
+        response = requests.post(f"{BASE_URL}/users/{self.admin_user['id']}/join", json=join_data, headers=headers)
+        assert response.status_code == 402
+
+class TestLeaveKick:
+    """Test leave and kick functionality"""
+
+    def test_leave_guild_success(self):
+        """Test successfully leaving a guild"""
+        headers = {"Authorization": f"Bearer {self.admin_token}"}
+
+        # Create a guild to leave
+        guild_data = {
+            "name": "Leave Test Guild",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{BASE_URL}/guilds", json=guild_data, headers=headers)
+        assert response.status_code == 200
+        leave_guild_id = response.json()["guild_id"]
+
+        # Leave the guild
+        leave_data = {
+            "guild_id": leave_guild_id
+        }
+        response = requests.post(f"{BASE_URL}/users/{self.admin_user['id']}/leave", json=leave_data, headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "current_guild_id" in data
+        assert "guild_name" in data
+        assert "message" in data
+
+    def test_leave_personal_guild_blocked(self):
+        """Test that leaving personal guild is blocked"""
+        headers = {"Authorization": f"Bearer {self.admin_token}"}
+
+        leave_data = {
+            "guild_id": TEST_GUILD_ID  # Personal guild
+        }
+        response = requests.post(f"{BASE_URL}/users/{self.admin_user['id']}/leave", json=leave_data, headers=headers)
+        assert response.status_code == 422
+
+    def test_kick_user_success(self):
+        """Test successfully kicking a user"""
+        headers = {"Authorization": f"Bearer {self.admin_token}"}
+
+        # Create a user to kick
+        kick_user_data = {
+            "name": "kick_test_user",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=kick_user_data, headers=headers)
+        assert response.status_code == 200
+        kick_user_id = response.json()["user_id"]
+
+        # Kick the user
+        response = requests.post(f"{ADMIN_BASE_URL}/users/{kick_user_id}/kick", headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "user_id" in data
+        assert "new_guild_id" in data
+        assert "guild_name" in data
+
+    def test_kick_self_blocked(self):
+        """Test that kicking yourself is blocked"""
+        headers = {"Authorization": f"Bearer {self.admin_token}"}
+
+        # Try to kick self
+        response = requests.post(f"{ADMIN_BASE_URL}/users/{self.admin_user['id']}/kick", headers=headers)
+        assert response.status_code == 422
+
 def setup_test_data():
     """Setup test data before running tests"""
     # Create test guild and admin user
@@ -896,6 +1092,24 @@ if __name__ == "__main__":
         test_login.test_login_nonexistent_user()
         test_login.test_login_account_locked()
         test_login.test_refresh_token()
+
+        # Test new guild management features
+        test_invite = TestInviteJoin()
+        test_invite.admin_token = test_auth.admin_token
+        test_invite.admin_user = test_auth.admin_user
+        test_invite.test_invite_creation_success()
+        test_invite.test_invite_member_limit_exceeded()
+        test_invite.test_join_with_valid_invite()
+        test_invite.test_join_with_invalid_invite()
+        test_invite.test_join_member_limit_exceeded()
+
+        test_leave_kick = TestLeaveKick()
+        test_leave_kick.admin_token = test_auth.admin_token
+        test_leave_kick.admin_user = test_auth.admin_user
+        test_leave_kick.test_leave_guild_success()
+        test_leave_kick.test_leave_personal_guild_blocked()
+        test_leave_kick.test_kick_user_success()
+        test_leave_kick.test_kick_self_blocked()
 
         print("✅ All tests passed!")
 
