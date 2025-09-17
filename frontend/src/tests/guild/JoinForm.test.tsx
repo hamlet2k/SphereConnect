@@ -14,7 +14,7 @@
 // 8. Resets form on close
 // 9. Handles "Join Another" functionality
 // 10. Auto-formats invite code input
-
+export {};
 // Mock data for testing
 const mockJoinData = {
   invite_code: 'ABC123DEF456'

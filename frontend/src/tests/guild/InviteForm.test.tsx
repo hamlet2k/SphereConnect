@@ -14,7 +14,7 @@
 // 8. Handles API errors (402 for member limit)
 // 9. Closes modal properly
 // 10. Resets form on close
-
+export {};
 // Mock data for testing
 const mockInviteData = {
   guild_id: 'test-guild-id',
