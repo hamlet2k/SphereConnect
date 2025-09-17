@@ -91,6 +91,8 @@ SphereConnect is a multitenant AI-assisted app for Star Citizen guild coordinati
 | id | UUID, primary key |
 | guild_id | UUID, foreign key to guilds, non-nullable, indexed |
 | name | Display name |
+| username | TEXT, unique, not null (login identifier) |
+| email | TEXT, unique (optional, for login) |
 | phonetic | For voice recognition |
 | availability | Session/online status |
 | rank | Assigned rank (e.g., Recruit, NCO) |
@@ -224,7 +226,8 @@ Freemium focused on guild upgrades (no player plans):
 - Extensibility: Higher free X for non-gaming (e.g., 10 for farming co-ops).
 
 ### User Authentication
-- Credentials (username/password/SSO), PIN for voice access.
+- Credentials (username or email/password/SSO), PIN for voice access.
+- Username and email unique; username required, email optional.
 - MFA (web/client, e.g., SMS/email code).
 - Auto-deactivation after failed attempts (configurable).
 - Auto-logoff after inactivity.

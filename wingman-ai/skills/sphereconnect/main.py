@@ -284,6 +284,78 @@ class SphereConnect(Skill):
                 },
             ),
             (
+                "invite_member",
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "invite_member",
+                        "description": "Create an invite code for a guild to allow new members to join.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "guild_name": {
+                                    "type": "string",
+                                    "description": "The name of the guild to create an invite for",
+                                },
+                                "user_id": {
+                                    "type": "string",
+                                    "description": "The user identifier (must have invite permissions)",
+                                },
+                            },
+                            "required": ["guild_name", "user_id"],
+                        },
+                    },
+                },
+            ),
+            (
+                "join_guild",
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "join_guild",
+                        "description": "Join a guild using an invite code.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "invite_code": {
+                                    "type": "string",
+                                    "description": "The invite code to join the guild",
+                                },
+                                "user_id": {
+                                    "type": "string",
+                                    "description": "The user identifier",
+                                },
+                            },
+                            "required": ["invite_code", "user_id"],
+                        },
+                    },
+                },
+            ),
+            (
+                "leave_guild",
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "leave_guild",
+                        "description": "Leave the current guild and switch to personal guild.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "guild_name": {
+                                    "type": "string",
+                                    "description": "The name of the guild to leave",
+                                },
+                                "user_id": {
+                                    "type": "string",
+                                    "description": "The user identifier",
+                                },
+                            },
+                            "required": ["guild_name", "user_id"],
+                        },
+                    },
+                },
+            ),
+            (
                 "invite_to_guild",
                 {
                     "type": "function",

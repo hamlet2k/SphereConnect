@@ -68,6 +68,8 @@ class User(Base):
     id = Column(PG_UUID(as_uuid=True), primary_key=True)
     guild_id = Column(PG_UUID(as_uuid=True), ForeignKey('guilds.id'), nullable=False, index=True)
     name = Column(String, nullable=False)
+    username = Column(String, nullable=False, unique=True)
+    email = Column(String, unique=True)
     phonetic = Column(String)
     availability = Column(String, default='offline')
     rank = Column(PG_UUID(as_uuid=True), ForeignKey('ranks.id'))

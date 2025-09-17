@@ -225,13 +225,16 @@ def seed_test_data():
         # Create invite codes for testing
         from datetime import timedelta
         from app.core.models import Invite
+        import secrets
 
         invite_codes = []
         for i in range(3):
+            # Generate unique invite code
+            invite_code = secrets.token_urlsafe(8).upper()[:10]
             invite = Invite(
                 id=uuid.uuid4(),
                 guild_id=personal_guild_id,
-                code=f"TESTCODE{i+1}",
+                code=invite_code,
                 expires_at=datetime.utcnow() + timedelta(days=7),
                 uses_left=1 if i < 2 else 0,  # One expired invite
                 created_at=datetime.utcnow()

@@ -5,6 +5,8 @@ CREATE TABLE users (
     id UUID PRIMARY KEY,
     guild_id UUID NOT NULL,
     name TEXT NOT NULL,
+    username TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE,
     phonetic TEXT,
     availability TEXT DEFAULT 'offline',
     rank UUID,

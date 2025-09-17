@@ -1,6 +1,6 @@
-# SphereConnect Use Cases and Flows (v1.0)
+# SphereConnect Use Cases and Flows (v1.1)
 
-This document outlines key use cases and interaction flows for the SphereConnect MVP, modularized by functionality (e.g., Registration, Login, Guild Management). Flows are visualized using Mermaid sequence diagrams for clarity. Update as needed for new features or refinements. Aligns with `mvp_grok.markdown` v16 (User/System Admin personas, guild-only monetization, non-deletable personal guilds).
+This document outlines key use cases and interaction flows for the SphereConnect MVP, modularized by functionality. Flows are visualized using Mermaid sequence diagrams for clarity. Update as needed for new features or refinements. Aligns with `mvp_grok.markdown` v17.
 
 ## Module 1: Registration
 ### Use Case: User Registration
@@ -15,9 +15,9 @@ sequenceDiagram
     participant W as Web PWA (Register.tsx)
     participant B as Backend (/api/auth/register)
     participant D as Database
-    U->>W: Enter username, password, PIN, optional invite_code
-    W->>B: POST {username, password, PIN, invite_code?}
-    B->>D: Validate & hash (bcrypt)
+    U->>W: Enter username, email (optional), password, PIN, invite_code?
+    W->>B: POST {username, email?, password, PIN, invite_code?}
+    B->>D: Validate & hash (bcrypt), check username/email uniqueness
     D-->>B: User created (id, current_guild_id=null)
     B->>D: Create personal Guild (is_solo=true, is_deletable=false, creator_id=user.id)
     D-->>B: Guild.id
@@ -31,13 +31,13 @@ sequenceDiagram
 ```
 
 ### Edge Cases
-- Duplicate username: 409 error, UI alert.
+- Duplicate username/email: 409 error, UI alert.
 - Invalid input: 422 error, form validation.
 
 ## Module 2: Login
 ### Use Case: User Login
 - **Persona**: User (Solo Player, Guild Member, Guild Leader).
-- **Goal**: Authenticate, default to personal guild (`current_guild_id`), fallback if null.
+- **Goal**: Authenticate, default to personal guild (`current_guild_id`).
 - **Preconditions**: Registered user.
 - **Success Criteria**: JWT issued, redirect to AdminDashboard with guild context.
 - **Flow**:
@@ -47,8 +47,8 @@ sequenceDiagram
     participant W as Web PWA (Login.tsx)
     participant B as Backend (/api/auth/login)
     participant D as Database
-    U->>W: Enter username, password
-    W->>B: POST {username, password}
+    U->>W: Enter username or email, password
+    W->>B: POST {username_or_email, password}
     B->>D: Validate credentials (bcrypt), check lockout
     D-->>B: User (current_guild_id)
     alt current_guild_id null
@@ -64,6 +64,8 @@ sequenceDiagram
 ### Edge Cases
 - Invalid credentials: 401, increment failed_attempts.
 - Locked account: 423, wait 15min.
+### Notes
+- Voice Subset: Login not available via Wingman AI (web-only for security).
 
 ## Module 3: Guild Management
 ### Use Case: Guild Switching
@@ -149,10 +151,14 @@ sequenceDiagram
     Note over B,U: Notify via WebSocket/push
 ```
 
+### Notes
+- Voice Subset: Includes “Switch to guild [name]”, “Invite member to guild [name]”, “Join guild with code [code]”, “Leave guild [name]”. Excludes rank management, guild deletion (web-only).
+
 ## Module 4: Objective/Task Management (TBD)
 - **Use Case**: Create Objective (e.g., "Collect 500 SCU Gold").
-- **Flow**: [To be added post-registration testing].
 - **Persona**: User (Guild Leader/Member with permission).
+- **Voice Subset**: Includes “Create objective [name]”, “Report progress [details]” (TBD).
 
 ## Updates Log
 - v1.0 (2025-09-16): Initial flows for Registration, Login, Guild Management.
+- v1.1 (2025-09-16): Updated Login for username/email, added voice subset notes.

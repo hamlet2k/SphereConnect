@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 function Register() {
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [pin, setPin] = useState('');
   const [inviteCode, setInviteCode] = useState('');
@@ -39,6 +40,8 @@ function Register() {
     try {
       const requestBody: any = {
         name: username,
+        username: username,
+        email: email || undefined,
         password: password,
         pin: pin
       };
@@ -104,6 +107,25 @@ function Register() {
             onChange={(e) => setUsername(e.target.value)}
             placeholder="Username"
             required
+            style={{
+              width: '100%',
+              padding: '15px',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+              borderRadius: '5px',
+              fontSize: '16px',
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
+              color: '#ffffff',
+              outline: 'none'
+            }}
+          />
+        </div>
+
+        <div style={{ marginBottom: '20px' }}>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email (optional)"
             style={{
               width: '100%',
               padding: '15px',

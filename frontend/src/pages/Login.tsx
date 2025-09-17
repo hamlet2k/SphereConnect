@@ -6,7 +6,7 @@ import { theme } from '../theme';
 type LoginStep = 'credentials' | 'pin' | 'mfa' | 'success';
 
 interface LoginData {
-  name: string;
+  username_or_email: string;
   password: string;
 }
 
@@ -94,7 +94,7 @@ function Login() {
 
     try {
       const loginData: LoginData = {
-        name: username,
+        username_or_email: username,
         password: password
       };
 
@@ -221,7 +221,7 @@ function Login() {
 
       // Store token and proceed
       const loginData: LoginData = {
-        name: username,
+        username_or_email: username,
         password: password
       };
 
@@ -291,7 +291,7 @@ function Login() {
           type="text"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
-          placeholder="Username"
+          placeholder="Username or Email"
           required
           style={{
             width: '100%',

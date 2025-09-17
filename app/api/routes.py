@@ -76,11 +76,13 @@ class ProgressUpdate(BaseModel):
 
 # Authentication models
 class UserLogin(BaseModel):
-    name: str
+    username_or_email: str
     password: str
 
 class UserRegister(BaseModel):
     name: str
+    username: str
+    email: Optional[str] = None
     password: str
     pin: str
     invite_code: Optional[str] = None
@@ -306,8 +308,11 @@ def get_totp_uri(secret: str, name: str, issuer: str = "SphereConnect") -> str:
 async def login(login_data: UserLogin, db: Session = Depends(get_db)):
     """Authenticate user and return JWT tokens"""
     try:
-        # Find user by name only (global authentication)
-        user = db.query(User).filter(User.name == login_data.name).first()
+        # Find user by username or email (global authentication)
+        user = db.query(User).filter(
+            (User.username == login_data.username_or_email) |
+            (User.email == login_data.username_or_email)
+        ).first()
 
         if not user:
             raise HTTPException(
@@ -377,6 +382,8 @@ async def login(login_data: UserLogin, db: Session = Depends(get_db)):
             user={
                 "id": str(user.id),
                 "name": user.name,
+                "username": user.username,
+                "email": user.email,
                 "guild_id": str(user.guild_id),
                 "current_guild_id": str(current_guild_id),
                 "rank": str(user.rank) if user.rank else None
@@ -434,6 +441,12 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
         if len(user_data.name) < 3:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Display name must be at least 3 characters"
+            )
+
+        if len(user_data.username) < 3:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Username must be at least 3 characters"
             )
 
@@ -449,14 +462,22 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
                 detail="PIN must be exactly 6 digits"
             )
 
-        # Check if user already exists (globally, since personal guilds are unique per user)
-        existing_user = db.query(User).filter(User.name == user_data.name).first()
-
-        if existing_user:
+        # Check if username already exists
+        existing_username = db.query(User).filter(User.username == user_data.username).first()
+        if existing_username:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="User already exists"
+                detail="Username already exists"
             )
+
+        # Check if email already exists (if provided)
+        if user_data.email:
+            existing_email = db.query(User).filter(User.email == user_data.email).first()
+            if existing_email:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Email already exists"
+                )
 
         # Handle invite code if provided
         target_guild_id = None
@@ -535,6 +556,8 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
             id=uuid.uuid4(),
             guild_id=personal_guild_id,  # Assign to personal guild
             name=user_data.name,
+            username=user_data.username,
+            email=user_data.email,
             password=hashed_password,
             pin=hashed_pin,
             phonetic=user_data.phonetic,
@@ -879,6 +902,8 @@ async def refresh_token(refresh_data: TokenRefresh, db: Session = Depends(get_db
             user={
                 "id": str(user.id),
                 "name": user.name,
+                "username": user.username,
+                "email": user.email,
                 "guild_id": str(user.guild_id),
                 "current_guild_id": str(current_guild_id),
                 "rank": str(user.rank) if user.rank else None
