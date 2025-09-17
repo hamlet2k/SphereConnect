@@ -6,6 +6,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY, UUID as PG_UUID
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.schema import FetchedValue
 import os
 from datetime import datetime
 
@@ -192,7 +193,7 @@ class GuildRequest(Base):
 
 class UserSession(Base):
     __tablename__ = 'user_sessions'
-    id = Column(PG_UUID(as_uuid=True), primary_key=True)
+    id = Column(PG_UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
     user_id = Column(PG_UUID(as_uuid=True), ForeignKey('users.id'), nullable=False, index=True)
     token_hash = Column(String(255), nullable=False)
     expires_at = Column(DateTime, nullable=False)

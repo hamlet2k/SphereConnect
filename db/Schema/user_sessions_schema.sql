@@ -1,8 +1,11 @@
 -- Copyright 2025 Federico Arce. All Rights Reserved.
 -- Confidential - Do Not Distribute Without Permission.
 
+-- Enable UUID extension for auto-generation
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
 CREATE TABLE user_sessions (
-    id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL,
     token_hash VARCHAR(255) NOT NULL,
     expires_at TIMESTAMP NOT NULL,

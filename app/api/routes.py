@@ -494,6 +494,7 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
             type='game_star_citizen'
         )
         db.add(personal_guild)
+        db.commit()  # Commit guild first to resolve ForeignKeyViolation
 
         # Create default CO rank with access levels
         co_rank = Rank(

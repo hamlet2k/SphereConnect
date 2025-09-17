@@ -4,6 +4,9 @@
 -- Master schema file for SphereConnect database
 -- Run this file to create all tables in the correct order
 
+-- Enable UUID extension for auto-generation
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
 -- Guilds
 CREATE TABLE guilds (
     id UUID PRIMARY KEY,
@@ -66,7 +69,7 @@ CREATE TABLE users (
 
 -- User Sessions
 CREATE TABLE user_sessions (
-    id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL,
     token_hash VARCHAR(255) NOT NULL,
     expires_at TIMESTAMP NOT NULL,

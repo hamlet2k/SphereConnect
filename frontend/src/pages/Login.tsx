@@ -7,7 +7,6 @@ type LoginStep = 'credentials' | 'pin' | 'mfa' | 'success';
 interface LoginData {
   name: string;
   password: string;
-  guild_id: string;
 }
 
 interface PinData {
@@ -24,7 +23,6 @@ function Login() {
   const [step, setStep] = useState<LoginStep>('credentials');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [guildId, setGuildId] = useState('');
   const [pin, setPin] = useState('');
   const [totpCode, setTotpCode] = useState('');
   const [userId, setUserId] = useState('');
@@ -96,8 +94,7 @@ function Login() {
     try {
       const loginData: LoginData = {
         name: username,
-        password: password,
-        guild_id: guildId || 'default-guild-id' // Use a default for now
+        password: password
       };
 
       const response = await fetch('http://localhost:8000/api/auth/login', {
@@ -172,6 +169,22 @@ function Login() {
         throw new Error(data.detail || 'PIN verification failed');
       }
 
+      // Fetch current guild details and set context
+      const currentGuildId = data.user.current_guild_id;
+      if (currentGuildId) {
+        try {
+          const guildResponse = await fetch(`http://localhost:8000/api/guilds/${currentGuildId}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+          });
+          const guildData = await guildResponse.json();
+          if (guildResponse.ok) {
+            setCurrentGuild(currentGuildId, guildData.name);
+          }
+        } catch (err) {
+          console.error('Failed to fetch guild details:', err);
+        }
+      }
+
       setMessage('PIN verified successfully!');
       setStep('success');
       setTimeout(() => navigate('/admin'), 1000);
@@ -208,8 +221,7 @@ function Login() {
       // Store token and proceed
       const loginData: LoginData = {
         name: username,
-        password: password,
-        guild_id: guildId || 'default-guild-id'
+        password: password
       };
 
       const loginResponse = await fetch('http://localhost:8000/api/auth/login', {
@@ -224,6 +236,23 @@ function Login() {
         localStorage.setItem('token', loginResult.access_token);
         localStorage.setItem('user', JSON.stringify(loginResult.user));
         localStorage.setItem('lastActivity', Date.now().toString());
+
+        // Fetch current guild details and set context
+        const currentGuildId = loginResult.user.current_guild_id;
+        if (currentGuildId) {
+          try {
+            const guildResponse = await fetch(`http://localhost:8000/api/guilds/${currentGuildId}`, {
+              headers: { 'Authorization': `Bearer ${loginResult.access_token}` }
+            });
+            const guildData = await guildResponse.json();
+            if (guildResponse.ok) {
+              setCurrentGuild(currentGuildId, guildData.name);
+            }
+          } catch (err) {
+            console.error('Failed to fetch guild details:', err);
+          }
+        }
+
         setMessage('Login successful!');
         setStep('success');
         setTimeout(() => navigate('/admin'), 1000);
@@ -273,21 +302,6 @@ function Login() {
         />
       </div>
 
-      <div style={{ marginBottom: '16px' }}>
-        <input
-          type="text"
-          value={guildId}
-          onChange={(e) => setGuildId(e.target.value)}
-          placeholder="Guild ID (optional)"
-          style={{
-            width: '100%',
-            padding: '12px',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            fontSize: '16px'
-          }}
-        />
-      </div>
 
       <button
         type="submit"

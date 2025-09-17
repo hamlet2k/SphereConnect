@@ -5,6 +5,7 @@ function Register() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [pin, setPin] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
@@ -36,14 +37,20 @@ function Register() {
     }
 
     try {
+      const requestBody: any = {
+        name: username,
+        password: password,
+        pin: pin
+      };
+
+      if (inviteCode.trim()) {
+        requestBody.invite_code = inviteCode.trim();
+      }
+
       const response = await fetch('http://localhost:8000/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: username,
-          password: password,
-          pin: pin
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
@@ -149,6 +156,25 @@ function Register() {
               outline: 'none',
               textAlign: 'center',
               letterSpacing: '4px'
+            }}
+          />
+        </div>
+
+        <div style={{ marginBottom: '20px' }}>
+          <input
+            type="text"
+            value={inviteCode}
+            onChange={(e) => setInviteCode(e.target.value)}
+            placeholder="Invite Code (optional)"
+            style={{
+              width: '100%',
+              padding: '15px',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+              borderRadius: '5px',
+              fontSize: '16px',
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
+              color: '#ffffff',
+              outline: 'none'
             }}
           />
         </div>
