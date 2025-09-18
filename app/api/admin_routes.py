@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 
 from ..core.models import (
-    User, Rank, AccessLevel, UserAccess, Objective, Task, Squad, ObjectiveCategory, Guild,
+    User, Rank, AccessLevel, UserAccess, Objective, Task, Squad, ObjectiveCategory, Guild, Invite,
     get_db, create_tables
 )
 from .routes import get_current_user, verify_token
@@ -1086,4 +1086,80 @@ async def remove_user_access(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to remove user access: {str(e)}"
+        )
+
+# Invite Management Endpoints
+@router.get("/invites")
+async def get_invites(
+    guild_id: str = Query(..., description="Guild ID for filtering"),
+    current_user: User = Depends(require_access_level(["manage_guilds"])),
+    db: Session = Depends(get_db)
+):
+    """Get all invites for a guild (admin only)"""
+    try:
+        # Verify user belongs to the guild
+        if str(current_user.guild_id) != guild_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: User does not belong to this guild"
+            )
+
+        invites = db.query(Invite).filter(Invite.guild_id == uuid.UUID(guild_id)).all()
+
+        return [
+            {
+                "id": str(invite.id),
+                "code": invite.code,
+                "guild_id": str(invite.guild_id),
+                "expires_at": invite.expires_at.isoformat() if invite.expires_at else None,
+                "uses_left": invite.uses_left,
+                "created_at": invite.created_at.isoformat() if invite.created_at else None
+            }
+            for invite in invites
+        ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve invites: {str(e)}"
+        )
+
+@router.delete("/invites/{invite_code}")
+async def delete_invite(
+    invite_code: str,
+    current_user: User = Depends(require_access_level(["manage_guilds"])),
+    db: Session = Depends(get_db)
+):
+    """Delete an invite (admin only)"""
+    try:
+        # Find the invite
+        invite = db.query(Invite).filter(Invite.code == invite_code).first()
+
+        if not invite:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Invite not found"
+            )
+
+        # Verify user belongs to the guild that owns the invite
+        if str(current_user.guild_id) != str(invite.guild_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: User does not belong to this guild"
+            )
+
+        db.delete(invite)
+        db.commit()
+
+        return {
+            "message": "Invite deleted successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete invite: {str(e)}"
         )

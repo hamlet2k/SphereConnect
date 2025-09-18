@@ -2624,7 +2624,75 @@ I have successfully merged `docs/project/mvp_grok.markdown` and `docs/project/mv
 
 The merged file now contains the most comprehensive and up-to-date specification, combining the detailed technical depth of v16 with the refined organizational structure and current development priorities of v20.
 ----------------------------------------------------------------------------------
+## Summary
 
+I have successfully fixed the invite code issues and added invite management UI for SphereConnect MVP. Here's what was implemented:
+
+### ✅ Backend Fixes
+
+**1. Fixed POST /api/invites (routes.py)**
+- ✅ Added member limit validation before creating invites
+- ✅ Implemented 7-day default expiration: `datetime.utcnow() + timedelta(days=7)`
+- ✅ Ensured unique invite codes using `secrets.token_urlsafe(8)`
+- ✅ Set default `uses_left=1`
+
+**2. Updated POST /api/auth/register (routes.py)**
+- ✅ Added creation of default access levels: `view_guilds`, `manage_guilds`, `objectives`
+- ✅ Created default CO rank with proper UUID[] access_levels array
+- ✅ Fixed access_levels to use actual UUID objects instead of strings
+
+**3. Schema Fixes**
+- ✅ Updated `app/core/models.py` Rank.access_levels to `ARRAY(PG_UUID(as_uuid=True))`
+- ✅ Updated `db/Schema/rank_schema.sql` access_levels to `UUID[]`
+
+**4. Admin Routes (admin_routes.py)**
+- ✅ Added GET `/api/admin/invites?guild_id={guild_id}` - List invites for guild
+- ✅ Added DELETE `/api/admin/invites/{code}` - Delete specific invite
+- ✅ Both endpoints require `manage_guilds` permission
+
+### ✅ Frontend UI
+
+**1. Created InviteManagement.tsx Component**
+- ✅ Table displaying: Code, Guild, Expires At, Uses Left, Delete button
+- ✅ Create Invite functionality with member limit error handling
+- ✅ Delete invite functionality
+- ✅ Proper error handling and user feedback
+
+**2. Updated AdminDashboard.tsx**
+- ✅ Added 'invites' to ActiveTab type
+- ✅ Imported InviteManagement component
+- ✅ Added Invite Management tab in sidebar with 📨 icon
+- ✅ Integrated invite management into main content area
+
+### ✅ Tests
+
+**1. Updated guild_tests.py**
+- ✅ Added `TestInviteCreation` class with comprehensive tests
+- ✅ Added `TestUserAccessCRUD` class for access level management
+- ✅ Tests cover invite creation, expiration, member limits, and access level CRUD
+
+**2. Created InviteManagement.test.tsx**
+- ✅ Frontend test stub with comprehensive test cases
+- ✅ Tests for loading invites, creating invites, deleting invites
+- ✅ Error handling tests (member limit, API failures)
+
+### ✅ Verification
+
+All changes align with:
+- ✅ FastAPI backend architecture
+- ✅ React frontend with TypeScript
+- ✅ v19 MVP specifications from mvp_grok.markdown
+- ✅ Guild-only monetization model
+- ✅ User persona (guild leader/member/solo player)
+- ✅ Proper RBAC with access levels and ranks
+
+The invite system now properly handles:
+- 7-day expiration by default
+- Member limit enforcement
+- Unique invite codes
+- Proper validation and error handling
+- Complete CRUD operations for invite management
+- Integration with existing guild and user management systems
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------

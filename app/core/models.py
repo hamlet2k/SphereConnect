@@ -159,7 +159,7 @@ class Rank(Base):
     guild_id = Column(PG_UUID(as_uuid=True), ForeignKey('guilds.id'), nullable=False, index=True)
     name = Column(String, nullable=False)
     phonetic = Column(String)
-    access_levels = Column(ARRAY(String), default=[])
+    access_levels = Column(ARRAY(PG_UUID(as_uuid=True)), default=[])
 
 class AccessLevel(Base):
     __tablename__ = 'access_levels'

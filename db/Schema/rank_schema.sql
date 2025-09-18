@@ -6,6 +6,6 @@ CREATE TABLE ranks (
     guild_id UUID NOT NULL,
     name TEXT NOT NULL,
     phonetic TEXT,
-    access_levels TEXT[] DEFAULT '{}',
+    access_levels UUID[] DEFAULT '{}',
     FOREIGN KEY (guild_id) REFERENCES guilds(id)
 );

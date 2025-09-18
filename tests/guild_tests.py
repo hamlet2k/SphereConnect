@@ -181,6 +181,86 @@ class TestGuildDeletionProtection:
         assert response.status_code == 403
 
 @pytest.mark.guild
+class TestInviteCreation:
+    """Test invite creation functionality"""
+
+    def test_invite_creation_success(self):
+        """Test successful invite creation with default 7-day expiration"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        invite_data = {
+            "guild_id": TEST_GUILD_ID
+        }
+
+        response = requests.post(f"{BASE_URL}/invites", json=invite_data, headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "code" in data
+        assert "guild_id" in data
+        assert "expires_at" in data
+        assert "uses_left" in data
+        assert data["uses_left"] == 1
+
+        # Verify expiration is set to approximately 7 days from now
+        expires_at = datetime.fromisoformat(data["expires_at"].replace('Z', '+00:00'))
+        now = datetime.utcnow().replace(tzinfo=expires_at.tzinfo)
+        time_diff = expires_at - now
+        assert 6.9 <= time_diff.days <= 7.1  # Allow small margin for test execution time
+
+        # Store invite code for other tests
+        self.created_invite_code = data["code"]
+
+    def test_invite_creation_member_limit_exceeded(self):
+        """Test invite creation fails when member limit exceeded"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Create a guild at member limit (2 members)
+        guild_data = {
+            "name": "Full Guild",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{BASE_URL}/guilds", json=guild_data, headers=headers)
+        assert response.status_code == 200
+        full_guild_id = response.json()["guild_id"]
+
+        # Add a second member to reach limit
+        user_data = {
+            "name": "second_member",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": full_guild_id
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=user_data, headers=headers)
+        assert response.status_code == 200
+
+        # Try to create invite (should fail with 402)
+        invite_data = {
+            "guild_id": full_guild_id,
+            "uses_left": 1
+        }
+        response = requests.post(f"{BASE_URL}/invites", json=invite_data, headers=headers)
+        assert response.status_code == 402
+
+    def test_invite_creation_custom_expiration(self):
+        """Test invite creation with custom expiration date"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        custom_expires_at = (datetime.utcnow() + timedelta(days=3)).isoformat()
+        invite_data = {
+            "guild_id": TEST_GUILD_ID,
+            "expires_at": custom_expires_at,
+            "uses_left": 2
+        }
+
+        response = requests.post(f"{BASE_URL}/invites", json=invite_data, headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["expires_at"] == custom_expires_at
+        assert data["uses_left"] == 2
+
+@pytest.mark.guild
 class TestInviteJoin:
     """Test invite creation and guild joining functionality"""
 
@@ -465,3 +545,87 @@ class TestUserAccessCRUD:
         fake_access_id = str(uuid.uuid4())
         response = requests.delete(f"{ADMIN_BASE_URL}/user_access/{test_state['admin_user']['id']}/{fake_access_id}", headers=headers)
         assert response.status_code == 404
+
+@pytest.mark.guild
+class TestUserAccessCRUD:
+    """Test user access level CRUD operations"""
+
+    def test_create_access_level_success(self):
+        """Test successfully creating a new access level"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        access_level_data = {
+            "name": "Test Access Level",
+            "user_actions": ["view_users", "manage_users"],
+            "guild_id": TEST_GUILD_ID
+        }
+
+        response = requests.post(f"{ADMIN_BASE_URL}/access-levels", json=access_level_data, headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "id" in data
+        assert data["name"] == "Test Access Level"
+        assert data["user_actions"] == ["view_users", "manage_users"]
+
+        # Store for other tests
+        self.created_access_level_id = data["id"]
+
+    def test_get_access_levels(self):
+        """Test retrieving all access levels for a guild"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        response = requests.get(f"{ADMIN_BASE_URL}/access-levels?guild_id={TEST_GUILD_ID}", headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert isinstance(data, list)
+        if len(data) > 0:
+            assert "id" in data[0]
+            assert "name" in data[0]
+            assert "user_actions" in data[0]
+
+    def test_assign_user_access_level(self):
+        """Test assigning access level to user"""
+        if not hasattr(self, 'created_access_level_id'):
+            pytest.skip("No access level available from previous test")
+
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        assign_data = {
+            "user_id": test_state['admin_user']['id'],
+            "access_level_id": self.created_access_level_id
+        }
+
+        response = requests.post(f"{ADMIN_BASE_URL}/user_access", json=assign_data, headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "user_access_id" in data
+        assert "Access level" in data["message"]
+
+    def test_get_user_access_levels(self):
+        """Test retrieving user's access levels"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        response = requests.get(f"{ADMIN_BASE_URL}/user_access/{test_state['admin_user']['id']}", headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "user_id" in data
+        assert "user_name" in data
+        assert "access_levels" in data
+        assert isinstance(data["access_levels"], list)
+
+    def test_remove_user_access_level(self):
+        """Test removing access level from user"""
+        if not hasattr(self, 'created_access_level_id'):
+            pytest.skip("No access level available from previous test")
+
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        response = requests.delete(f"{ADMIN_BASE_URL}/user_access/{test_state['admin_user']['id']}/{self.created_access_level_id}", headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "removed from user" in data["message"]

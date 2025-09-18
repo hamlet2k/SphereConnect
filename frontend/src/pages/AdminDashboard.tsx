@@ -5,8 +5,9 @@ import { theme } from '../theme';
 import GuildList from '../components/GuildList';
 import InviteForm from '../components/InviteForm';
 import JoinForm from '../components/JoinForm';
+import InviteManagement from '../components/InviteManagement';
 
-type ActiveTab = 'users' | 'ranks' | 'objectives' | 'tasks' | 'squads' | 'access-levels' | 'categories' | 'guilds';
+type ActiveTab = 'users' | 'ranks' | 'objectives' | 'tasks' | 'squads' | 'access-levels' | 'categories' | 'guilds' | 'invites';
 
 interface User {
   id: string;
@@ -571,6 +572,8 @@ function AdminDashboard() {
         return renderTasksTab();
       case 'guilds':
         return renderGuildsTab();
+      case 'invites':
+        return <InviteManagement />;
       default:
         return <div>Select a tab to manage entities</div>;
     }
@@ -965,6 +968,38 @@ function AdminDashboard() {
                   }}
                 >
                   🏰 Guilds
+                </button>
+                <button
+                  onClick={() => setActiveTab('invites')}
+                  style={{
+                    padding: `${theme.spacing[3]} ${theme.spacing[4]}`,
+                    backgroundColor: activeTab === 'invites' ? theme.colors.primary : 'transparent',
+                    color: activeTab === 'invites' ? theme.colors.background : theme.colors.textSecondary,
+                    border: 'none',
+                    borderRadius: theme.borderRadius.lg,
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontSize: theme.typography.fontSize.sm,
+                    fontWeight: theme.typography.fontWeight.medium,
+                    fontFamily: theme.typography.fontFamily,
+                    transition: 'all 0.2s ease-in-out',
+                    width: '100%',
+                    boxShadow: activeTab === 'invites' ? theme.shadows.neon : 'none'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (activeTab !== 'invites') {
+                      (e.target as HTMLElement).style.backgroundColor = theme.colors.surfaceHover;
+                      (e.target as HTMLElement).style.color = theme.colors.text;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (activeTab !== 'invites') {
+                      (e.target as HTMLElement).style.backgroundColor = 'transparent';
+                      (e.target as HTMLElement).style.color = theme.colors.textSecondary;
+                    }
+                  }}
+                >
+                  📨 Invites
                 </button>
               </div>
             </div>

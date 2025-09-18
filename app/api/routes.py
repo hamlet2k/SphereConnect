@@ -545,7 +545,7 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
             guild_id=personal_guild_id,
             name="CO",
             phonetic="Commander",
-            access_levels=[str(access_view.id), str(access_manage.id), str(access_objectives.id)]
+            access_levels=[access_view.id, access_manage.id, access_objectives.id]
         )
         db.add(co_rank)
 
@@ -1352,15 +1352,36 @@ async def create_invite(invite_data: dict, current_user: User = Depends(get_curr
                 detail="Access denied: User does not belong to this guild"
             )
 
+        # Check member limit before creating invite
+        guild = db.query(Guild).filter(Guild.id == guild_uuid).first()
+        if not guild:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Guild not found"
+            )
+
+        # Count current members
+        member_count = db.query(User).filter(User.guild_id == guild.id).count()
+        if member_count >= guild.member_limit:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail="Guild member limit reached. Upgrade to add more members."
+            )
+
         # Generate unique invite code
         import secrets
         invite_code = secrets.token_urlsafe(8)
+
+        # Set default expiration to 7 days if not provided
+        expires_at = invite_data.get("expires_at")
+        if not expires_at:
+            expires_at = datetime.utcnow() + timedelta(days=7)
 
         invite = Invite(
             id=uuid.uuid4(),
             guild_id=guild_uuid,
             code=invite_code,
-            expires_at=invite_data.get("expires_at"),
+            expires_at=expires_at,
             uses_left=invite_data.get("uses_left", 1)
         )
 
