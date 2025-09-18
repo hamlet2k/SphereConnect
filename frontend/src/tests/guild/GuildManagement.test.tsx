@@ -43,3 +43,5 @@ describe('Guild Management', () => {
     });
   });
 });
+
+export {};

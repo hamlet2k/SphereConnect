@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 
 from ..core.models import (
-    User, Rank, AccessLevel, Objective, Task, Squad, ObjectiveCategory, Guild,
+    User, Rank, AccessLevel, UserAccess, Objective, Task, Squad, ObjectiveCategory, Guild,
     get_db, create_tables
 )
 from .routes import get_current_user, verify_token
@@ -761,12 +761,29 @@ async def create_objective_category(
 # Guild Management Endpoints
 @router.get("/guilds")
 async def get_guilds(
-    current_user: User = Depends(require_access_level(["view_guilds"])),
+    current_user: User = Depends(require_access_level(["manage_guilds"])),
     db: Session = Depends(get_db)
 ):
-    """Get all guilds (admin only)"""
+    """Get user's guilds (admin only with manage_guilds permission)"""
     try:
-        guilds = db.query(Guild).all()
+        # Get user's personal guild
+        personal_guild = db.query(Guild).filter(Guild.creator_id == current_user.id).first()
+
+        # Get guilds where user has approved guild requests
+        approved_requests = db.query(GuildRequest).filter(
+            GuildRequest.user_id == current_user.id,
+            GuildRequest.status == "approved"
+        ).all()
+
+        guild_ids = set()
+        if personal_guild:
+            guild_ids.add(personal_guild.id)
+
+        for request in approved_requests:
+            guild_ids.add(request.guild_id)
+
+        # Get all guilds user has access to
+        guilds = db.query(Guild).filter(Guild.id.in_(guild_ids)).all()
 
         return [
             {
@@ -909,4 +926,164 @@ async def delete_guild(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete guild: {str(e)}"
+        )
+
+# User Access Management Endpoints
+@router.post("/user_access")
+async def assign_user_access(
+    access_data: dict,
+    current_user: User = Depends(require_access_level(["manage_users"])),
+    db: Session = Depends(get_db)
+):
+    """Assign access level to user (admin only)"""
+    try:
+        user_id = access_data.get("user_id")
+        access_level_id = access_data.get("access_level_id")
+
+        if not user_id or not access_level_id:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="user_id and access_level_id are required"
+            )
+
+        # Verify user exists
+        user = db.query(User).filter(User.id == uuid.UUID(user_id)).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # Verify access level exists
+        access_level = db.query(AccessLevel).filter(AccessLevel.id == uuid.UUID(access_level_id)).first()
+        if not access_level:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Access level not found"
+            )
+
+        # Check if assignment already exists
+        existing = db.query(UserAccess).filter(
+            UserAccess.user_id == uuid.UUID(user_id),
+            UserAccess.access_level_id == uuid.UUID(access_level_id)
+        ).first()
+
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User already has this access level"
+            )
+
+        # Create assignment
+        user_access = UserAccess(
+            user_id=uuid.UUID(user_id),
+            access_level_id=uuid.UUID(access_level_id)
+        )
+
+        db.add(user_access)
+        db.commit()
+
+        return {
+            "message": f"Access level '{access_level.name}' assigned to user '{user.name}' successfully",
+            "user_access_id": str(user_access.id)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to assign user access: {str(e)}"
+        )
+
+@router.get("/user_access/{user_id}")
+async def get_user_access_levels(
+    user_id: str,
+    current_user: User = Depends(require_access_level(["view_users"])),
+    db: Session = Depends(get_db)
+):
+    """Get all access levels for a user"""
+    try:
+        user_uuid = uuid.UUID(user_id)
+
+        # Verify user exists
+        user = db.query(User).filter(User.id == user_uuid).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # Get user's access levels
+        user_access_levels = db.query(UserAccess).filter(UserAccess.user_id == user_uuid).all()
+
+        access_levels_data = []
+        for ua in user_access_levels:
+            access_level = db.query(AccessLevel).filter(AccessLevel.id == ua.access_level_id).first()
+            if access_level:
+                access_levels_data.append({
+                    "id": str(access_level.id),
+                    "name": access_level.name,
+                    "user_actions": access_level.user_actions,
+                    "assigned_at": ua.created_at.isoformat() if ua.created_at else None
+                })
+
+        return {
+            "user_id": user_id,
+            "user_name": user.name,
+            "access_levels": access_levels_data
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve user access levels: {str(e)}"
+        )
+
+@router.delete("/user_access/{user_id}/{access_id}")
+async def remove_user_access(
+    user_id: str,
+    access_id: str,
+    current_user: User = Depends(require_access_level(["manage_users"])),
+    db: Session = Depends(get_db)
+):
+    """Remove access level from user (admin only)"""
+    try:
+        user_uuid = uuid.UUID(user_id)
+        access_uuid = uuid.UUID(access_id)
+
+        # Find the user access assignment
+        user_access = db.query(UserAccess).filter(
+            UserAccess.user_id == user_uuid,
+            UserAccess.access_level_id == access_uuid
+        ).first()
+
+        if not user_access:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User access assignment not found"
+            )
+
+        # Get access level name for response
+        access_level = db.query(AccessLevel).filter(AccessLevel.id == access_uuid).first()
+        access_level_name = access_level.name if access_level else "Unknown"
+
+        # Get user name for response
+        user = db.query(User).filter(User.id == user_uuid).first()
+        user_name = user.name if user else "Unknown"
+
+        db.delete(user_access)
+        db.commit()
+
+        return {
+            "message": f"Access level '{access_level_name}' removed from user '{user_name}' successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to remove user access: {str(e)}"
         )

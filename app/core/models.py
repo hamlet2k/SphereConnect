@@ -193,6 +193,13 @@ class GuildRequest(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class UserAccess(Base):
+    __tablename__ = 'user_access'
+    id = Column(PG_UUID(as_uuid=True), primary_key=True)
+    user_id = Column(PG_UUID(as_uuid=True), ForeignKey('users.id'), nullable=False, index=True)
+    access_level_id = Column(PG_UUID(as_uuid=True), ForeignKey('access_levels.id'), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class UserSession(Base):
     __tablename__ = 'user_sessions'
     id = Column(PG_UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))

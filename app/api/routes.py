@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 import secrets
 import hashlib
 from ..core.models import (
-    Objective, Task, Guild, Squad, AICommander, User, Rank, AccessLevel, UserSession,
+    Objective, Task, Guild, Squad, AICommander, User, Rank, AccessLevel, UserAccess, UserSession,
     Invite, GuildRequest, get_db, create_tables
 )
 
@@ -517,39 +517,37 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
         db.add(personal_guild)
         db.commit()  # Commit guild first to resolve ForeignKeyViolation
 
+        # Create default access levels before ranks
+        access_view = AccessLevel(
+            id=uuid.uuid4(),
+            guild_id=personal_guild_id,
+            name='view_guilds',
+            user_actions=['view_guilds']
+        )
+        access_manage = AccessLevel(
+            id=uuid.uuid4(),
+            guild_id=personal_guild_id,
+            name='manage_guilds',
+            user_actions=['manage_guilds', 'manage_users']
+        )
+        access_objectives = AccessLevel(
+            id=uuid.uuid4(),
+            guild_id=personal_guild_id,
+            name='objectives',
+            user_actions=['create_objective', 'manage_objectives']
+        )
+        db.add_all([access_view, access_manage, access_objectives])
+        db.commit()
+
         # Create default CO rank with access levels
         co_rank = Rank(
             id=uuid.uuid4(),
             guild_id=personal_guild_id,
             name="CO",
             phonetic="Commander",
-            access_levels=["manage_users", "create_objective", "manage_objectives", "manage_tasks"]
+            access_levels=[str(access_view.id), str(access_manage.id), str(access_objectives.id)]
         )
         db.add(co_rank)
-
-        # Create access levels for the guild
-        access_levels = [
-            AccessLevel(
-                id=uuid.uuid4(),
-                guild_id=personal_guild_id,
-                name="User Management",
-                user_actions=["manage_users", "view_users"]
-            ),
-            AccessLevel(
-                id=uuid.uuid4(),
-                guild_id=personal_guild_id,
-                name="Objective Management",
-                user_actions=["create_objective", "manage_objectives", "view_objectives"]
-            ),
-            AccessLevel(
-                id=uuid.uuid4(),
-                guild_id=personal_guild_id,
-                name="Task Management",
-                user_actions=["manage_tasks", "view_tasks"]
-            )
-        ]
-        for al in access_levels:
-            db.add(al)
 
         # Create new user
         new_user = User(
@@ -621,12 +619,24 @@ async def get_user_guilds(
 
         user_uuid = uuid.UUID(user_id)
 
-        # Get user's personal guild
+        # Get user's personal guild (created by user)
         personal_guild = db.query(Guild).filter(Guild.creator_id == user_uuid).first()
 
-        # Get all guilds (for now, return all guilds user has access to)
-        # In a more complex system, this would check membership tables
-        all_guilds = db.query(Guild).all()
+        # Get guilds where user has approved guild requests
+        approved_requests = db.query(GuildRequest).filter(
+            GuildRequest.user_id == user_uuid,
+            GuildRequest.status == "approved"
+        ).all()
+
+        guild_ids = set()
+        if personal_guild:
+            guild_ids.add(personal_guild.id)
+
+        for request in approved_requests:
+            guild_ids.add(request.guild_id)
+
+        # Get all guilds user has access to
+        all_guilds = db.query(Guild).filter(Guild.id.in_(guild_ids)).all()
 
         guilds_data = []
         for guild in all_guilds:

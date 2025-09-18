@@ -13,7 +13,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from app.core.models import (
-    get_db, create_tables, User, Guild, Rank, AccessLevel,
+    get_db, create_tables, User, Guild, Rank, AccessLevel, UserAccess,
     Squad, AICommander, Objective, Task, ObjectiveCategory
 )
 from app.api.routes import hash_password, hash_pin
@@ -134,6 +134,33 @@ def seed_test_data():
 
         for al in access_levels:
             db.add(al)
+
+        # Create user access assignments
+        user_access_assignments = [
+            UserAccess(
+                id=uuid.uuid4(),
+                user_id=test_user.id,
+                access_level_id=access_levels[0].id  # User Management
+            ),
+            UserAccess(
+                id=uuid.uuid4(),
+                user_id=test_user.id,
+                access_level_id=access_levels[1].id  # Objective Management
+            ),
+            UserAccess(
+                id=uuid.uuid4(),
+                user_id=test_user.id,
+                access_level_id=access_levels[2].id  # Task Management
+            ),
+            UserAccess(
+                id=uuid.uuid4(),
+                user_id=test_user.id,
+                access_level_id=access_levels[3].id  # Guild Management
+            )
+        ]
+
+        for ua in user_access_assignments:
+            db.add(ua)
 
         # Create AI Commander
         ai_commander = AICommander(
@@ -267,6 +294,7 @@ def seed_test_data():
         print(f"   Created {len(extra_guilds) + 1} total guilds")
         print(f"   Created 2 ranks")
         print(f"   Created {len(access_levels)} access levels")
+        print(f"   Created {len(user_access_assignments)} user access assignments")
         print(f"   Created 1 AI Commander")
         print(f"   Created 1 squad")
         print(f"   Created {len(categories)} objective categories")

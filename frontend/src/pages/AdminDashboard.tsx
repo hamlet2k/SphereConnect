@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGuild } from '../contexts/GuildContext';
 import { theme } from '../theme';
@@ -89,7 +89,7 @@ function AdminDashboard() {
     const loadGuilds = async () => {
       try {
         const headers = { 'Authorization': `Bearer ${token}` };
-        const guildsResponse = await fetch('http://localhost:8000/api/admin/guilds', { headers });
+        const guildsResponse = await fetch(`http://localhost:8000/api/users/${user.id}/guilds`, { headers });
         if (guildsResponse.ok) {
           const guildsData = await guildsResponse.json();
           setGuilds(guildsData);
@@ -102,7 +102,7 @@ function AdminDashboard() {
     loadGuilds();
   }, [activeTab, token, navigate]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const headers = { 'Authorization': `Bearer ${token}` };
@@ -150,7 +150,7 @@ function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab, token, currentGuildId]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');

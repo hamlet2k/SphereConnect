@@ -1,5 +1,5 @@
 //import React, { useState, useEffect } from 'react';
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { theme } from '../theme';
 
 interface Guild {
@@ -39,12 +39,9 @@ const GuildList: React.FC<GuildListProps> = ({
   loading = false,
   message = ''
 }) => {
-  const [selectedGuild, setSelectedGuild] = useState<string | null>(null);
-
-  const handleInvite = (guildId: string) => {
-    setSelectedGuild(guildId);
+  const handleInvite = useCallback((guildId: string) => {
     onInvite(guildId);
-  };
+  }, [onInvite]);
 
   const handleLeave = async (guildId: string) => {
     if (window.confirm('Are you sure you want to leave this guild? You will be switched to your personal guild.')) {

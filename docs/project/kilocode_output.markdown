@@ -2450,6 +2450,75 @@ I have successfully enhanced the guild management UI for SphereConnect MVP with 
 
 The guild management system is now fully functional and ready for organic testing of all guild-related flows as requested in the MVP specification.
 ----------------------------------------------------------------------------------
+## Summary
+
+I have successfully fixed the guild listing issues and added user_access CRUD for the SphereConnect MVP. Here's what was implemented:
+
+### Backend Changes
+
+1. **User Access CRUD** (`app/api/admin_routes.py`):
+   - Added `POST /api/admin/user_access` - Assign access level to user
+   - Added `GET /api/admin/user_access/{user_id}` - List user's access levels  
+   - Added `DELETE /api/admin/user_access/{user_id}/{access_id}` - Remove access level
+
+2. **Database Schema** (`db/Schema/user_access_schema.sql`):
+   - Created user_access table with foreign keys to users and access_levels
+
+3. **Models** (`app/core/models.py`):
+   - Added UserAccess model for junction table between users and access levels
+
+4. **Registration Fix** (`app/api/routes.py`):
+   - Updated `/api/auth/register` to create default access levels before ranks
+   - Added view_guilds, manage_guilds, and objectives access levels
+
+5. **Guild Listing Fixes**:
+   - `GET /api/users/{id}/guilds`: Now filters by creator_id or approved GuildRequests
+   - `GET /api/admin/guilds`: Now requires manage_guilds permission and returns user's guilds only
+
+### Frontend Changes
+
+1. **AdminDashboard.tsx**:
+   - Updated guild loading to use `/api/users/{id}/guilds` endpoint
+   - Added useCallback for loadData function
+   - Fixed guild switcher to load from correct API
+
+2. **GuildList.tsx**:
+   - Removed unused `selectedGuild` state
+   - Memoized `handleInvite` function with useCallback
+   - Cleaned up imports
+
+3. **Test Files**:
+   - Added `export {}` to all test files to fix TS1208 errors
+   - Updated GuildManagement.test.tsx
+   - Updated InviteForm.test.tsx and JoinForm.test.tsx
+
+### Testing & Scripts
+
+1. **Test Suite** (`tests/guild_tests.py`):
+   - Added `TestUserAccessCRUD` class with comprehensive tests for user access operations
+
+2. **Test Data** (`scripts/test_data.py`):
+   - Added UserAccess model import
+   - Created sample user access assignments for test data
+
+### Key Features Implemented
+
+- **RBAC Access Control**: Users can be assigned specific access levels beyond their rank defaults
+- **Proper Guild Filtering**: Guild listings now respect user permissions and membership
+- **Default Access Levels**: Registration creates standard access levels (view_guilds, manage_guilds, objectives)
+- **Frontend Fixes**: Guild switcher loads from correct API, components optimized
+- **Test Coverage**: Comprehensive tests for user access CRUD operations
+
+All changes align with the FastAPI backend, React frontend, and v19 MVP specifications, ensuring proper guild-only monetization and user persona management.
+----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------
 
