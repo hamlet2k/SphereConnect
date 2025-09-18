@@ -1,7 +1,13 @@
-# SphereConnect MVP Specification: Star Citizen Focus (v16)
+# SphereConnect MVP Specification: Star Citizen Focus (v20)
 
 ## Overview
-SphereConnect is a multitenant AI-assisted app for Star Citizen guild coordination, enhancing management with users (members), ranks (roles), objectives (missions), tasks, authentication, access control, optional voice interaction (via Wingman-AI as-is), game-specific templates, and notifications. Not a replacement for voice chats; integrable with platforms like Discord (deferred). Designed for extensibility to non-gaming communities (e.g., city farming with production goals as objectives). Prioritizes seamless flows with minimal configuration for adoption.
+SphereConnect is a multitenant AI app for community organization and management, initially focused on complementing sandbox MMO games (e.g., Star Citizen) with tools for members, roles, objectives, events, auth, access, voice interaction, game-specific templates, and notifications. It's designed for extensibility to non-gaming communities (e.g., city farming, professional groups). Not a replacement for voice chats; integrable with Discord.
+
+**Key Goals**: Enhance coordination, AI immersion, scalability, security. Architecture facilitates adaptation to non-gaming sectors while starting with video games.
+
+**Functionalities**: Administer members, manage roles/objectives/events, authenticate/access, voice commands, customizable templates, notifications. AI-driven personalization across contexts.
+
+**Challenges**: Modular architecture, web/mobile/voice interfaces, Python/React/AI API stack, freemium model, MVP in 3-6 months.
 
 **Key Principles**:
 - Multitenancy: Independent, private guild interactions via `guild_id` in a single PostgreSQL schema for MVP, enforced across all entities.
@@ -243,18 +249,18 @@ Freemium focused on guild upgrades (no player plans):
 - **System Admin**: Manage guild approvals, billing (post-MVP).
 
 ## Development Sequence
-1. Wingman-AI PoC (Weeks 1-4, Completed): Custom skill maps voice to API.
-2. Auth & Security (Weeks 5-6): Implement Cognito/PIN/MFA, guild limits, switching, deletion protection.
-3. Entities & Database (Weeks 7-8, Completed): PostgreSQL with guild_id filtering.
-4. Admin/Self Actions (Weeks 9-10, In Progress): CRUD, guild management UI.
-5. Overlay UI & Notifications (Weeks 11-12): React PWA, game overlay, SNS.
-6. Analytics (Week 13): AI-driven debriefs (post-MVP).
-7. Guild Plans & Donations (Post-MVP): Stripe prep, in-app donations.
+1. **Phase 1**: Auth (register, login, PIN, status).
+2. **Phase 2**: Guild management (switch, invite/join, leave/kick, delete).
+3. **Phase 3**: Objectives/tasks (create, report, notify).
+4. **Phase 4**: User access CRUD, invite management UI.
 
 ## Repository Notes
+- Tests organized by functionality: tests/auth_tests.py, guild_tests.py, objective_tests.py, login_polish_tests.py.
+- No eject of Create React App; use react-app-rewired for webpack overrides.
 - License: Apache 2.0 (`LICENSE`).
 - Sensitive Files: `docs/`, `.env`, `.env.local`, `env/`, `__pycache__/`, `.vscode/` in `.gitignore`; history clean.
 - Credentials: Use env vars (e.g., DB_PASS in .env.local).
 - Pre-Commit Hook: Block sensitive files.
 - Current Files: `app/core/models.py` (SQLAlchemy models), `app/api/routes.py`, `app/api/admin_routes.py` (endpoints), `db/schema/` (SQL backups), `frontend/src/App.tsx` (React entry), `tsconfig.json` (TypeScript config), `tests/test_admin_crud.py` (unit tests), `wingman-ai/skills/sphereconnect/` (production skill), `wingman-ai/configs/_SphereConnect/` (UEE Commander config).
 - Schema Verification: All entities include `guild_id` (non-nullable, indexed); no mismatches in `app/core/models.py` or `db/schema/`.
+- Voice subset: Switch guild, create objective, report progress; exclude invite/join/leave/kick (web-only, post-MVP).

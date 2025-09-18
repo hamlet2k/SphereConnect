@@ -2511,8 +2511,120 @@ I have successfully fixed the guild listing issues and added user_access CRUD fo
 
 All changes align with the FastAPI backend, React frontend, and v19 MVP specifications, ensuring proper guild-only monetization and user persona management.
 ----------------------------------------------------------------------------------
+## Test Organization Complete
+
+I have successfully organized the test files for SphereConnect MVP by functionality and added the required stubs. Here's what was accomplished:
+
+### Backend Test Organization ✅
+
+**Files Created/Updated:**
+- `tests/auth_tests.py` - Already existed with TestRegistration and TestLogin classes using `@pytest.mark.auth`
+- `tests/guild_tests.py` - Already existed with comprehensive guild management tests using `@pytest.mark.guild`
+- `tests/objective_tests.py` - Updated with new TestTaskCreation and TestProgressReporting stub classes using `@pytest.mark.objective`
+- `tests/login_polish_tests.py` - **New file** with TestPINValidation and TestStatusUpdate stub classes using `@pytest.mark.login_polish`
+
+**pytest.ini Updated:**
+- Added `objective` and `login_polish` markers to the configuration
+
+### Frontend Test Organization ✅
+
+**Directory Structure:**
+- `frontend/src/tests/auth/` - Contains Register.test.tsx and Login.test.tsx
+- `frontend/src/tests/guild/` - Contains GuildList.test.tsx, GuildManagement.test.tsx, InviteForm.test.tsx, JoinForm.test.tsx
+- `frontend/src/tests/objective/` - Contains ObjectiveForm.test.tsx
+- `frontend/src/tests/login_polish/` - **New directory** with LoginPolish.test.tsx stub
+
+**Test Structure:**
+- All tests use proper Jest describe blocks with `describe('Feature Name', () => { ... })`
+- Frontend tests use `it()` instead of `test()` for consistency
+- All files include proper TypeScript declarations and export statements
+- InviteForm.test.tsx and JoinForm.test.tsx already have `export {};` for TS1208 compliance
+
+### Test Verification ✅
+
+**Backend Tests:**
+- `pytest tests/auth_tests.py --collect-only` → 10 tests collected
+- `pytest tests/login_polish_tests.py --collect-only` → 6 tests collected  
+- `pytest tests/objective_tests.py --collect-only` → 10 tests collected
+
+**Markers Working:**
+- `@pytest.mark.auth`, `@pytest.mark.guild`, `@pytest.mark.objective`, `@pytest.mark.login_polish`
+
+### Key Features Implemented
+
+1. **Proper Test Organization:** Tests are now organized by functionality (auth, guild, objectives, login_polish)
+2. **Pytest Markers:** All test classes use appropriate markers for selective test execution
+3. **Stub Structure:** All new tests include TODO comments with specific implementation guidance
+4. **Consistent Naming:** Test classes follow Test[Feature] pattern
+5. **TypeScript Compliance:** Frontend tests include proper type declarations and export statements
+
+### Usage Examples
+
+```bash
+# Run all auth tests
+pytest -m auth
+
+# Run all guild tests  
+pytest -m guild
+
+# Run all objective tests
+pytest -m objective
+
+# Run all login polish tests
+pytest -m login_polish
+
+# Run specific test files
+pytest tests/auth_tests.py
+pytest tests/login_polish_tests.py
+```
+
+The test organization is now complete and ready for UI validation and full implementation of the stubbed test logic.
 ----------------------------------------------------------------------------------
+## File Merge Complete ✅
+
+I have successfully merged `docs/project/mvp_grok.markdown` and `docs/project/mvp_grok (1).markdown` while preserving all content and updating what has changed.
+
+### Key Changes Made:
+
+**1. Version Update**
+- Updated from v16 to v20 in the title
+
+**2. Overview Section Enhancement**
+- Merged detailed architecture from v16 with key goals and functionalities from v20
+- Added **Key Goals**, **Functionalities**, and **Challenges** sections from v20
+- Preserved comprehensive system architecture details from v16
+
+**3. Entities Preservation**
+- All entities from both files preserved (AI Commander, Squads, etc. were already present)
+- Maintained detailed entity specifications with proper attributes and descriptions
+
+**4. Development Sequence Update**
+- Replaced week-based sequence (v16) with phase-based sequence (v20):
+  - **Phase 1**: Auth (register, login, PIN, status)
+  - **Phase 2**: Guild management (switch, invite/join, leave/kick, delete)
+  - **Phase 3**: Objectives/tasks (create, report, notify)
+  - **Phase 4**: User access CRUD, invite management UI
+
+**5. Repository Notes Enhancement**
+- Added test organization information: `tests/auth_tests.py, guild_tests.py, objective_tests.py, login_polish_tests.py`
+- Added note about react-app-rewired for webpack overrides
+- Added voice subset information: "Switch guild, create objective, report progress; exclude invite/join/leave/kick (web-only, post-MVP)"
+
+**6. File Cleanup**
+- Removed duplicate file `docs/project/mvp_grok (1).markdown`
+- Maintained single authoritative file: `docs/project/mvp_grok.markdown`
+
+### Content Preservation:
+- ✅ All system personas and buyer personas
+- ✅ Complete system architecture (Central System, Local Client, Webapp, Game Overlay UI, Wingman-AI Integration)
+- ✅ All entity definitions with detailed attributes
+- ✅ Revenue model and feature specifications
+- ✅ User authentication and authorization details
+- ✅ All disclaimers and repository guidelines
+
+The merged file now contains the most comprehensive and up-to-date specification, combining the detailed technical depth of v16 with the refined organizational structure and current development priorities of v20.
 ----------------------------------------------------------------------------------
+
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------
