@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from app.core.models import (
     get_db, create_tables, User, Guild, Rank, AccessLevel, UserAccess,
-    Squad, AICommander, Objective, Task, ObjectiveCategory
+    Squad, AICommander, Objective, Task, ObjectiveCategory, GuildRequest
 )
 from app.api.routes import hash_password, hash_pin
 
@@ -269,6 +269,22 @@ def seed_test_data():
             db.add(invite)
             invite_codes.append(invite)
 
+        # Create guild requests for testing
+        guild_requests = []
+        for i in range(2):
+            # Create a guild request from test user to one of the extra guilds
+            if extra_guilds:
+                guild_request = GuildRequest(
+                    id=uuid.uuid4(),
+                    user_id=test_user.id,
+                    guild_id=extra_guilds[i % len(extra_guilds)].id,
+                    status="pending" if i == 0 else "approved",  # One pending, one approved
+                    created_at=datetime.utcnow(),
+                    updated_at=datetime.utcnow()
+                )
+                db.add(guild_request)
+                guild_requests.append(guild_request)
+
         # Create additional test users for guild testing
         test_users = []
         for i in range(2):
@@ -301,6 +317,7 @@ def seed_test_data():
         print(f"   Created 1 objective")
         print(f"   Created 1 task")
         print(f"   Created {len(invite_codes)} invite codes")
+        print(f"   Created {len(guild_requests)} guild requests")
         print()
         print("Test User Credentials:")
         print("   Username: testuser")

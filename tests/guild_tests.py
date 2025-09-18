@@ -629,3 +629,150 @@ class TestUserAccessCRUD:
 
         data = response.json()
         assert "removed from user" in data["message"]
+
+@pytest.mark.guild
+class TestGuildRequestApproval:
+    """Test guild request approval functionality"""
+
+    def test_get_guild_requests_success(self):
+        """Test successfully retrieving guild requests for a guild"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        response = requests.get(f"{ADMIN_BASE_URL}/guild_requests?guild_id={TEST_GUILD_ID}", headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert isinstance(data, list)
+
+        # If there are requests, verify structure
+        if len(data) > 0:
+            request_data = data[0]
+            assert "id" in request_data
+            assert "user_id" in request_data
+            assert "user_name" in request_data
+            assert "guild_id" in request_data
+            assert "guild_name" in request_data
+            assert "status" in request_data
+            assert "created_at" in request_data
+
+    def test_get_guild_requests_wrong_guild(self):
+        """Test that users cannot access requests for guilds they don't belong to"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Use a random guild ID that user doesn't belong to
+        fake_guild_id = str(uuid.uuid4())
+        response = requests.get(f"{ADMIN_BASE_URL}/guild_requests?guild_id={fake_guild_id}", headers=headers)
+        assert response.status_code == 403
+
+    def test_approve_guild_request_success(self):
+        """Test successfully approving a guild request"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # First, create a guild request by having a user try to join via invite
+        # Create an invite first
+        invite_data = {
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{BASE_URL}/invites", json=invite_data, headers=headers)
+        assert response.status_code == 200
+        invite_code = response.json()["code"]
+
+        # Create a test user to make the request
+        test_user_data = {
+            "name": "request_test_user",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=test_user_data, headers=headers)
+        assert response.status_code == 200
+        test_user_id = response.json()["user_id"]
+
+        # Login as test user
+        response = requests.post(f"{BASE_URL}/auth/login", json=test_user_data)
+        assert response.status_code == 200
+        test_user_token = response.json()["access_token"]
+
+        # Have test user join via invite (creates guild request)
+        test_headers = {"Authorization": f"Bearer {test_user_token}"}
+        join_data = {
+            "invite_code": invite_code
+        }
+        response = requests.post(f"{BASE_URL}/users/{test_user_id}/join", json=join_data, headers=test_headers)
+        assert response.status_code == 200
+
+        # Now get the guild request as admin
+        response = requests.get(f"{ADMIN_BASE_URL}/guild_requests?guild_id={TEST_GUILD_ID}", headers=headers)
+        assert response.status_code == 200
+        requests_list = response.json()
+
+        # Find the request for our test user
+        test_request = None
+        for req in requests_list:
+            if req["user_id"] == test_user_id:
+                test_request = req
+                break
+
+        assert test_request is not None, "Guild request not found"
+        assert test_request["status"] == "pending"
+
+        # Approve the request
+        approve_data = {"status": "approved"}
+        response = requests.patch(f"{ADMIN_BASE_URL}/guild_requests/{test_request['id']}", json=approve_data, headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "approved successfully" in data["message"]
+        assert data["status"] == "approved"
+
+    def test_reject_guild_request_success(self):
+        """Test successfully rejecting a guild request"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Get existing pending requests
+        response = requests.get(f"{ADMIN_BASE_URL}/guild_requests?guild_id={TEST_GUILD_ID}", headers=headers)
+        assert response.status_code == 200
+        requests_list = response.json()
+
+        # Find a pending request
+        pending_request = None
+        for req in requests_list:
+            if req["status"] == "pending":
+                pending_request = req
+                break
+
+        if pending_request:
+            # Reject the request
+            reject_data = {"status": "denied"}
+            response = requests.patch(f"{ADMIN_BASE_URL}/guild_requests/{pending_request['id']}", json=reject_data, headers=headers)
+            assert response.status_code == 200
+
+            data = response.json()
+            assert "denied successfully" in data["message"]
+            assert data["status"] == "denied"
+
+    def test_update_guild_request_invalid_status(self):
+        """Test that invalid status values are rejected"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Get a request to update
+        response = requests.get(f"{ADMIN_BASE_URL}/guild_requests?guild_id={TEST_GUILD_ID}", headers=headers)
+        assert response.status_code == 200
+        requests_list = response.json()
+
+        if len(requests_list) > 0:
+            request_id = requests_list[0]["id"]
+
+            # Try invalid status
+            invalid_data = {"status": "invalid_status"}
+            response = requests.patch(f"{ADMIN_BASE_URL}/guild_requests/{request_id}", json=invalid_data, headers=headers)
+            assert response.status_code == 422
+
+    def test_update_nonexistent_guild_request(self):
+        """Test updating a non-existent guild request"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        fake_request_id = str(uuid.uuid4())
+        update_data = {"status": "approved"}
+        response = requests.patch(f"{ADMIN_BASE_URL}/guild_requests/{fake_request_id}", json=update_data, headers=headers)
+        assert response.status_code == 404

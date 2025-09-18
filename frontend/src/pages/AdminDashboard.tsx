@@ -5,9 +5,10 @@ import { theme } from '../theme';
 import GuildList from '../components/GuildList';
 import InviteForm from '../components/InviteForm';
 import JoinForm from '../components/JoinForm';
+import GuildRequestApproval from '../components/GuildRequestApproval';
 import InviteManagement from '../components/InviteManagement';
 
-type ActiveTab = 'users' | 'ranks' | 'objectives' | 'tasks' | 'squads' | 'access-levels' | 'categories' | 'guilds' | 'invites';
+type ActiveTab = 'users' | 'ranks' | 'objectives' | 'tasks' | 'squads' | 'access-levels' | 'categories' | 'guilds' | 'invites' | 'guild-requests';
 
 interface User {
   id: string;
@@ -139,7 +140,11 @@ function AdminDashboard() {
           }
           break;
         case 'guilds':
-          const guildsResponse = await fetch('http://localhost:8000/api/admin/guilds', { headers });
+          // Skip redundant API call if guilds are already loaded from the dropdown
+          if (guilds.length > 0) {
+            break;
+          }
+          const guildsResponse = await fetch(`http://localhost:8000/api/users/${user.id}/guilds`, { headers });
           if (guildsResponse.ok) {
             const guildsData = await guildsResponse.json();
             setGuilds(guildsData);
@@ -574,6 +579,8 @@ function AdminDashboard() {
         return renderGuildsTab();
       case 'invites':
         return <InviteManagement />;
+      case 'guild-requests':
+        return <GuildRequestApproval />;
       default:
         return <div>Select a tab to manage entities</div>;
     }
@@ -968,6 +975,38 @@ function AdminDashboard() {
                   }}
                 >
                   🏰 Guilds
+                </button>
+                <button
+                  onClick={() => setActiveTab('guild-requests')}
+                  style={{
+                    padding: `${theme.spacing[3]} ${theme.spacing[4]}`,
+                    backgroundColor: activeTab === 'guild-requests' ? theme.colors.primary : 'transparent',
+                    color: activeTab === 'guild-requests' ? theme.colors.background : theme.colors.textSecondary,
+                    border: 'none',
+                    borderRadius: theme.borderRadius.lg,
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontSize: theme.typography.fontSize.sm,
+                    fontWeight: theme.typography.fontWeight.medium,
+                    fontFamily: theme.typography.fontFamily,
+                    transition: 'all 0.2s ease-in-out',
+                    width: '100%',
+                    boxShadow: activeTab === 'guild-requests' ? theme.shadows.neon : 'none'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (activeTab !== 'guild-requests') {
+                      (e.target as HTMLElement).style.backgroundColor = theme.colors.surfaceHover;
+                      (e.target as HTMLElement).style.color = theme.colors.text;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (activeTab !== 'guild-requests') {
+                      (e.target as HTMLElement).style.backgroundColor = 'transparent';
+                      (e.target as HTMLElement).style.color = theme.colors.textSecondary;
+                    }
+                  }}
+                >
+                  📋 Guild Requests
                 </button>
                 <button
                   onClick={() => setActiveTab('invites')}

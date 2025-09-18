@@ -1088,6 +1088,117 @@ async def remove_user_access(
             detail=f"Failed to remove user access: {str(e)}"
         )
 
+# Guild Request Management Endpoints
+@router.get("/guild_requests")
+async def get_guild_requests(
+    guild_id: str = Query(..., description="Guild ID for filtering"),
+    current_user: User = Depends(require_access_level(["manage_users"])),
+    db: Session = Depends(get_db)
+):
+    """Get all guild requests for a guild (admin only)"""
+    try:
+        # Verify user belongs to the guild
+        if str(current_user.guild_id) != guild_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: User does not belong to this guild"
+            )
+
+        from ..core.models import GuildRequest
+
+        # Get guild requests for this guild
+        guild_requests = db.query(GuildRequest).filter(GuildRequest.guild_id == uuid.UUID(guild_id)).all()
+
+        requests_data = []
+        for gr in guild_requests:
+            # Get user info
+            user = db.query(User).filter(User.id == gr.user_id).first()
+            user_name = user.name if user else "Unknown User"
+
+            # Get guild info
+            guild = db.query(Guild).filter(Guild.id == gr.guild_id).first()
+            guild_name = guild.name if guild else "Unknown Guild"
+
+            requests_data.append({
+                "id": str(gr.id),
+                "user_id": str(gr.user_id),
+                "user_name": user_name,
+                "guild_id": str(gr.guild_id),
+                "guild_name": guild_name,
+                "status": gr.status,
+                "created_at": gr.created_at.isoformat() if gr.created_at else None,
+                "updated_at": gr.updated_at.isoformat() if gr.updated_at else None
+            })
+
+        return requests_data
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve guild requests: {str(e)}"
+        )
+
+@router.patch("/guild_requests/{request_id}")
+async def update_guild_request(
+    request_id: str,
+    request_data: dict,
+    current_user: User = Depends(require_access_level(["manage_users"])),
+    db: Session = Depends(get_db)
+):
+    """Approve or deny a guild request (admin only)"""
+    try:
+        from ..core.models import GuildRequest
+
+        request_uuid = uuid.UUID(request_id)
+        guild_request = db.query(GuildRequest).filter(GuildRequest.id == request_uuid).first()
+
+        if not guild_request:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Guild request not found"
+            )
+
+        # Verify admin belongs to the guild
+        if str(current_user.guild_id) != str(guild_request.guild_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: User does not belong to this guild"
+            )
+
+        new_status = request_data.get("status")
+        if new_status not in ["approved", "denied"]:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Status must be 'approved' or 'denied'"
+            )
+
+        # Update the request status
+        guild_request.status = new_status
+        guild_request.updated_at = datetime.utcnow()
+
+        # If approved, switch user to the guild
+        if new_status == "approved":
+            user = db.query(User).filter(User.id == guild_request.user_id).first()
+            if user:
+                user.current_guild_id = str(guild_request.guild_id)
+
+        db.commit()
+
+        return {
+            "message": f"Guild request {new_status} successfully",
+            "request_id": str(guild_request.id),
+            "status": guild_request.status
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update guild request: {str(e)}"
+        )
+
 # Invite Management Endpoints
 @router.get("/invites")
 async def get_invites(

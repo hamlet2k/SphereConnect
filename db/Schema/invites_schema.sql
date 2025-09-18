@@ -5,7 +5,7 @@ CREATE TABLE invites (
     id UUID PRIMARY KEY,
     guild_id UUID NOT NULL,
     code TEXT NOT NULL UNIQUE,
-    expires_at TIMESTAMP,
+    expires_at TIMESTAMP DEFAULT (NOW() + INTERVAL '7 days'),
     uses_left INTEGER DEFAULT 1,
     created_at TIMESTAMP DEFAULT NOW(),
     FOREIGN KEY (guild_id) REFERENCES guilds(id)

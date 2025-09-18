@@ -765,16 +765,23 @@ async def join_guild(
         # Update invite uses
         invite.uses_left -= 1
 
-        # Switch user to the guild
-        current_user.current_guild_id = str(guild.id)
+        # Create guild request for approval instead of direct join
+        guild_request = GuildRequest(
+            id=uuid.uuid4(),
+            user_id=current_user.id,
+            guild_id=guild.id,
+            status="pending"
+        )
+        db.add(guild_request)
 
         db.commit()
 
         return {
-            "message": f"Successfully joined guild: {guild.name}",
-            "current_guild_id": str(guild.id),
+            "message": f"Guild join request submitted for '{guild.name}'. Awaiting approval from guild leader.",
+            "guild_request_id": str(guild_request.id),
             "guild_name": guild.name,
-            "tts_response": f"Joined guild: {guild.name}"
+            "status": "pending",
+            "tts_response": f"Guild join request submitted for: {guild.name}"
         }
 
     except HTTPException:

@@ -1,6 +1,6 @@
 # SphereConnect Use Cases and Flows (v1.4)
 
-This document outlines key use cases and interaction flows for the SphereConnect MVP, modularized by functionality. Flows are visualized using Mermaid sequence diagrams for clarity. Update as needed for new features or refinements. Aligns with `mvp_grok.markdown` v20.
+This document outlines key use cases and interaction flows for the SphereConnect MVP, modularized by functionality. Flows are visualized using Mermaid sequence diagrams for clarity. Update as needed for new features or refinements. Aligns with `mvp_grok.markdown` v21.
 
 ## Module 1: Registration
 ### Use Case: User Registration

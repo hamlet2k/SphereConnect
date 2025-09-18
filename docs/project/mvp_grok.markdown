@@ -1,4 +1,4 @@
-# SphereConnect MVP Specification: Star Citizen Focus (v20)
+# SphereConnect MVP Specification: Star Citizen Focus (v21)
 
 ## Overview
 SphereConnect is a multitenant AI app for community organization and management, initially focused on complementing sandbox MMO games (e.g., Star Citizen) with tools for members, roles, objectives, events, auth, access, voice interaction, game-specific templates, and notifications. It's designed for extensibility to non-gaming communities (e.g., city farming, professional groups). Not a replacement for voice chats; integrable with Discord.
@@ -83,11 +83,11 @@ SphereConnect is a multitenant AI app for community organization and management,
 |-----------|-------------|
 | id | UUID, primary key |
 | name | Guild name |
-| member_limit | INTEGER DEFAULT 2 (free tier; upgradable) |
-| billing_tier | TEXT DEFAULT 'free' (e.g., 'tier1' for 10 members) |
+| member_limit | INTEGER DEFAULT 2 (free tier; upgradable via guild plan) |
+| billing_tier | TEXT DEFAULT 'free' (free: 2, tier1: 10, tier2: 50, tier3: unlimited) |
 | is_solo | BOOLEAN DEFAULT true (personal guilds; persists on join) |
 | is_active | BOOLEAN DEFAULT true (archive on inactivity; no deletion) |
-| type | TEXT DEFAULT 'game_star_citizen' (for per-industry limits) |
+| type | TEXT DEFAULT 'game_star_citizen' (for per-industry configs) |
 | creator_id | UUID (foreign key to Users; restricts deletion) |
 | is_deletable | BOOLEAN DEFAULT true (false for is_solo=true; prevents personal guild deletion) |
 
@@ -100,7 +100,7 @@ SphereConnect is a multitenant AI app for community organization and management,
 | username | TEXT, unique, not null (login identifier) |
 | email | TEXT, unique (optional, for login) |
 | phonetic | For voice recognition |
-| availability | Session/online status |
+| availability | Session/online status (e.g., Available, Busy) |
 | rank | Assigned rank (e.g., Recruit, NCO) |
 | preferences | Traits (e.g., mining, combat) |
 | password | Hashed with bcrypt |
@@ -113,8 +113,8 @@ SphereConnect is a multitenant AI app for community organization and management,
 ### Invites
 | Attribute | Description |
 |-----------|-------------|
-| id | UUID |
-| guild_id | UUID |
+| id | UUID, primary key |
+| guild_id | UUID, foreign key to guilds |
 | code | TEXT (unique) |
 | expires_at | TIMESTAMP |
 | uses_left | INTEGER DEFAULT 1 (free tier) |
@@ -122,9 +122,9 @@ SphereConnect is a multitenant AI app for community organization and management,
 ### GuildRequests
 | Attribute | Description |
 |-----------|-------------|
-| id | UUID |
-| user_id | UUID |
-| guild_id | UUID |
+| id | UUID, primary key |
+| user_id | UUID, foreign key to users |
+| guild_id | UUID, foreign key to guilds |
 | status | TEXT (pending/approved/denied) |
 
 ### AI Commander
@@ -154,8 +154,7 @@ SphereConnect is a multitenant AI app for community organization and management,
 | guild_id | UUID, foreign key to guilds, non-nullable, indexed |
 | name | e.g., Recruit, NCO, Commander |
 | phonetic | For voice recognition |
-| access_levels | Hierarchical permissions with custom overrides (e.g., NCO-specific recruiting) |
-| default_access_levels | TEXT[] DEFAULT '{}' (default actions for rank) |
+| access_levels | UUID[] (references access_levels.id) |
 
 **Structure**: Military-style pyramid; higher ranks inherit lower access levels.
 
@@ -165,7 +164,7 @@ SphereConnect is a multitenant AI app for community organization and management,
 | id | UUID, primary key |
 | guild_id | UUID, foreign key to guilds, non-nullable, indexed |
 | name | e.g., Recruiting, Mission Development |
-| user_actions | Grouped actions permitted |
+| user_actions | Grouped actions permitted (e.g., 'view_guilds', 'manage_guilds') |
 
 **Structure**: Independent groups assigned to ranks/users for flexibility.
 
@@ -239,14 +238,15 @@ Freemium focused on guild upgrades (no player plans):
 - Auto-logoff after inactivity.
 
 ### User Authorization
-- Granular RBAC with rank defaults + user overrides.
+- Granular RBAC with rank defaults + user overrides via user_access table.
 - Tier checks on join/invite; switching via current_guild_id.
 - Guild deletion: Personal guilds non-deletable (403 if is_deletable=false). Non-personal: Restricted to creator_id (403 otherwise).
+- User Access CRUD: POST/GET/DELETE /api/admin/user_access for assigning/removing access levels.
 
 ### User Actions
-- **Administrative**: High-rank users manage users/ranks/guilds; overrides allow flexibility. Only creator deletes non-personal guilds; personal guilds never deleted.
-- **Self-Managed**: Update profile, authenticate, sign up/withdraw tasks, switch guilds (PATCH /api/users/{id}/switch-guild).
-- **System Admin**: Manage guild approvals, billing (post-MVP).
+- Administrative: High-rank users manage users/ranks/guilds; overrides via user_access CRUD. Only creator deletes non-personal guilds; personal guilds never deleted.
+- Self-Managed: Update profile, authenticate, sign up/withdraw tasks, switch guilds (PATCH /api/users/{id}/switch-guild).
+- System Admin: Manage guild approvals, billing (post-MVP).
 
 ## Development Sequence
 1. **Phase 1**: Auth (register, login, PIN, status).
@@ -257,10 +257,4 @@ Freemium focused on guild upgrades (no player plans):
 ## Repository Notes
 - Tests organized by functionality: tests/auth_tests.py, guild_tests.py, objective_tests.py, login_polish_tests.py.
 - No eject of Create React App; use react-app-rewired for webpack overrides.
-- License: Apache 2.0 (`LICENSE`).
-- Sensitive Files: `docs/`, `.env`, `.env.local`, `env/`, `__pycache__/`, `.vscode/` in `.gitignore`; history clean.
-- Credentials: Use env vars (e.g., DB_PASS in .env.local).
-- Pre-Commit Hook: Block sensitive files.
-- Current Files: `app/core/models.py` (SQLAlchemy models), `app/api/routes.py`, `app/api/admin_routes.py` (endpoints), `db/schema/` (SQL backups), `frontend/src/App.tsx` (React entry), `tsconfig.json` (TypeScript config), `tests/test_admin_crud.py` (unit tests), `wingman-ai/skills/sphereconnect/` (production skill), `wingman-ai/configs/_SphereConnect/` (UEE Commander config).
-- Schema Verification: All entities include `guild_id` (non-nullable, indexed); no mismatches in `app/core/models.py` or `db/schema/`.
 - Voice subset: Switch guild, create objective, report progress; exclude invite/join/leave/kick (web-only, post-MVP).
