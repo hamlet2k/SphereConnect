@@ -1136,3 +1136,255 @@ class TestRbacPermission:
         assert response.status_code == 403
         data = response.json()
         assert "manage_rbac" in data.get("detail", "")
+
+@pytest.mark.guild
+class TestRanksCRUD:
+    """Test ranks CRUD operations"""
+
+    def test_create_rank_success(self):
+        """Test successfully creating a new rank"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Get available access levels first
+        response = requests.get(f"{ADMIN_BASE_URL}/access-levels?guild_id={TEST_GUILD_ID}", headers=headers)
+        assert response.status_code == 200
+        access_levels = response.json()
+
+        # Use first access level for the rank
+        access_level_ids = [access_levels[0]["id"]] if access_levels else []
+
+        rank_data = {
+            "name": "Test Rank",
+            "access_levels": access_level_ids,
+            "guild_id": TEST_GUILD_ID
+        }
+
+        response = requests.post(f"{ADMIN_BASE_URL}/ranks", json=rank_data, headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "rank_id" in data
+        assert data["message"] == "Rank 'Test Rank' created successfully"
+
+        # Store for other tests
+        self.created_rank_id = data["rank_id"]
+
+    def test_get_ranks_success(self):
+        """Test successfully retrieving ranks for a guild"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        response = requests.get(f"{ADMIN_BASE_URL}/ranks?guild_id={TEST_GUILD_ID}", headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert isinstance(data, list)
+        if len(data) > 0:
+            assert "id" in data[0]
+            assert "name" in data[0]
+            assert "access_levels" in data[0]
+
+    def test_update_rank_success(self):
+        """Test successfully updating a rank"""
+        if not hasattr(self, 'created_rank_id'):
+            pytest.skip("No rank available from previous test")
+
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        update_data = {
+            "name": "Updated Test Rank",
+            "access_levels": []  # Clear access levels
+        }
+
+        response = requests.patch(f"{ADMIN_BASE_URL}/ranks/{self.created_rank_id}", json=update_data, headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "updated successfully" in data["message"]
+
+    def test_update_rank_partial(self):
+        """Test updating only part of a rank"""
+        if not hasattr(self, 'created_rank_id'):
+            pytest.skip("No rank available from previous test")
+
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Update only name
+        update_data = {
+            "name": "Partially Updated Rank"
+        }
+
+        response = requests.patch(f"{ADMIN_BASE_URL}/ranks/{self.created_rank_id}", json=update_data, headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "updated successfully" in data["message"]
+
+    def test_update_nonexistent_rank(self):
+        """Test updating a non-existent rank"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        fake_rank_id = str(uuid.uuid4())
+        update_data = {
+            "name": "Non-existent Update"
+        }
+
+        response = requests.patch(f"{ADMIN_BASE_URL}/ranks/{fake_rank_id}", json=update_data, headers=headers)
+        assert response.status_code == 404
+
+    def test_delete_rank_success(self):
+        """Test successfully deleting a rank"""
+        if not hasattr(self, 'created_rank_id'):
+            pytest.skip("No rank available from previous test")
+
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        response = requests.delete(f"{ADMIN_BASE_URL}/ranks/{self.created_rank_id}", headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "deleted successfully" in data["message"]
+
+    def test_delete_rank_with_users_assigned(self):
+        """Test deleting a rank that has users assigned fails"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Create a rank
+        rank_data = {
+            "name": "Assigned Rank",
+            "access_levels": [],
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/ranks", json=rank_data, headers=headers)
+        assert response.status_code == 200
+        assigned_rank_id = response.json()["rank_id"]
+
+        # Assign the rank to the test user
+        user_update_data = {
+            "rank_id": assigned_rank_id
+        }
+        response = requests.put(f"{ADMIN_BASE_URL}/users/{test_state['admin_user']['id']}", json=user_update_data, headers=headers)
+        assert response.status_code == 200
+
+        # Try to delete the rank (should fail)
+        response = requests.delete(f"{ADMIN_BASE_URL}/ranks/{assigned_rank_id}", headers=headers)
+        assert response.status_code == 409
+
+        data = response.json()
+        assert "Cannot delete rank" in data["detail"]
+
+    def test_delete_nonexistent_rank(self):
+        """Test deleting a non-existent rank"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        fake_rank_id = str(uuid.uuid4())
+        response = requests.delete(f"{ADMIN_BASE_URL}/ranks/{fake_rank_id}", headers=headers)
+        assert response.status_code == 404
+
+    def test_rank_wrong_guild(self):
+        """Test that users cannot access ranks from other guilds"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Use a random guild ID that user doesn't belong to
+        fake_guild_id = str(uuid.uuid4())
+
+        # Try to get ranks
+        response = requests.get(f"{ADMIN_BASE_URL}/ranks?guild_id={fake_guild_id}", headers=headers)
+        assert response.status_code == 403
+
+        # Try to create rank
+        rank_data = {
+            "name": "Wrong Guild Rank",
+            "access_levels": [],
+            "guild_id": fake_guild_id
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/ranks", json=rank_data, headers=headers)
+        assert response.status_code == 403
+
+    def test_rank_insufficient_permissions(self):
+        """Test that users without proper permissions cannot manage ranks"""
+        # Create a user with limited permissions
+        limited_user_data = {
+            "name": "limited_rank_user",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=limited_user_data, headers={"Authorization": f"Bearer {test_state['admin_token']}"})
+        assert response.status_code == 200
+        limited_user_id = response.json()["user_id"]
+
+        # Login as limited user
+        response = requests.post(f"{BASE_URL}/auth/login", json=limited_user_data)
+        assert response.status_code == 200
+        limited_token = response.json()["access_token"]
+
+        limited_headers = {"Authorization": f"Bearer {limited_token}"}
+
+        # Try to get ranks (should fail without manage_ranks permission)
+        response = requests.get(f"{ADMIN_BASE_URL}/ranks?guild_id={TEST_GUILD_ID}", headers=limited_headers)
+        assert response.status_code == 403
+
+        # Try to create rank (should fail without manage_ranks permission)
+        rank_data = {
+            "name": "Limited User Rank",
+            "access_levels": [],
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/ranks", json=rank_data, headers=limited_headers)
+        assert response.status_code == 403
+
+    def test_rank_manage_ranks_permission_required(self):
+        """Test that manage_ranks permission is required for rank operations"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Create a user with manage_ranks permission
+        ranks_user_data = {
+            "name": "ranks_manager_user",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=ranks_user_data, headers=headers)
+        assert response.status_code == 200
+        ranks_user_id = response.json()["user_id"]
+
+        # Assign manage_ranks access level to the user
+        # First get the manage_ranks access level
+        response = requests.get(f"{ADMIN_BASE_URL}/access-levels?guild_id={TEST_GUILD_ID}", headers=headers)
+        assert response.status_code == 200
+        access_levels = response.json()
+
+        ranks_access_level = None
+        for level in access_levels:
+            if "manage_ranks" in level["user_actions"]:
+                ranks_access_level = level
+                break
+
+        if ranks_access_level:
+            # Assign the access level to the user
+            assign_data = {
+                "user_id": ranks_user_id,
+                "access_level_id": ranks_access_level["id"]
+            }
+            response = requests.post(f"{ADMIN_BASE_URL}/user_access", json=assign_data, headers=headers)
+            assert response.status_code == 200
+
+            # Login as ranks user
+            response = requests.post(f"{BASE_URL}/auth/login", json=ranks_user_data)
+            assert response.status_code == 200
+            ranks_token = response.json()["access_token"]
+
+            ranks_headers = {"Authorization": f"Bearer {ranks_token}"}
+
+            # User with manage_ranks should be able to perform rank operations
+            response = requests.get(f"{ADMIN_BASE_URL}/ranks?guild_id={TEST_GUILD_ID}", headers=ranks_headers)
+            assert response.status_code == 200
+
+            # User with manage_ranks should be able to create ranks
+            rank_data = {
+                "name": "Managed Rank",
+                "access_levels": [],
+                "guild_id": TEST_GUILD_ID
+            }
+            response = requests.post(f"{ADMIN_BASE_URL}/ranks", json=rank_data, headers=ranks_headers)
+            assert response.status_code == 200

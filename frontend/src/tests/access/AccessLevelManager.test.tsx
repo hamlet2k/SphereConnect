@@ -490,13 +490,15 @@ describe('AccessLevelManager', () => {
         fireEvent.click(screen.getByText('Create Access Level'));
       });
 
-      // Check that all user actions are displayed including manage_rbac
+      // Check that all user actions are displayed including manage_rbac, view_ranks, and manage_ranks
       expect(screen.getByLabelText('View Guilds')).toBeInTheDocument();
       expect(screen.getByLabelText('Manage Guilds')).toBeInTheDocument();
       expect(screen.getByLabelText('Manage Users')).toBeInTheDocument();
       expect(screen.getByLabelText('Create Objective')).toBeInTheDocument();
       expect(screen.getByLabelText('Manage Objectives')).toBeInTheDocument();
       expect(screen.getByLabelText('Manage Rbac')).toBeInTheDocument();
+      expect(screen.getByLabelText('View Ranks')).toBeInTheDocument();
+      expect(screen.getByLabelText('Manage Ranks')).toBeInTheDocument();
     });
 
     test('toggles user actions correctly', async () => {

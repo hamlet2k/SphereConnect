@@ -542,23 +542,36 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
             name='manage_rbac',
             user_actions=['manage_rbac']
         )
-        # Create super_admin access level with all permissions
+        access_view_ranks = AccessLevel(
+            id=uuid.uuid4(),
+            guild_id=personal_guild_id,
+            name='view_ranks',
+            user_actions=['view_ranks']
+        )
+        access_manage_ranks = AccessLevel(
+            id=uuid.uuid4(),
+            guild_id=personal_guild_id,
+            name='manage_ranks',
+            user_actions=['manage_ranks']
+        )
+        # Create super_admin access level with ALL permissions including manage_ranks
         access_super = AccessLevel(
             id=uuid.uuid4(),
             guild_id=personal_guild_id,
             name='super_admin',
-            user_actions=['view_guilds', 'manage_guilds', 'manage_users', 'manage_rbac', 'create_objective', 'manage_objectives']
+            user_actions=['view_guilds', 'manage_guilds', 'manage_users', 'manage_rbac', 'create_objective', 'manage_objectives', 'view_ranks', 'manage_ranks']
         )
+        db.add_all([access_view, access_manage, access_objectives, access_rbac, access_view_ranks, access_manage_ranks, access_super])
         db.add_all([access_view, access_manage, access_objectives, access_rbac, access_super])
         db.commit()
 
-        # Create default CO rank with access levels (including manage_rbac)
+        # Create default CO rank with access levels (including manage_rbac, view_ranks, manage_ranks)
         co_rank = Rank(
             id=uuid.uuid4(),
             guild_id=personal_guild_id,
             name="CO",
             phonetic="Commander",
-            access_levels=[access_view.id, access_manage.id, access_objectives.id, access_rbac.id]
+            access_levels=[access_view.id, access_manage.id, access_objectives.id, access_rbac.id, access_view_ranks.id, access_manage_ranks.id]
         )
 
         # Add CO rank first

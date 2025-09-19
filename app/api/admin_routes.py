@@ -438,6 +438,99 @@ async def create_rank(
             detail=f"Failed to create rank: {str(e)}"
         )
 
+@router.patch("/ranks/{rank_id}")
+async def update_rank(
+    rank_id: str,
+    rank_data: RankUpdate,
+    current_user: User = Depends(require_access_level(["manage_ranks"])),
+    db: Session = Depends(get_db)
+):
+    """Update a rank (admin only)"""
+    try:
+        rank_uuid = uuid.UUID(rank_id)
+        rank = db.query(Rank).filter(Rank.id == rank_uuid).first()
+
+        if not rank:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Rank not found"
+            )
+
+        # Verify admin belongs to the same guild
+        if str(current_user.guild_id) != str(rank.guild_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Rank does not belong to your guild"
+            )
+
+        # Update fields
+        if rank_data.name is not None:
+            rank.name = rank_data.name
+        if rank_data.access_levels is not None:
+            rank.access_levels = rank_data.access_levels
+
+        db.commit()
+
+        return {
+            "message": "Rank updated successfully",
+            "rank_id": str(rank.id)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update rank: {str(e)}"
+        )
+
+@router.delete("/ranks/{rank_id}")
+async def delete_rank(
+    rank_id: str,
+    current_user: User = Depends(require_access_level(["manage_ranks"])),
+    db: Session = Depends(get_db)
+):
+    """Delete a rank (admin only)"""
+    try:
+        rank_uuid = uuid.UUID(rank_id)
+        rank = db.query(Rank).filter(Rank.id == rank_uuid).first()
+
+        if not rank:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Rank not found"
+            )
+
+        # Verify admin belongs to the same guild
+        if str(current_user.guild_id) != str(rank.guild_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Rank does not belong to your guild"
+            )
+
+        # Check if rank is assigned to any users
+        users_with_rank = db.query(User).filter(User.rank == rank_uuid).count()
+        if users_with_rank > 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Cannot delete rank: {users_with_rank} user(s) are assigned to this rank"
+            )
+
+        db.delete(rank)
+        db.commit()
+
+        return {
+            "message": "Rank deleted successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete rank: {str(e)}"
+        )
+
 # Objective Management Endpoints
 @router.get("/objectives")
 async def get_objectives(

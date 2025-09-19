@@ -46,6 +46,8 @@ def seed_test_data():
             id=uuid.uuid4(),
             guild_id=personal_guild_id,
             name="testuser",
+            username="testuser",
+            email="test@example.com",
             password=hash_password("testpass123"),
             pin=hash_pin("123456"),
             phonetic="Test User",
@@ -81,13 +83,13 @@ def seed_test_data():
 
         db.commit()
 
-        # Create ranks
+        # Create ranks (will update access_levels after creating access levels)
         admin_rank = Rank(
             id=uuid.uuid4(),
             guild_id=personal_guild_id,
             name="Commander",
             phonetic="Commander",
-            access_levels=["manage_users", "manage_ranks", "manage_objectives", "manage_tasks", "manage_squads", "manage_guilds", "view_guilds"]
+            access_levels=[]  # Will update after creating access levels
         )
         db.add(admin_rank)
 
@@ -96,13 +98,11 @@ def seed_test_data():
             guild_id=personal_guild_id,
             name="Recruit",
             phonetic="Recruit",
-            access_levels=["view_users", "view_objectives", "view_tasks"]
+            access_levels=[]  # Will update after creating access levels
         )
         db.add(member_rank)
 
-        # Assign rank to user
-        test_user.rank = admin_rank.id
-        db.commit()
+        db.commit()  # Commit ranks first
 
         # Create access levels
         access_levels = [
@@ -135,6 +135,18 @@ def seed_test_data():
                 guild_id=personal_guild_id,
                 name="RBAC Management",
                 user_actions=["manage_rbac"]
+            ),
+            AccessLevel(
+                id=uuid.uuid4(),
+                guild_id=personal_guild_id,
+                name="View Ranks",
+                user_actions=["view_ranks"]
+            ),
+            AccessLevel(
+                id=uuid.uuid4(),
+                guild_id=personal_guild_id,
+                name="Ranks Management",
+                user_actions=["manage_ranks"]
             )
         ]
 
@@ -167,11 +179,30 @@ def seed_test_data():
                 id=uuid.uuid4(),
                 user_id=test_user.id,
                 access_level_id=access_levels[4].id  # RBAC Management
+            ),
+            UserAccess(
+                id=uuid.uuid4(),
+                user_id=test_user.id,
+                access_level_id=access_levels[5].id  # View Ranks
+            ),
+            UserAccess(
+                id=uuid.uuid4(),
+                user_id=test_user.id,
+                access_level_id=access_levels[6].id  # Ranks Management
             )
         ]
 
         for ua in user_access_assignments:
             db.add(ua)
+
+        # Update ranks with proper access level UUIDs
+        admin_rank.access_levels = [access_levels[0].id, access_levels[1].id, access_levels[2].id, access_levels[3].id, access_levels[4].id, access_levels[5].id, access_levels[6].id]  # All permissions including view_ranks and manage_ranks
+        member_rank.access_levels = [access_levels[0].id]  # Just User Management for basic access
+
+        # Assign rank to user
+        test_user.rank = admin_rank.id
+
+        db.commit()
 
         # Create AI Commander
         ai_commander = AICommander(
@@ -303,6 +334,8 @@ def seed_test_data():
                 id=uuid.uuid4(),
                 guild_id=personal_guild_id,
                 name=f"testuser{i+2}",
+                username=f"testuser{i+2}",
+                email=f"test{i+2}@example.com",
                 password=hash_password("testpass123"),
                 pin=hash_pin("123456"),
                 phonetic=f"Test User {i+2}",
@@ -320,8 +353,8 @@ def seed_test_data():
         print(f"   Created 1 main user + {len(test_users)} additional users")
         print(f"   Created {len(extra_guilds) + 1} total guilds")
         print(f"   Created 2 ranks")
-        print(f"   Created {len(access_levels)} access levels (including manage_rbac)")
-        print(f"   Created {len(user_access_assignments)} user access assignments")
+        print(f"   Created {len(access_levels)} access levels (including manage_rbac, view_ranks, and manage_ranks)")
+        print(f"   Created {len(user_access_assignments)} user access assignments (including view_ranks and manage_ranks)")
         print(f"   Created 1 AI Commander")
         print(f"   Created 1 squad")
         print(f"   Created {len(categories)} objective categories")

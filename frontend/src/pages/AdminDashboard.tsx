@@ -8,6 +8,7 @@ import JoinForm from '../components/JoinForm';
 import GuildRequestApproval from '../components/GuildRequestApproval';
 import InviteManagement from '../components/InviteManagement';
 import AccessLevelManager from '../components/AccessLevelManager';
+import RanksManager from '../components/RanksManager';
 
 type ActiveTab = 'users' | 'ranks' | 'objectives' | 'tasks' | 'squads' | 'access-levels' | 'categories' | 'guilds' | 'invites' | 'guild-requests';
 
@@ -395,55 +396,7 @@ function AdminDashboard() {
     </div>
   );
 
-  const renderRanksTab = () => (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h3 style={{ margin: 0 }}>Ranks Management</h3>
-        <button
-          style={{
-            padding: '8px 16px',
-            backgroundColor: '#3182ce',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Add Rank
-        </button>
-      </div>
-
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#f7fafc' }}>
-              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Name</th>
-              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Access Levels</th>
-              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ranks.map(rank => (
-              <tr key={rank.id}>
-                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>{rank.name}</td>
-                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>
-                  {rank.access_levels.join(', ')}
-                </td>
-                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>
-                  <button style={{ marginRight: '8px', padding: '4px 8px', backgroundColor: '#3182ce', color: 'white', border: 'none', borderRadius: '4px' }}>
-                    Edit
-                  </button>
-                  <button style={{ padding: '4px 8px', backgroundColor: '#e53e3e', color: 'white', border: 'none', borderRadius: '4px' }}>
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+  const renderRanksTab = () => <RanksManager />;
 
   const renderObjectivesTab = () => (
     <div>

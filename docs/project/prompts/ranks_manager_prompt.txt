@@ -1,6 +1,6 @@
 Prompt for Kilo Code (grok-code-fast-1):
 
-Add ranks manager UI for SphereConnect MVP. Align with FastAPI backend, React frontend, v21 spec (User persona, guild-only monetization). Ranks tie to access_levels (UUID[]) via dropdown from GET /api/admin/access-levels. Add to AdminDashboard.tsx (Ranks tab). Do not modify node_modules.
+Add ranks manager UI for SphereConnect MVP. Align with FastAPI backend, React frontend, v24 spec (User persona, guild-only monetization). Ranks tie to access_levels (UUID[]) via dropdown from GET /api/admin/access-levels. Add to AdminDashboard.tsx (Ranks tab). Do not modify node_modules.
 
 1. **Frontend**:
    - Path: frontend/src/components/RanksManager.tsx (new)
@@ -23,7 +23,7 @@ Add ranks manager UI for SphereConnect MVP. Align with FastAPI backend, React fr
 Implementation Details:
 - Chakra UI, TypeScript.
 - Proxy: http://localhost:8000.
-- Reference: @/docs/project/mvp_grok.markdown, @/docs/project/use_cases.markdown, @/docs/project/kilocode_output.markdown.
+- Reference: @/docs/project/grok/mvp_grok.markdown, @/docs/project/grok/use_cases.markdown, @/docs/project/grok/kilocode_output.markdown.
 - No node_modules edits.
 
 Output artifacts:
