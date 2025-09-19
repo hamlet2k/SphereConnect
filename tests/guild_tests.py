@@ -631,6 +631,199 @@ class TestUserAccessCRUD:
         assert "removed from user" in data["message"]
 
 @pytest.mark.guild
+class TestAccessLevelCRUD:
+    """Test access level CRUD operations"""
+
+    def test_create_access_level_success(self):
+        """Test successfully creating a new access level"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        access_level_data = {
+            "name": "Test Access Level",
+            "user_actions": ["view_guilds", "manage_guilds"],
+            "guild_id": TEST_GUILD_ID
+        }
+
+        response = requests.post(f"{ADMIN_BASE_URL}/access-levels", json=access_level_data, headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "id" in data
+        assert data["name"] == "Test Access Level"
+        assert data["user_actions"] == ["view_guilds", "manage_guilds"]
+
+        # Store for other tests
+        self.created_access_level_id = data["id"]
+
+    def test_get_access_levels(self):
+        """Test retrieving all access levels for a guild"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        response = requests.get(f"{ADMIN_BASE_URL}/access-levels?guild_id={TEST_GUILD_ID}", headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert isinstance(data, list)
+        if len(data) > 0:
+            assert "id" in data[0]
+            assert "name" in data[0]
+            assert "user_actions" in data[0]
+
+    def test_create_access_level_duplicate_name(self):
+        """Test creating access level with duplicate name fails"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # First create an access level
+        access_level_data = {
+            "name": "Duplicate Test",
+            "user_actions": ["view_guilds"],
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/access-levels", json=access_level_data, headers=headers)
+        assert response.status_code == 200
+
+        # Try to create another with same name
+        response = requests.post(f"{ADMIN_BASE_URL}/access-levels", json=access_level_data, headers=headers)
+        # Should succeed as names can be duplicate (no unique constraint in schema)
+        assert response.status_code == 200
+
+    def test_create_access_level_invalid_actions(self):
+        """Test creating access level with invalid user actions"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        access_level_data = {
+            "name": "Invalid Actions Test",
+            "user_actions": ["invalid_action", "view_guilds"],
+            "guild_id": TEST_GUILD_ID
+        }
+
+        response = requests.post(f"{ADMIN_BASE_URL}/access-levels", json=access_level_data, headers=headers)
+        # Should succeed as we don't validate action names in backend
+        assert response.status_code == 200
+
+    def test_update_access_level_success(self):
+        """Test successfully updating an access level"""
+        if not hasattr(self, 'created_access_level_id'):
+            pytest.skip("No access level available from previous test")
+
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        update_data = {
+            "name": "Updated Access Level",
+            "user_actions": ["view_guilds", "manage_users", "create_objective"]
+        }
+
+        response = requests.patch(f"{ADMIN_BASE_URL}/access-levels/{self.created_access_level_id}", json=update_data, headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "updated successfully" in data["message"]
+
+    def test_update_access_level_partial(self):
+        """Test updating only part of an access level"""
+        if not hasattr(self, 'created_access_level_id'):
+            pytest.skip("No access level available from previous test")
+
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Update only name
+        update_data = {
+            "name": "Partially Updated"
+        }
+
+        response = requests.patch(f"{ADMIN_BASE_URL}/access-levels/{self.created_access_level_id}", json=update_data, headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "updated successfully" in data["message"]
+
+    def test_update_nonexistent_access_level(self):
+        """Test updating a non-existent access level"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        fake_access_level_id = str(uuid.uuid4())
+        update_data = {
+            "name": "Non-existent Update"
+        }
+
+        response = requests.patch(f"{ADMIN_BASE_URL}/access-levels/{fake_access_level_id}", json=update_data, headers=headers)
+        assert response.status_code == 404
+
+    def test_delete_access_level_success(self):
+        """Test successfully deleting an access level"""
+        if not hasattr(self, 'created_access_level_id'):
+            pytest.skip("No access level available from previous test")
+
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        response = requests.delete(f"{ADMIN_BASE_URL}/access-levels/{self.created_access_level_id}", headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "deleted successfully" in data["message"]
+
+    def test_delete_nonexistent_access_level(self):
+        """Test deleting a non-existent access level"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        fake_access_level_id = str(uuid.uuid4())
+        response = requests.delete(f"{ADMIN_BASE_URL}/access-levels/{fake_access_level_id}", headers=headers)
+        assert response.status_code == 404
+
+    def test_access_level_wrong_guild(self):
+        """Test that users cannot access access levels from other guilds"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Use a random guild ID that user doesn't belong to
+        fake_guild_id = str(uuid.uuid4())
+
+        # Try to get access levels
+        response = requests.get(f"{ADMIN_BASE_URL}/access-levels?guild_id={fake_guild_id}", headers=headers)
+        assert response.status_code == 403
+
+        # Try to create access level
+        access_level_data = {
+            "name": "Wrong Guild Test",
+            "user_actions": ["view_guilds"],
+            "guild_id": fake_guild_id
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/access-levels", json=access_level_data, headers=headers)
+        assert response.status_code == 403
+
+    def test_access_level_insufficient_permissions(self):
+        """Test that users without proper permissions cannot manage access levels"""
+        # Create a user with limited permissions
+        limited_user_data = {
+            "name": "limited_user",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=limited_user_data, headers={"Authorization": f"Bearer {test_state['admin_token']}"})
+        assert response.status_code == 200
+        limited_user_id = response.json()["user_id"]
+
+        # Login as limited user
+        response = requests.post(f"{BASE_URL}/auth/login", json=limited_user_data)
+        assert response.status_code == 200
+        limited_token = response.json()["access_token"]
+
+        limited_headers = {"Authorization": f"Bearer {limited_token}"}
+
+        # Try to get access levels (should fail without view_access_levels permission)
+        response = requests.get(f"{ADMIN_BASE_URL}/access-levels?guild_id={TEST_GUILD_ID}", headers=limited_headers)
+        assert response.status_code == 403
+
+        # Try to create access level (should fail without manage_guilds permission)
+        access_level_data = {
+            "name": "Limited User Test",
+            "user_actions": ["view_guilds"],
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/access-levels", json=access_level_data, headers=limited_headers)
+        assert response.status_code == 403
+
+@pytest.mark.guild
 class TestGuildRequestApproval:
     """Test guild request approval functionality"""
 
@@ -776,3 +969,170 @@ class TestGuildRequestApproval:
         update_data = {"status": "approved"}
         response = requests.patch(f"{ADMIN_BASE_URL}/guild_requests/{fake_request_id}", json=update_data, headers=headers)
         assert response.status_code == 404
+
+@pytest.mark.guild
+class TestRbacPermission:
+    """Test RBAC permission system for access level management"""
+
+    def test_manage_rbac_permission_required_for_access_levels(self):
+        """Test that manage_rbac permission is required for access level operations"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Create a user without manage_rbac permission
+        limited_user_data = {
+            "name": "no_rbac_user",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=limited_user_data, headers=headers)
+        assert response.status_code == 200
+        limited_user_id = response.json()["user_id"]
+
+        # Login as limited user
+        response = requests.post(f"{BASE_URL}/auth/login", json=limited_user_data)
+        assert response.status_code == 200
+        limited_token = response.json()["access_token"]
+
+        limited_headers = {"Authorization": f"Bearer {limited_token}"}
+
+        # Test GET access levels (should fail without manage_rbac)
+        response = requests.get(f"{ADMIN_BASE_URL}/access-levels?guild_id={TEST_GUILD_ID}", headers=limited_headers)
+        assert response.status_code == 403
+
+        # Test POST access level (should fail without manage_rbac)
+        access_level_data = {
+            "name": "Test Access Level",
+            "user_actions": ["view_guilds"],
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/access-levels", json=access_level_data, headers=limited_headers)
+        assert response.status_code == 403
+
+        # Test PATCH access level (should fail without manage_rbac)
+        fake_access_level_id = str(uuid.uuid4())
+        update_data = {"name": "Updated Name"}
+        response = requests.patch(f"{ADMIN_BASE_URL}/access-levels/{fake_access_level_id}", json=update_data, headers=limited_headers)
+        assert response.status_code == 403
+
+        # Test DELETE access level (should fail without manage_rbac)
+        response = requests.delete(f"{ADMIN_BASE_URL}/access-levels/{fake_access_level_id}", headers=limited_headers)
+        assert response.status_code == 403
+
+    def test_admin_user_has_manage_rbac_permission(self):
+        """Test that admin users have manage_rbac permission"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Admin should be able to access access levels
+        response = requests.get(f"{ADMIN_BASE_URL}/access-levels?guild_id={TEST_GUILD_ID}", headers=headers)
+        assert response.status_code == 200
+
+        # Admin should be able to create access levels
+        access_level_data = {
+            "name": "Admin Test Access Level",
+            "user_actions": ["view_guilds", "manage_guilds", "manage_rbac"],
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/access-levels", json=access_level_data, headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "id" in data
+        assert data["user_actions"] == ["view_guilds", "manage_guilds", "manage_rbac"]
+
+        # Store for cleanup
+        self.created_admin_access_level_id = data["id"]
+
+    def test_manage_rbac_includes_other_permissions(self):
+        """Test that manage_rbac permission includes other admin permissions"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Create a user with only manage_rbac permission
+        rbac_user_data = {
+            "name": "rbac_only_user",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=rbac_user_data, headers=headers)
+        assert response.status_code == 200
+        rbac_user_id = response.json()["user_id"]
+
+        # Assign manage_rbac access level to the user
+        # First get the manage_rbac access level
+        response = requests.get(f"{ADMIN_BASE_URL}/access-levels?guild_id={TEST_GUILD_ID}", headers=headers)
+        assert response.status_code == 200
+        access_levels = response.json()
+
+        rbac_access_level = None
+        for level in access_levels:
+            if "manage_rbac" in level["user_actions"]:
+                rbac_access_level = level
+                break
+
+        assert rbac_access_level is not None, "manage_rbac access level not found"
+
+        # Assign the access level to the user
+        assign_data = {
+            "user_id": rbac_user_id,
+            "access_level_id": rbac_access_level["id"]
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/user_access", json=assign_data, headers=headers)
+        assert response.status_code == 200
+
+        # Login as rbac user
+        response = requests.post(f"{BASE_URL}/auth/login", json=rbac_user_data)
+        assert response.status_code == 200
+        rbac_token = response.json()["access_token"]
+
+        rbac_headers = {"Authorization": f"Bearer {rbac_token}"}
+
+        # User with manage_rbac should be able to perform access level operations
+        response = requests.get(f"{ADMIN_BASE_URL}/access-levels?guild_id={TEST_GUILD_ID}", headers=rbac_headers)
+        assert response.status_code == 200
+
+        # User with manage_rbac should be able to create new access levels
+        new_access_level_data = {
+            "name": "RBAC Created Level",
+            "user_actions": ["view_users"],
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/access-levels", json=new_access_level_data, headers=rbac_headers)
+        assert response.status_code == 200
+
+    def test_rbac_permission_error_messages(self):
+        """Test that proper error messages are returned for RBAC permission failures"""
+        # Create a user without manage_rbac permission
+        limited_user_data = {
+            "name": "no_rbac_user_2",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=limited_user_data, headers={"Authorization": f"Bearer {test_state['admin_token']}"})
+        assert response.status_code == 200
+        limited_user_id = response.json()["user_id"]
+
+        # Login as limited user
+        response = requests.post(f"{BASE_URL}/auth/login", json=limited_user_data)
+        assert response.status_code == 200
+        limited_token = response.json()["access_token"]
+
+        limited_headers = {"Authorization": f"Bearer {limited_token}"}
+
+        # Test error message for GET access levels
+        response = requests.get(f"{ADMIN_BASE_URL}/access-levels?guild_id={TEST_GUILD_ID}", headers=limited_headers)
+        assert response.status_code == 403
+        data = response.json()
+        assert "manage_rbac" in data.get("detail", "")
+
+        # Test error message for POST access level
+        access_level_data = {
+            "name": "Test Access Level",
+            "user_actions": ["view_guilds"],
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/access-levels", json=access_level_data, headers=limited_headers)
+        assert response.status_code == 403
+        data = response.json()
+        assert "manage_rbac" in data.get("detail", "")

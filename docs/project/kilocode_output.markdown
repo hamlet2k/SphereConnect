@@ -2818,6 +2818,107 @@ I have successfully fixed all the invite code issues and added the invite manage
 
 All changes align with the FastAPI backend, React frontend, and v19 spec requirements. The system now properly handles invite codes, expiration, and provides a complete UI for managing guild requests and invites.
 ----------------------------------------------------------------------------------
+## ✅ **Access Level/User Actions Manager UI Implementation Complete**
+
+I have successfully implemented the complete access level/user actions manager UI for SphereConnect MVP. Here's a comprehensive summary of what has been delivered:
+
+### **🎯 Core Features Implemented**
+
+#### **Frontend Components**
+- **`AccessLevelManager.tsx`**: Full-featured React component with:
+  - **Table View**: Displays Name, User Actions, and Actions columns
+  - **Create/Edit Form**: Modal with checkboxes for hardcoded user actions
+  - **CRUD Operations**: Create, Read, Update, Delete functionality
+  - **Validation**: Form validation and error handling
+  - **UI/UX**: Loading states, confirmation dialogs, Star Citizen theming
+
+#### **AdminDashboard Integration**
+- **Access Levels Tab**: Added to sidebar navigation with 🔐 icon
+- **Component Rendering**: Integrated AccessLevelManager for the 'access-levels' tab
+- **Navigation**: Seamless integration with existing admin interface
+
+#### **Backend API Endpoints**
+- **`POST /api/admin/access-levels`**: Create new access level
+- **`PATCH /api/admin/access-levels/{id}`**: Update existing access level  
+- **`DELETE /api/admin/access-levels/{id}`**: Delete access level
+- **RBAC Protection**: All endpoints require `manage_guilds` permission
+- **Guild Isolation**: Proper multitenant data filtering
+
+### **🔧 Technical Implementation**
+
+#### **Hardcoded User Actions**
+The system supports all required user actions:
+- `view_guilds` - View guild information
+- `manage_guilds` - Create/manage guilds
+- `manage_users` - User management operations
+- `create_objective` - Create objectives
+- `manage_objectives` - Full objective management
+
+#### **Security & RBAC**
+- **Permission Checks**: `manage_guilds` required for all operations
+- **Guild Isolation**: Users can only manage access levels in their guilds
+- **Error Handling**: Proper 403/404 responses for unauthorized access
+
+#### **Test Coverage**
+- **`frontend/src/tests/access/AccessLevelManager.test.tsx`**: Comprehensive component tests
+- **`tests/guild_tests.py`**: Added `TestAccessLevelCRUD` class with full API testing
+- **`scripts/test_data.py`**: Includes 4 predefined access levels for testing
+
+### **🎨 User Experience**
+
+#### **Table Interface**
+- Clean, responsive table showing access level details
+- Action buttons for Edit/Delete operations
+- User-friendly display of user actions (formatted names)
+
+#### **Form Interface**
+- Modal-based create/edit forms
+- Checkbox grid for user action selection
+- Real-time form validation
+- Clear success/error messaging
+
+#### **Navigation**
+- Integrated into existing AdminDashboard
+- Consistent with other management tabs
+- Proper loading states and error handling
+
+### **📊 Data Structure**
+
+#### **Access Level Schema**
+```typescript
+interface AccessLevel {
+  id: string;
+  name: string;
+  user_actions: string[];
+}
+```
+
+#### **API Endpoints**
+- `GET /api/admin/access-levels?guild_id={guild_id}` - List access levels
+- `POST /api/admin/access-levels` - Create access level
+- `PATCH /api/admin/access-levels/{id}` - Update access level
+- `DELETE /api/admin/access-levels/{id}` - Delete access level
+
+### **🚀 Production Ready**
+
+The implementation is fully functional and includes:
+- ✅ **Complete CRUD operations** for access level management
+- ✅ **Proper RBAC integration** with guild-based permissions
+- ✅ **Comprehensive test coverage** for both frontend and backend
+- ✅ **Error handling and validation** throughout the system
+- ✅ **Responsive UI design** matching existing components
+- ✅ **Multitenant architecture** with proper data isolation
+
+### **📋 Usage**
+
+Guild managers with `manage_guilds` permission can now:
+1. **Navigate** to Admin Dashboard → Access Levels tab
+2. **View** all access levels for their guild
+3. **Create** new access levels with custom user action combinations
+4. **Edit** existing access levels to modify permissions
+5. **Delete** access levels that are no longer needed
+
+The system provides a complete solution for managing granular user permissions in the SphereConnect MVP, perfectly aligned with the FastAPI backend, React frontend, and v21 specifications.
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------

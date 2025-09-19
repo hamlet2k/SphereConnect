@@ -7,6 +7,7 @@ import InviteForm from '../components/InviteForm';
 import JoinForm from '../components/JoinForm';
 import GuildRequestApproval from '../components/GuildRequestApproval';
 import InviteManagement from '../components/InviteManagement';
+import AccessLevelManager from '../components/AccessLevelManager';
 
 type ActiveTab = 'users' | 'ranks' | 'objectives' | 'tasks' | 'squads' | 'access-levels' | 'categories' | 'guilds' | 'invites' | 'guild-requests';
 
@@ -581,6 +582,8 @@ function AdminDashboard() {
         return <InviteManagement />;
       case 'guild-requests':
         return <GuildRequestApproval />;
+      case 'access-levels':
+        return <AccessLevelManager />;
       default:
         return <div>Select a tab to manage entities</div>;
     }

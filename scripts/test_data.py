@@ -129,6 +129,12 @@ def seed_test_data():
                 guild_id=personal_guild_id,
                 name="Guild Management",
                 user_actions=["manage_guilds", "view_guilds"]
+            ),
+            AccessLevel(
+                id=uuid.uuid4(),
+                guild_id=personal_guild_id,
+                name="RBAC Management",
+                user_actions=["manage_rbac"]
             )
         ]
 
@@ -156,6 +162,11 @@ def seed_test_data():
                 id=uuid.uuid4(),
                 user_id=test_user.id,
                 access_level_id=access_levels[3].id  # Guild Management
+            ),
+            UserAccess(
+                id=uuid.uuid4(),
+                user_id=test_user.id,
+                access_level_id=access_levels[4].id  # RBAC Management
             )
         ]
 
@@ -309,7 +320,7 @@ def seed_test_data():
         print(f"   Created 1 main user + {len(test_users)} additional users")
         print(f"   Created {len(extra_guilds) + 1} total guilds")
         print(f"   Created 2 ranks")
-        print(f"   Created {len(access_levels)} access levels")
+        print(f"   Created {len(access_levels)} access levels (including manage_rbac)")
         print(f"   Created {len(user_access_assignments)} user access assignments")
         print(f"   Created 1 AI Commander")
         print(f"   Created 1 squad")

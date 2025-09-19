@@ -1,0 +1,35 @@
+Prompt for Kilo Code (grok-code-fast-1):
+
+Add ranks manager UI for SphereConnect MVP. Align with FastAPI backend, React frontend, v21 spec (User persona, guild-only monetization). Ranks tie to access_levels (UUID[]) via dropdown from GET /api/admin/access-levels. Add to AdminDashboard.tsx (Ranks tab). Do not modify node_modules.
+
+1. **Frontend**:
+   - Path: frontend/src/components/RanksManager.tsx (new)
+   - Features: Table (Name, Access Levels, Actions: Edit/Delete).
+   - Form for POST /api/admin/ranks (name, access_levels UUID[] from dropdown).
+   - Update /api/admin/ranks/{id} (PATCH), DELETE /api/admin/ranks/{id}.
+
+2. **Backend**:
+   - Path: app/api/admin_routes.py
+   - Endpoints (RBAC: manage_guilds):
+     - POST /api/admin/ranks {name, access_levels: UUID[]}
+     - GET /api/admin/ranks?guild_id={guild_id}: List ranks.
+     - PATCH /api/admin/ranks/{id}: Update name/access_levels.
+     - DELETE /api/admin/ranks/{id}.
+
+3. **Stubs**:
+   - frontend/src/tests/ranks/RanksManager.test.tsx (stub).
+   - tests/guild_tests.py: TestRanksCRUD.
+
+Implementation Details:
+- Chakra UI, TypeScript.
+- Proxy: http://localhost:8000.
+- Reference: @/docs/project/mvp_grok.markdown, @/docs/project/use_cases.markdown, @/docs/project/kilocode_output.markdown.
+- No node_modules edits.
+
+Output artifacts:
+- frontend/src/components/RanksManager.tsx
+- frontend/src/pages/AdminDashboard.tsx
+- frontend/src/tests/ranks/RanksManager.test.tsx
+- app/api/admin_routes.py
+- tests/guild_tests.py
+- scripts/test_data.py

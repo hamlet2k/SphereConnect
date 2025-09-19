@@ -658,7 +658,7 @@ async def create_squad(
 @router.get("/access-levels")
 async def get_access_levels(
     guild_id: str = Query(..., description="Guild ID for filtering"),
-    current_user: User = Depends(require_access_level(["view_access_levels"])),
+    current_user: User = Depends(require_access_level(["manage_rbac"])),
     db: Session = Depends(get_db)
 ):
     """Get all access levels for a guild"""
@@ -685,6 +685,128 @@ async def get_access_levels(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve access levels: {str(e)}"
+        )
+
+@router.post("/access-levels")
+async def create_access_level(
+    access_level_data: AccessLevelCreate,
+    current_user: User = Depends(require_access_level(["manage_rbac"])),
+    db: Session = Depends(get_db)
+):
+    """Create a new access level (admin only)"""
+    try:
+        if str(current_user.guild_id) != access_level_data.guild_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Admin does not belong to this guild"
+            )
+
+        new_access_level = AccessLevel(
+            id=uuid.uuid4(),
+            guild_id=uuid.UUID(access_level_data.guild_id),
+            name=access_level_data.name,
+            user_actions=access_level_data.user_actions
+        )
+
+        db.add(new_access_level)
+        db.commit()
+
+        return {
+            "message": f"Access level '{access_level_data.name}' created successfully",
+            "id": str(new_access_level.id)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create access level: {str(e)}"
+        )
+
+@router.patch("/access-levels/{access_level_id}")
+async def update_access_level(
+    access_level_id: str,
+    access_level_data: AccessLevelUpdate,
+    current_user: User = Depends(require_access_level(["manage_rbac"])),
+    db: Session = Depends(get_db)
+):
+    """Update an access level (admin only)"""
+    try:
+        access_level_uuid = uuid.UUID(access_level_id)
+        access_level = db.query(AccessLevel).filter(AccessLevel.id == access_level_uuid).first()
+
+        if not access_level:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Access level not found"
+            )
+
+        # Verify admin belongs to the same guild
+        if str(current_user.guild_id) != str(access_level.guild_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Access level does not belong to your guild"
+            )
+
+        # Update fields
+        if access_level_data.name is not None:
+            access_level.name = access_level_data.name
+        if access_level_data.user_actions is not None:
+            access_level.user_actions = access_level_data.user_actions
+
+        db.commit()
+
+        return {
+            "message": "Access level updated successfully",
+            "id": str(access_level.id)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update access level: {str(e)}"
+        )
+
+@router.delete("/access-levels/{access_level_id}")
+async def delete_access_level(
+    access_level_id: str,
+    current_user: User = Depends(require_access_level(["manage_rbac"])),
+    db: Session = Depends(get_db)
+):
+    """Delete an access level (admin only)"""
+    try:
+        access_level_uuid = uuid.UUID(access_level_id)
+        access_level = db.query(AccessLevel).filter(AccessLevel.id == access_level_uuid).first()
+
+        if not access_level:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Access level not found"
+            )
+
+        # Verify admin belongs to the same guild
+        if str(current_user.guild_id) != str(access_level.guild_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Access level does not belong to your guild"
+            )
+
+        db.delete(access_level)
+        db.commit()
+
+        return {
+            "message": "Access level deleted successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete access level: {str(e)}"
         )
 
 # Objective Category Management Endpoints

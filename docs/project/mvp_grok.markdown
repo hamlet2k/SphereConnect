@@ -1,4 +1,4 @@
-# SphereConnect MVP Specification: Star Citizen Focus (v21)
+# SphereConnect MVP Specification: Star Citizen Focus (v23)
 
 ## Overview
 SphereConnect is a multitenant AI app for community organization and management, initially focused on complementing sandbox MMO games (e.g., Star Citizen) with tools for members, roles, objectives, events, auth, access, voice interaction, game-specific templates, and notifications. It's designed for extensibility to non-gaming communities (e.g., city farming, professional groups). Not a replacement for voice chats; integrable with Discord.
@@ -24,11 +24,11 @@ SphereConnect is a multitenant AI app for community organization and management,
 ## Disclaimers
 - Attributes for guidance, not strict schemas.
 - Docs offline in `docs/` (.gitignore) to protect IP; share via NDAs.
-- All TBDs Resolved: JSONB for objectives/tasks, single UEE Commander.
+- All attributes finalized: JSONB for objectives/tasks, single UEE Commander.
 - Deferred: Discord integration (post-MVP).
 
 ## System Personas
-- **User**: All guild interactions (solo, member, leader). Access via ranks (e.g., CO for admin-like) and overrides (e.g., grant 'create_objective'). Personal guilds: Full access, non-deletable (is_solo=true). Non-personal guilds: Delete only by creator_id.
+- **User**: All guild interactions (solo, member, leader). Access via ranks (e.g., CO for admin-like) and overrides via user_access table. Personal guilds: Full access, non-deletable (is_solo=true). Non-personal guilds: Delete only by creator_id.
 - **System Administrator**: Platform-level (e.g., guild approvals, billing). Minimal MVP impact (flag in Users table).
 
 ## Buyer Personas
@@ -43,7 +43,7 @@ SphereConnect is a multitenant AI app for community organization and management,
 - Push Updates: Real-time objective/task/notifications, AI-filtered by preferences/squads to avoid spam.
 - Configuration: Web-based UI (React PWA with TypeScript) for settings, restricted by user access.
 - Database: PostgreSQL "sphereconnect" with single schema, guild_id filtering for multitenancy.
-- API: FastAPI/Flask endpoints (`app/api/routes.py`, `app/api/admin_routes.py`) for objectives, tasks, progress, scheduling, with guild_id required.
+- API: FastAPI endpoints (`app/api/routes.py`, `app/api/admin_routes.py`) for objectives, tasks, progress, scheduling, with guild_id required.
 
 ### Local Client (Game Overlay)
 - Authentication: Credentials/SSO/PIN, integrating with backend API.
@@ -57,7 +57,7 @@ SphereConnect is a multitenant AI app for community organization and management,
 - Mobile-friendly Progressive Web App using React with TypeScript (`.tsx` files, `frontend/src/App.tsx`, `tsconfig.json`).
 - Full interface for all functionalities: user management, objective/task CRUD, settings, guild switching.
 - Voice is a subset—bypasses Wingman-AI via direct API calls or text inputs.
-- Responsive design with Material-UI or Chakra UI.
+- Responsive design with Chakra UI.
 
 ### Game Overlay UI
 - Transparent, Star Citizen-themed display over game.
@@ -115,8 +115,8 @@ SphereConnect is a multitenant AI app for community organization and management,
 |-----------|-------------|
 | id | UUID, primary key |
 | guild_id | UUID, foreign key to guilds |
-| code | TEXT (unique) |
-| expires_at | TIMESTAMP |
+| code | TEXT, unique invite code |
+| expires_at | TIMESTAMP, DEFAULT now() + interval '7 days' |
 | uses_left | INTEGER DEFAULT 1 (free tier) |
 
 ### GuildRequests
@@ -164,9 +164,16 @@ SphereConnect is a multitenant AI app for community organization and management,
 | id | UUID, primary key |
 | guild_id | UUID, foreign key to guilds, non-nullable, indexed |
 | name | e.g., Recruiting, Mission Development |
-| user_actions | Grouped actions permitted (e.g., 'view_guilds', 'manage_guilds') |
+| user_actions | VARCHAR[] (hardcoded strings, e.g., 'view_guilds', 'manage_guilds', 'manage_rbac') |
 
 **Structure**: Independent groups assigned to ranks/users for flexibility.
+
+### user_access
+| Attribute | Description |
+|-----------|-------------|
+| user_id | UUID, foreign key to users |
+| access_level_id | UUID, foreign key to access_levels |
+| PRIMARY KEY | (user_id, access_level_id) |
 
 ### Objectives
 | Attribute | Description |
@@ -242,6 +249,7 @@ Freemium focused on guild upgrades (no player plans):
 - Tier checks on join/invite; switching via current_guild_id.
 - Guild deletion: Personal guilds non-deletable (403 if is_deletable=false). Non-personal: Restricted to creator_id (403 otherwise).
 - User Access CRUD: POST/GET/DELETE /api/admin/user_access for assigning/removing access levels.
+- Access Level Management: Requires `manage_rbac` permission, assigned to CO rank by default.
 
 ### User Actions
 - Administrative: High-rank users manage users/ranks/guilds; overrides via user_access CRUD. Only creator deletes non-personal guilds; personal guilds never deleted.
@@ -250,9 +258,9 @@ Freemium focused on guild upgrades (no player plans):
 
 ## Development Sequence
 1. **Phase 1**: Auth (register, login, PIN, status).
-2. **Phase 2**: Guild management (switch, invite/join, leave/kick, delete).
+2. **Phase 2**: Guild management (switch, invite/join, leave/kick, delete, guild request approval).
 3. **Phase 3**: Objectives/tasks (create, report, notify).
-4. **Phase 4**: User access CRUD, invite management UI.
+4. **Phase 4**: User access CRUD, invite management, access level/ranks/users management.
 
 ## Repository Notes
 - Tests organized by functionality: tests/auth_tests.py, guild_tests.py, objective_tests.py, login_polish_tests.py.

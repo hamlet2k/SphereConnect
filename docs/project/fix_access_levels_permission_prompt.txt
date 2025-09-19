@@ -1,0 +1,60 @@
+Prompt for Kilo Code (grok-code-fast-1):
+
+Fix permission issue for access level management in SphereConnect MVP. Align with FastAPI backend, React frontend, v21 spec (User persona, guild-only monetization). Add standalone `manage_access_levels` permission, auto-assigned to CO rank during registration. Update access level endpoints to require `manage_access_levels` instead of `view_access_levels`. Ensure `ranks.access_levels` is UUID[] (not VARCHAR[]). Do not modify node_modules.
+
+1. **Backend Fixes**:
+   - Path: app/api/admin_routes.py
+   - Update endpoints to require `manage_access_levels`:
+     - GET /api/admin/access-levels?guild_id={guild_id}
+     - POST /api/admin/access-levels {name, user_actions}
+     - PATCH /api/admin/access-levels/{id}
+     - DELETE /api/admin/access-levels/{id}
+   - Path: app/api/routes.py
+   - Update /api/auth/register:
+     - Add `manage_access_levels` to default access_levels:
+       ```python
+       access_view = AccessLevel(name='view_guilds', user_actions=['view_guilds'])
+       access_manage = AccessLevel(name='manage_guilds', user_actions=['manage_guilds', 'manage_users'])
+       access_objectives = AccessLevel(name='objectives', user_actions=['create_objective', 'manage_objectives'])
+       access_levels = AccessLevel(name='manage_access_levels', user_actions=['manage_access_levels'])
+       db.add_all([access_view, access_manage, access_objectives, access_levels])
+       db.commit()
+       rank_co = Rank(name='CO', access_levels=[access_view.id, access_manage.id, access_objectives.id, access_levels.id])
+       ```
+   - Path: db/schema/ranks.sql
+   - Ensure `access_levels` is UUID[]:
+     ```sql
+     CREATE TABLE ranks (
+         id UUID PRIMARY KEY,
+         guild_id UUID NOT NULL,
+         name TEXT NOT NULL,
+         access_levels UUID[] NOT NULL,
+         phonetic TEXT,
+         FOREIGN KEY (guild_id) REFERENCES guilds(id)
+     );
+     ```
+
+2. **Frontend**:
+   - Path: frontend/src/components/AccessLevelManager.tsx
+   - Ensure error handling for 403 (e.g., "Insufficient permissions to manage access levels").
+   - Update AdminDashboard.tsx: Refresh Access Levels tab after permission fix.
+
+3. **Stubs**:
+   - tests/guild_tests.py: Update TestAccessLevelCRUD to test `manage_access_levels`.
+   - frontend/src/tests/access/AccessLevelManager.test.tsx: Add test for 403 handling.
+
+Implementation Details:
+- FastAPI, SQLAlchemy, Chakra UI, TypeScript.
+- Proxy: http://localhost:8000.
+- Reference: @/docs/project/mvp_grok.markdown, @/docs/project/use_cases.markdown, @/docs/project/kilocode_output.markdown.
+- No node_modules edits.
+
+Output artifacts:
+- app/api/admin_routes.py
+- app/api/routes.py
+- db/schema/ranks.sql
+- frontend/src/components/AccessLevelManager.tsx
+- frontend/src/pages/AdminDashboard.tsx
+- frontend/src/tests/access/AccessLevelManager.test.tsx
+- tests/guild_tests.py
+- scripts/test_data.py

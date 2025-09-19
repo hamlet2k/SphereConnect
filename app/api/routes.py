@@ -536,16 +536,22 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
             name='objectives',
             user_actions=['create_objective', 'manage_objectives']
         )
-        db.add_all([access_view, access_manage, access_objectives])
+        access_rbac = AccessLevel(
+            id=uuid.uuid4(),
+            guild_id=personal_guild_id,
+            name='manage_rbac',
+            user_actions=['manage_rbac']
+        )
+        db.add_all([access_view, access_manage, access_objectives, access_rbac])
         db.commit()
 
-        # Create default CO rank with access levels
+        # Create default CO rank with access levels (including manage_rbac)
         co_rank = Rank(
             id=uuid.uuid4(),
             guild_id=personal_guild_id,
             name="CO",
             phonetic="Commander",
-            access_levels=[access_view.id, access_manage.id, access_objectives.id]
+            access_levels=[access_view.id, access_manage.id, access_objectives.id, access_rbac.id]
         )
         db.add(co_rank)
 
