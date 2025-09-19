@@ -10,7 +10,9 @@ interface AccessLevel {
 const USER_ACTIONS = [
   'view_guilds',
   'manage_guilds',
+  'view_users',
   'manage_users',
+  'manage_user_access',
   'create_objective',
   'manage_objectives',
   'manage_rbac',

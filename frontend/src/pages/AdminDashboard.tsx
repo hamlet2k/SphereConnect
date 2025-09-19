@@ -9,6 +9,7 @@ import GuildRequestApproval from '../components/GuildRequestApproval';
 import InviteManagement from '../components/InviteManagement';
 import AccessLevelManager from '../components/AccessLevelManager';
 import RanksManager from '../components/RanksManager';
+import UsersManager from '../components/UsersManager';
 
 type ActiveTab = 'users' | 'ranks' | 'objectives' | 'tasks' | 'squads' | 'access-levels' | 'categories' | 'guilds' | 'invites' | 'guild-requests';
 
@@ -346,55 +347,7 @@ function AdminDashboard() {
     }
   };
 
-  const renderUsersTab = () => (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h3 style={{ margin: 0 }}>Users Management</h3>
-        <button
-          style={{
-            padding: '8px 16px',
-            backgroundColor: '#3182ce',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Add User
-        </button>
-      </div>
-
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#f7fafc' }}>
-              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Name</th>
-              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Rank</th>
-              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Availability</th>
-              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map(user => (
-              <tr key={user.id}>
-                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>{user.name}</td>
-                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>{user.rank || 'N/A'}</td>
-                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>{user.availability}</td>
-                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>
-                  <button style={{ marginRight: '8px', padding: '4px 8px', backgroundColor: '#3182ce', color: 'white', border: 'none', borderRadius: '4px' }}>
-                    Edit
-                  </button>
-                  <button style={{ padding: '4px 8px', backgroundColor: '#e53e3e', color: 'white', border: 'none', borderRadius: '4px' }}>
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+  const renderUsersTab = () => <UsersManager />;
 
   const renderRanksTab = () => <RanksManager />;
 

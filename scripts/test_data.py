@@ -110,7 +110,7 @@ def seed_test_data():
                 id=uuid.uuid4(),
                 guild_id=personal_guild_id,
                 name="User Management",
-                user_actions=["manage_users", "view_users"]
+                user_actions=["manage_users", "view_users", "manage_user_access"]
             ),
             AccessLevel(
                 id=uuid.uuid4(),

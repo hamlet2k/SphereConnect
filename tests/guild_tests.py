@@ -1388,3 +1388,315 @@ class TestRanksCRUD:
             }
             response = requests.post(f"{ADMIN_BASE_URL}/ranks", json=rank_data, headers=ranks_headers)
             assert response.status_code == 200
+
+@pytest.mark.guild
+class TestUsersCRUD:
+    """Test users CRUD operations"""
+
+    def test_create_user_success(self):
+        """Test successfully creating a new user"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        user_data = {
+            "name": "test_user_crud",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": TEST_GUILD_ID
+        }
+
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=user_data, headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "user_id" in data
+        assert data["message"] == "User 'test_user_crud' created successfully"
+
+        # Store for other tests
+        self.created_user_id = data["user_id"]
+
+    def test_get_users_success(self):
+        """Test successfully retrieving users for a guild"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        response = requests.get(f"{ADMIN_BASE_URL}/users?guild_id={TEST_GUILD_ID}", headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert isinstance(data, list)
+        if len(data) > 0:
+            assert "id" in data[0]
+            assert "name" in data[0]
+            assert "rank" in data[0]
+            assert "availability" in data[0]
+
+    def test_update_user_success(self):
+        """Test successfully updating a user"""
+        if not hasattr(self, 'created_user_id'):
+            pytest.skip("No user available from previous test")
+
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        update_data = {
+            "name": "updated_test_user",
+            "availability": "busy",
+            "phonetic": "updated user"
+        }
+
+        response = requests.put(f"{ADMIN_BASE_URL}/users/{self.created_user_id}", json=update_data, headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "updated successfully" in data["message"]
+
+    def test_update_user_partial(self):
+        """Test updating only part of a user"""
+        if not hasattr(self, 'created_user_id'):
+            pytest.skip("No user available from previous test")
+
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Update only availability
+        update_data = {
+            "availability": "away"
+        }
+
+        response = requests.put(f"{ADMIN_BASE_URL}/users/{self.created_user_id}", json=update_data, headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "updated successfully" in data["message"]
+
+    def test_update_nonexistent_user(self):
+        """Test updating a non-existent user"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        fake_user_id = str(uuid.uuid4())
+        update_data = {
+            "name": "Non-existent Update"
+        }
+
+        response = requests.put(f"{ADMIN_BASE_URL}/users/{fake_user_id}", json=update_data, headers=headers)
+        assert response.status_code == 404
+
+    def test_delete_user_success(self):
+        """Test successfully deleting a user"""
+        if not hasattr(self, 'created_user_id'):
+            pytest.skip("No user available from previous test")
+
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        response = requests.delete(f"{ADMIN_BASE_URL}/users/{self.created_user_id}", headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "deleted successfully" in data["message"]
+
+    def test_delete_self_blocked(self):
+        """Test that deleting yourself is blocked"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Try to delete self
+        response = requests.delete(f"{ADMIN_BASE_URL}/users/{test_state['admin_user']['id']}", headers=headers)
+        assert response.status_code == 400
+
+        data = response.json()
+        assert "Cannot delete your own account" in data["detail"]
+
+    def test_delete_nonexistent_user(self):
+        """Test deleting a non-existent user"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        fake_user_id = str(uuid.uuid4())
+        response = requests.delete(f"{ADMIN_BASE_URL}/users/{fake_user_id}", headers=headers)
+        assert response.status_code == 404
+
+    def test_user_wrong_guild(self):
+        """Test that users cannot access users from other guilds"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Use a random guild ID that user doesn't belong to
+        fake_guild_id = str(uuid.uuid4())
+
+        # Try to get users
+        response = requests.get(f"{ADMIN_BASE_URL}/users?guild_id={fake_guild_id}", headers=headers)
+        assert response.status_code == 403
+
+        # Try to create user
+        user_data = {
+            "name": "Wrong Guild User",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": fake_guild_id
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=user_data, headers=headers)
+        assert response.status_code == 403
+
+    def test_user_insufficient_permissions(self):
+        """Test that users without proper permissions cannot manage users"""
+        # Create a user with limited permissions
+        limited_user_data = {
+            "name": "limited_user_crud",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=limited_user_data, headers={"Authorization": f"Bearer {test_state['admin_token']}"})
+        assert response.status_code == 200
+        limited_user_id = response.json()["user_id"]
+
+        # Login as limited user
+        response = requests.post(f"{BASE_URL}/auth/login", json=limited_user_data)
+        assert response.status_code == 200
+        limited_token = response.json()["access_token"]
+
+        limited_headers = {"Authorization": f"Bearer {limited_token}"}
+
+        # Try to get users (should fail without manage_users permission)
+        response = requests.get(f"{ADMIN_BASE_URL}/users?guild_id={TEST_GUILD_ID}", headers=limited_headers)
+        assert response.status_code == 403
+
+        # Try to create user (should fail without manage_users permission)
+        user_data = {
+            "name": "Limited User Creation",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=user_data, headers=limited_headers)
+        assert response.status_code == 403
+
+    def test_user_manage_users_permission_required(self):
+        """Test that manage_users permission is required for user operations"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Create a user with manage_users permission
+        users_user_data = {
+            "name": "users_manager_user",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=users_user_data, headers=headers)
+        assert response.status_code == 200
+        users_user_id = response.json()["user_id"]
+
+        # Assign manage_users access level to the user
+        # First get the manage_users access level
+        response = requests.get(f"{ADMIN_BASE_URL}/access-levels?guild_id={TEST_GUILD_ID}", headers=headers)
+        assert response.status_code == 200
+        access_levels = response.json()
+
+        users_access_level = None
+        for level in access_levels:
+            if "manage_users" in level["user_actions"]:
+                users_access_level = level
+                break
+
+        if users_access_level:
+            # Assign the access level to the user
+            assign_data = {
+                "user_id": users_user_id,
+                "access_level_id": users_access_level["id"]
+            }
+            response = requests.post(f"{ADMIN_BASE_URL}/user_access", json=assign_data, headers=headers)
+            assert response.status_code == 200
+
+            # Login as users user
+            response = requests.post(f"{BASE_URL}/auth/login", json=users_user_data)
+            assert response.status_code == 200
+            users_token = response.json()["access_token"]
+
+            users_headers = {"Authorization": f"Bearer {users_token}"}
+
+            # User with manage_users should be able to perform user operations
+            response = requests.get(f"{ADMIN_BASE_URL}/users?guild_id={TEST_GUILD_ID}", headers=users_headers)
+            assert response.status_code == 200
+
+            # User with manage_users should be able to create users
+            new_user_data = {
+                "name": "Managed User",
+                "password": "testpass123",
+                "pin": "123456",
+                "guild_id": TEST_GUILD_ID
+            }
+            response = requests.post(f"{ADMIN_BASE_URL}/users", json=new_user_data, headers=users_headers)
+            assert response.status_code == 200
+
+    def test_user_access_assignment(self):
+        """Test assigning access levels to users"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Create a test user
+        test_user_data = {
+            "name": "access_test_user",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=test_user_data, headers=headers)
+        assert response.status_code == 200
+        test_user_id = response.json()["user_id"]
+
+        # Get an access level to assign
+        response = requests.get(f"{ADMIN_BASE_URL}/access-levels?guild_id={TEST_GUILD_ID}", headers=headers)
+        assert response.status_code == 200
+        access_levels = response.json()
+
+        if len(access_levels) > 0:
+            access_level_id = access_levels[0]["id"]
+
+            # Assign access level to user
+            assign_data = {
+                "user_id": test_user_id,
+                "access_level_id": access_level_id
+            }
+            response = requests.post(f"{ADMIN_BASE_URL}/user_access", json=assign_data, headers=headers)
+            assert response.status_code == 200
+
+            # Verify assignment
+            response = requests.get(f"{ADMIN_BASE_URL}/user_access/{test_user_id}", headers=headers)
+            assert response.status_code == 200
+            user_access_data = response.json()
+            assert len(user_access_data["access_levels"]) > 0
+
+            # Remove access level
+            response = requests.delete(f"{ADMIN_BASE_URL}/user_access/{test_user_id}/{access_level_id}", headers=headers)
+            assert response.status_code == 200
+
+    def test_user_rank_assignment(self):
+        """Test assigning ranks to users"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Create a test user
+        test_user_data = {
+            "name": "rank_test_user",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=test_user_data, headers=headers)
+        assert response.status_code == 200
+        test_user_id = response.json()["user_id"]
+
+        # Get a rank to assign
+        response = requests.get(f"{ADMIN_BASE_URL}/ranks?guild_id={TEST_GUILD_ID}", headers=headers)
+        assert response.status_code == 200
+        ranks = response.json()
+
+        if len(ranks) > 0:
+            rank_id = ranks[0]["id"]
+
+            # Assign rank to user
+            update_data = {
+                "rank_id": rank_id
+            }
+            response = requests.put(f"{ADMIN_BASE_URL}/users/{test_user_id}", json=update_data, headers=headers)
+            assert response.status_code == 200
+
+            # Verify assignment by getting user
+            response = requests.get(f"{ADMIN_BASE_URL}/users?guild_id={TEST_GUILD_ID}", headers=headers)
+            assert response.status_code == 200
+            users = response.json()
+            test_user = next((u for u in users if u["id"] == test_user_id), None)
+            assert test_user is not None
+            assert test_user["rank"] == rank_id
