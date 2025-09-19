@@ -35,7 +35,7 @@ if os.path.exists(env_local_path):
 else:
     print("Warning: .env.local file not found, using default database settings")
 
-from sqlalchemy import create_engine, MetaData, Table
+from sqlalchemy import create_engine, MetaData, Table, text
 from app.core.models import Base, create_tables
 
 def get_database_engine():
@@ -79,12 +79,18 @@ def purge_all_data(engine, dry_run: bool = False) -> int:
         metadata = MetaData()
         metadata.reflect(bind=engine)
 
-        # Drop tables in reverse dependency order
+        # Drop tables with CASCADE to handle foreign key dependencies
         for table_name in reversed(table_names):
             if table_name in metadata.tables:
-                table = metadata.tables[table_name]
-                table.drop(engine, checkfirst=True)
-                print(f"✓ Dropped table: {table_name}")
+                try:
+                    # Use raw SQL with CASCADE to handle dependencies
+                    with engine.connect() as conn:
+                        conn.execute(text(f"DROP TABLE IF EXISTS {table_name} CASCADE"))
+                        conn.commit()
+                    print(f"✓ Dropped table: {table_name}")
+                except Exception as e:
+                    print(f"⚠️  Could not drop table {table_name}: {e}")
+                    # Continue with other tables
 
         # Recreate all tables
         print("🔄 Recreating all tables...")

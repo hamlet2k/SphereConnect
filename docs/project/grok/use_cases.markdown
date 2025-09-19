@@ -1,13 +1,13 @@
-# SphereConnect Use Cases and Flows (v1.6)
+# SphereConnect Use Cases and Flows (v1.7)
 
-This document outlines key use cases and interaction flows for the SphereConnect MVP, modularized by functionality. Flows are visualized using Mermaid sequence diagrams for clarity. Update as needed for new features or refinements. Aligns with `mvp_grok.markdown` v23.
+This document outlines key use cases and interaction flows for the SphereConnect MVP, modularized by functionality. Flows are visualized using Mermaid sequence diagrams for clarity. Update as needed for new features or refinements. Aligns with `mvp_grok.markdown` v24.
 
 ## Module 1: Registration
 ### Use Case: User Registration
 - **Persona**: User (Solo Player buyer persona).
-- **Goal**: Register, auto-create personal guild (`is_solo=true`, `is_deletable=false`), gain full access (except delete).
+- **Goal**: Register, auto-create personal guild (`is_solo=true`, `is_deletable=false`), gain full access (except delete) via `super_admin` access level.
 - **Preconditions**: No existing user.
-- **Success Criteria**: User and personal guild in DB, redirect to login.
+- **Success Criteria**: User, personal guild, and `super_admin` access level in DB, redirect to login.
 - **Flow**:
 ```mermaid
 sequenceDiagram
@@ -22,9 +22,10 @@ sequenceDiagram
     B->>D: Create personal Guild (is_solo=true, is_deletable=false, creator_id=user.id)
     D-->>B: Guild.id
     B->>D: Commit Guild (ensure FK for access_levels)
-    B->>D: Create default Access Levels (view_guilds, manage_guilds, objectives, manage_rbac)
-    B->>D: Create CO Rank (access_levels array)
+    B->>D: Create default Access Levels (view_guilds, manage_guilds, objectives, manage_rbac, super_admin)
+    B->>D: Create CO Rank (access_levels array, excluding super_admin)
     B->>D: Assign User.rank=CO, current_guild_id=Guild.id
+    B->>D: Assign super_admin via user_access (user_id=user.id, access_level_id=super_admin.id)
     note over B,D: If invite_code: Create GuildRequest (pending)
     B-->>W: 201 {user_id, guild_id}
     W->>U: Redirect to Login.tsx ("Registered!")
@@ -238,7 +239,7 @@ sequenceDiagram
 ## Module 6: Access Level Management
 ### Use Case: Manage Access Levels
 - **Persona**: User (Guild Leader with manage_rbac permission).
-- **Goal**: Create, update, delete access levels with specific user actions.
+- **Goal**: Create, update, delete access levels with specific user actions (except super_admin).
 - **Preconditions**: User has manage_rbac permission.
 - **Success Criteria**: Access level created/updated/deleted, reflected in ranks/users.
 - **Flow**:
@@ -248,25 +249,30 @@ sequenceDiagram
     participant W as Web PWA (AccessLevelManager.tsx)
     participant B as Backend (/api/admin/access-levels)
     participant D as Database
-    U->>W: View access levels in table
+    U->>W: View access levels in table (excluding super_admin)
     W->>B: GET /api/admin/access-levels?guild_id={current_guild_id}
-    B->>D: Fetch access levels
+    B->>D: Fetch access levels (exclude super_admin)
     D-->>B: Access level list
     B-->>W: 200 {access_levels}
     U->>W: Click "Create" or "Edit" (popup: name, user_actions)
     W->>B: POST/PATCH /api/admin/access-levels {name, user_actions}
     B->>D: Create/Update access level
-    D-->>B: Success
-    B-->>W: 201/200 OK
+    alt super_admin
+        B-->>W: 403 "Cannot modify super_admin"
+    else
+        D-->>B: Success
+        B-->>W: 201/200 OK
+    end
     U->>W: Click "Delete" (confirm dialog)
     W->>B: DELETE /api/admin/access-levels/{id}
     B->>D: Remove access level
-    D-->>B: Success
-    B-->>W: 204 No Content
+    alt super_admin
+        B-->>W: 403 "Cannot delete super_admin"
+    else
+        D-->>B: Success
+        B-->>W: 204 No Content
+    end
 ```
 
 ## Updates Log
-- v1.0 (2025-09-16): Initial flows for Registration, Login, Guild Management.
-- v1.1 (2025-09-16): Updated Login for username/email, added voice subset notes.
-- v1.4 (2025-09-17): Added invite management, clarified RBAC, updated voice subset.
-- v1.6 (2025-09-18): Added guild request approval, updated invite management for popup consistency, added access level management with manage_rbac.
+- v1.7 (2025-09-18): Added super_admin access level, guild request approval, updated invite management for popup consistency.

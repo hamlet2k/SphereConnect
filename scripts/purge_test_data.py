@@ -146,69 +146,90 @@ def purge_test_data(session, test_data: Dict[str, List[Any]], dry_run: bool = Fa
     deleted_count = 0
 
     try:
-        # Delete in reverse order of creation (respecting foreign keys)
+        # Delete in correct dependency order to avoid foreign key constraint issues
         # 1. Delete guild requests first (references users and guilds)
         for request in test_data['guild_requests']:
-            if not dry_run:
-                session.delete(request)
-                print(f"✓ Deleted guild request: {request.id}")
-            else:
-                print(f"📋 Would delete guild request: {request.id}")
-            deleted_count += 1
+            try:
+                if not dry_run:
+                    session.delete(request)
+                    print(f"✓ Deleted guild request: {request.id}")
+                else:
+                    print(f"📋 Would delete guild request: {request.id}")
+                deleted_count += 1
+            except Exception as e:
+                print(f"⚠️  Could not delete guild request {request.id}: {e}")
 
         # 2. Delete invites (references guilds)
         for invite in test_data['invites']:
-            if not dry_run:
-                session.delete(invite)
-                print(f"✓ Deleted invite: {invite.code} (ID: {invite.id})")
-            else:
-                print(f"📋 Would delete invite: {invite.code} (ID: {invite.id})")
-            deleted_count += 1
+            try:
+                if not dry_run:
+                    session.delete(invite)
+                    print(f"✓ Deleted invite: {invite.code} (ID: {invite.id})")
+                else:
+                    print(f"📋 Would delete invite: {invite.code} (ID: {invite.id})")
+                deleted_count += 1
+            except Exception as e:
+                print(f"⚠️  Could not delete invite {invite.code}: {e}")
 
         # 3. Delete tasks (references objectives)
         for task in test_data['tasks']:
-            if not dry_run:
-                session.delete(task)
-                print(f"✓ Deleted task: {task.name} (ID: {task.id})")
-            else:
-                print(f"📋 Would delete task: {task.name} (ID: {task.id})")
-            deleted_count += 1
+            try:
+                if not dry_run:
+                    session.delete(task)
+                    print(f"✓ Deleted task: {task.name} (ID: {task.id})")
+                else:
+                    print(f"📋 Would delete task: {task.name} (ID: {task.id})")
+                deleted_count += 1
+            except Exception as e:
+                print(f"⚠️  Could not delete task {task.name}: {e}")
 
         # 4. Delete objectives (references guilds)
         for objective in test_data['objectives']:
-            if not dry_run:
-                session.delete(objective)
-                print(f"✓ Deleted objective: {objective.name} (ID: {objective.id})")
-            else:
-                print(f"📋 Would delete objective: {objective.name} (ID: {objective.id})")
-            deleted_count += 1
+            try:
+                if not dry_run:
+                    session.delete(objective)
+                    print(f"✓ Deleted objective: {objective.name} (ID: {objective.id})")
+                else:
+                    print(f"📋 Would delete objective: {objective.name} (ID: {objective.id})")
+                deleted_count += 1
+            except Exception as e:
+                print(f"⚠️  Could not delete objective {objective.name}: {e}")
 
         # 5. Delete AI commanders (references guilds)
         for commander in test_data['commanders']:
-            if not dry_run:
-                session.delete(commander)
-                print(f"✓ Deleted AI Commander: {commander.name} (ID: {commander.id})")
-            else:
-                print(f"📋 Would delete AI Commander: {commander.name} (ID: {commander.id})")
-            deleted_count += 1
+            try:
+                if not dry_run:
+                    session.delete(commander)
+                    print(f"✓ Deleted AI Commander: {commander.name} (ID: {commander.id})")
+                else:
+                    print(f"📋 Would delete AI Commander: {commander.name} (ID: {commander.id})")
+                deleted_count += 1
+            except Exception as e:
+                print(f"⚠️  Could not delete AI Commander {commander.name}: {e}")
 
-        # 6. Delete users (references guilds)
+        # 6. Delete users (references guilds and squads)
         for user in test_data['users']:
-            if not dry_run:
-                session.delete(user)
-                print(f"✓ Deleted user: {user.name} (ID: {user.id})")
-            else:
-                print(f"📋 Would delete user: {user.name} (ID: {user.id})")
-            deleted_count += 1
+            try:
+                if not dry_run:
+                    session.delete(user)
+                    print(f"✓ Deleted user: {user.name} (ID: {user.id})")
+                else:
+                    print(f"📋 Would delete user: {user.name} (ID: {user.id})")
+                deleted_count += 1
+            except Exception as e:
+                print(f"⚠️  Could not delete user {user.name}: {e}")
 
         # 7. Delete guilds last (referenced by many tables)
         for guild in test_data['guilds']:
-            if not dry_run:
-                session.delete(guild)
-                print(f"✓ Deleted guild: {guild.name} (ID: {guild.id})")
-            else:
-                print(f"📋 Would delete guild: {guild.name} (ID: {guild.id})")
-            deleted_count += 1
+            try:
+                if not dry_run:
+                    session.delete(guild)
+                    print(f"✓ Deleted guild: {guild.name} (ID: {guild.id})")
+                else:
+                    print(f"📋 Would delete guild: {guild.name} (ID: {guild.id})")
+                deleted_count += 1
+            except Exception as e:
+                print(f"⚠️  Could not delete guild {guild.name}: {e}")
 
         if not dry_run:
             session.commit()

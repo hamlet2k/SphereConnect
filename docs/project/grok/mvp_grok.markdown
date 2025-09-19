@@ -1,4 +1,4 @@
-# SphereConnect MVP Specification: Star Citizen Focus (v23)
+# SphereConnect MVP Specification: Star Citizen Focus (v24)
 
 ## Overview
 SphereConnect is a multitenant AI app for community organization and management, initially focused on complementing sandbox MMO games (e.g., Star Citizen) with tools for members, roles, objectives, events, auth, access, voice interaction, game-specific templates, and notifications. It's designed for extensibility to non-gaming communities (e.g., city farming, professional groups). Not a replacement for voice chats; integrable with Discord.
@@ -163,10 +163,10 @@ SphereConnect is a multitenant AI app for community organization and management,
 |-----------|-------------|
 | id | UUID, primary key |
 | guild_id | UUID, foreign key to guilds, non-nullable, indexed |
-| name | e.g., Recruiting, Mission Development |
+| name | e.g., Recruiting, Mission Development, super_admin |
 | user_actions | VARCHAR[] (hardcoded strings, e.g., 'view_guilds', 'manage_guilds', 'manage_rbac') |
 
-**Structure**: Independent groups assigned to ranks/users for flexibility.
+**Structure**: Independent groups assigned to ranks/users for flexibility. `super_admin` is non-revocable, non-modifiable, assigned to creator via user_access, removed on guild deletion.
 
 ### user_access
 | Attribute | Description |
@@ -223,7 +223,7 @@ SphereConnect is a multitenant AI app for community organization and management,
 ### Revenue Model
 Freemium focused on guild upgrades (no player plans):
 - **Free Tier**:
-  - Self-registration auto-creates persistent personal (solo) guild (full access as leader, non-deletable via is_deletable=false).
+  - Self-registration auto-creates persistent personal (solo) guild (full access as leader, non-deletable via is_solo=true).
   - Unlimited join/create (up to 3 total guilds, including personal).
   - Each guild capped at 2 members (configurable per `type`, e.g., 10 for farming).
   - Invite 1 member per guild.
@@ -250,6 +250,7 @@ Freemium focused on guild upgrades (no player plans):
 - Guild deletion: Personal guilds non-deletable (403 if is_deletable=false). Non-personal: Restricted to creator_id (403 otherwise).
 - User Access CRUD: POST/GET/DELETE /api/admin/user_access for assigning/removing access levels.
 - Access Level Management: Requires `manage_rbac` permission, assigned to CO rank by default.
+- Super Admin: `super_admin` access level grants all user actions to guild creator via user_access, non-revocable, non-modifiable, removed on guild deletion.
 
 ### User Actions
 - Administrative: High-rank users manage users/ranks/guilds; overrides via user_access CRUD. Only creator deletes non-personal guilds; personal guilds never deleted.
@@ -260,7 +261,7 @@ Freemium focused on guild upgrades (no player plans):
 1. **Phase 1**: Auth (register, login, PIN, status).
 2. **Phase 2**: Guild management (switch, invite/join, leave/kick, delete, guild request approval).
 3. **Phase 3**: Objectives/tasks (create, report, notify).
-4. **Phase 4**: User access CRUD, invite management, access level/ranks/users management.
+4. **Phase 4**: User access CRUD, invite management, access level/ranks/users management, super_admin access level.
 
 ## Repository Notes
 - Tests organized by functionality: tests/auth_tests.py, guild_tests.py, objective_tests.py, login_polish_tests.py.

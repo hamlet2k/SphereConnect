@@ -1,0 +1,83 @@
+Prompt for Kilo Code (grok-code-fast-1):
+
+Implement a default `super_admin` access level for guild creators in SphereConnect MVP, granting all user actions (view_guilds, manage_guilds, manage_users, manage_rbac, create_objective, manage_objectives), assigned via user_access, non-revocable, non-modifiable, removed only on guild deletion. Fix 403/500 errors on guild page, invite code issues (NULL expiration as 1969, 402 on join), and add guild request approval UI. Align with FastAPI backend, React frontend, v24 spec (User persona, guild-only monetization). Ensure GET /api/admin/guilds returns user’s guilds with manage_guilds permission. Set default expires_at=7 days in POST /api/invites. Fix join (POST /api/users/{id}/join) to reduce uses_left, create guild_request if needed. Add consistent invite creation popup. Do not modify node_modules.
+
+1. **Backend Implementation**:
+
+   - Path: app/api/routes.py
+   - Update /api/auth/register:
+     - Create `super_admin` access level:
+
+       ```python
+       access_view = AccessLevel(name='view_guilds', user_actions=['view_guilds'])
+       access_manage = AccessLevel(name='manage_guilds', user_actions=['manage_guilds', 'manage_users'])
+       access_objectives = AccessLevel(name='objectives', user_actions=['create_objective', 'manage_objectives'])
+       access_rbac = AccessLevel(name='manage_rbac', user_actions=['manage_rbac'])
+       access_super = AccessLevel(name='super_admin', user_actions=['view_guilds', 'manage_guilds', 'manage_users', 'manage_rbac', 'create_objective', 'manage_objectives'])
+       db.add_all([access_view, access_manage, access_objectives, access_rbac, access_super])
+       db.commit()
+       rank_co = Rank(name='CO', access_levels=[access_view.id, access_manage.id, access_objectives.id, access_rbac.id])
+       user_access = UserAccess(user_id=user.id, access_level_id=access_super.id)
+       db.add(user_access)
+       db.commit()
+       ```
+   - Path: app/api/admin_routes.py
+   - Update access level endpoints to block `super_admin` modification:
+     - PATCH /api/admin/access-levels/{id}: Return 403 if id=super_admin ("Cannot modify super_admin").
+     - DELETE /api/admin/access-levels/{id}: Return 403 if id=super_admin.
+   - Update DELETE /api/admin/user_access/{user_id}/{access_id}: Return 403 if access_id=super_admin ("Cannot revoke super_admin").
+   - Fix POST /api/invites: Set expires_at = datetime.utcnow() + timedelta(days=7), uses_left=1 (configurable).
+   - Fix POST /api/users/{id}/join: Reduce uses_left, create GuildRequest (status='pending' if approval needed), check member_limit (402 if exceeded).
+   - Fix GET /api/admin/guilds: Require manage_guilds, filter by creator_id or approved GuildRequests, catch errors to avoid 500 (return 403 with "Insufficient permissions").
+   - Add PATCH /api/admin/guild_requests/{id}: Update status (approved/denied); on approve, add user to guild.
+   - Add DELETE /api/admin/guilds/{id}: Remove `user_access` entries for `super_admin` when guild is deleted.
+
+2. **Frontend Updates**:
+
+   - Path: frontend/src/components/InviteManagement.tsx
+   - Add popup for POST /api/invites (like Guilds tab):
+     - Fields: expires_at (default 7 days), uses_left (default 1).
+   - Path: frontend/src/components/GuildRequestApproval.tsx (new)
+   - Features: Table (User, Guild, Status, Actions: Approve/Reject via PATCH /api/admin/guild_requests/{id}).
+   - Path: frontend/src/components/AccessLevelManager.tsx
+   - Hide `super_admin` from table/form; add 403 error handling.
+   - Path: frontend/src/pages/AdminDashboard.tsx
+   - Add Guild Requests tab (render GuildRequestApproval.tsx).
+   - Fix Guilds tab to use GET /api/users/{id}/guilds (not /api/admin/guilds).
+
+3. **Schema Fixes**:
+
+   - Update db/schema/invites.sql:
+
+     ```sql
+     ALTER TABLE invites ALTER COLUMN expires_at SET DEFAULT (now() + interval '7 days');
+     ```
+   - Update db/schema/master_schema.sql.
+
+4. **Stubs**:
+
+   - tests/guild_tests.py: TestSuperAdminAccess, TestGuildRequestApproval, TestInviteCreation.
+   - frontend/src/tests/guild/GuildRequestApproval.test.tsx (stub).
+   - frontend/src/tests/access/AccessLevelManager.test.tsx: Add test for super_admin hiding.
+
+Implementation Details:
+
+- FastAPI, SQLAlchemy, Chakra UI, TypeScript.
+- Proxy: http://localhost:8000.
+- Reference: @/docs/project/mvp_grok.markdown, @/docs/project/use_cases.markdown, @/docs/project/kilocode_output.markdown.
+- No node_modules edits.
+
+Output artifacts:
+
+- app/api/routes.py
+- app/api/admin_routes.py
+- db/schema/invites.sql
+- db/schema/master_schema.sql
+- frontend/src/components/InviteManagement.tsx
+- frontend/src/components/GuildRequestApproval.tsx
+- frontend/src/components/AccessLevelManager.tsx
+- frontend/src/pages/AdminDashboard.tsx
+- frontend/src/tests/guild/GuildRequestApproval.test.tsx
+- frontend/src/tests/access/AccessLevelManager.test.tsx
+- tests/guild_tests.py
+- scripts/test_data.py

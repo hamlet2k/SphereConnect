@@ -542,7 +542,14 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
             name='manage_rbac',
             user_actions=['manage_rbac']
         )
-        db.add_all([access_view, access_manage, access_objectives, access_rbac])
+        # Create super_admin access level with all permissions
+        access_super = AccessLevel(
+            id=uuid.uuid4(),
+            guild_id=personal_guild_id,
+            name='super_admin',
+            user_actions=['view_guilds', 'manage_guilds', 'manage_users', 'manage_rbac', 'create_objective', 'manage_objectives']
+        )
+        db.add_all([access_view, access_manage, access_objectives, access_rbac, access_super])
         db.commit()
 
         # Create default CO rank with access levels (including manage_rbac)
@@ -553,6 +560,8 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
             phonetic="Commander",
             access_levels=[access_view.id, access_manage.id, access_objectives.id, access_rbac.id]
         )
+
+        # Add CO rank first
         db.add(co_rank)
 
         # Create new user
@@ -577,6 +586,14 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
 
         # Update personal guild creator_id
         personal_guild.creator_id = new_user.id
+
+        # Assign super_admin access level directly to user (non-revocable)
+        user_access_super = UserAccess(
+            id=uuid.uuid4(),
+            user_id=new_user.id,
+            access_level_id=access_super.id
+        )
+        db.add(user_access_super)
         db.commit()
 
         # If invite code was used, create guild request or join directly

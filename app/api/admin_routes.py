@@ -109,28 +109,49 @@ class ObjectiveCategoryUpdate(BaseModel):
 
 # RBAC Helper Functions
 def check_admin_access(user: User, db: Session) -> bool:
-    """Check if user has admin access for their guild"""
-    if not user.rank:
-        return False
+    """Check if user has admin access for their guild from both rank and user_access table"""
+    # Check rank-based admin access
+    rank_has_admin = False
+    if user.rank:
+        rank = db.query(Rank).filter(Rank.id == user.rank).first()
+        if rank:
+            admin_actions = ["manage_users", "manage_ranks", "manage_objectives", "manage_tasks", "manage_squads", "manage_guilds", "view_guilds"]
+            rank_has_admin = any(action in rank.access_levels for action in admin_actions)
 
-    rank = db.query(Rank).filter(Rank.id == user.rank).first()
-    if not rank:
-        return False
+    # Check user_access table for admin permissions
+    user_access_actions = set()
+    user_access_levels = db.query(UserAccess).filter(UserAccess.user_id == user.id).all()
+    for ua in user_access_levels:
+        access_level = db.query(AccessLevel).filter(AccessLevel.id == ua.access_level_id).first()
+        if access_level:
+            user_access_actions.update(access_level.user_actions)
 
-    # Check if rank has admin access levels
-    admin_actions = ["manage_users", "manage_ranks", "manage_objectives", "manage_tasks", "manage_squads", "manage_guilds", "view_guilds"]
-    return any(action in rank.access_levels for action in admin_actions)
+    user_has_admin = any(action in user_access_actions for action in ["manage_users", "manage_ranks", "manage_objectives", "manage_tasks", "manage_squads", "manage_guilds", "view_guilds"])
+
+    # User has admin access if either rank OR user_access grants admin permissions
+    return rank_has_admin or user_has_admin
 
 def check_access_level(user: User, required_actions: List[str], db: Session) -> bool:
-    """Check if user has required access levels"""
-    if not user.rank:
-        return False
+    """Check if user has required access levels from both rank and user_access table"""
+    # Check rank-based access levels
+    rank_has_access = False
+    if user.rank:
+        rank = db.query(Rank).filter(Rank.id == user.rank).first()
+        if rank:
+            rank_has_access = all(action in rank.access_levels for action in required_actions)
 
-    rank = db.query(Rank).filter(Rank.id == user.rank).first()
-    if not rank:
-        return False
+    # Check user_access table for additional permissions
+    user_access_actions = set()
+    user_access_levels = db.query(UserAccess).filter(UserAccess.user_id == user.id).all()
+    for ua in user_access_levels:
+        access_level = db.query(AccessLevel).filter(AccessLevel.id == ua.access_level_id).first()
+        if access_level:
+            user_access_actions.update(access_level.user_actions)
 
-    return all(action in rank.access_levels for action in required_actions)
+    user_has_access = all(action in user_access_actions for action in required_actions)
+
+    # User has access if either rank OR user_access grants the required actions
+    return rank_has_access or user_has_access
 
 def require_admin_access(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Dependency to require admin access"""
@@ -742,6 +763,20 @@ async def update_access_level(
                 detail="Access level not found"
             )
 
+        # Block super_admin modification
+        if access_level.name == "super_admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot modify super_admin access level"
+            )
+
+        # Block super_admin deletion
+        if access_level.name == "super_admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot delete super_admin access level"
+            )
+
         # Verify admin belongs to the same guild
         if str(current_user.guild_id) != str(access_level.guild_id):
             raise HTTPException(
@@ -1185,6 +1220,14 @@ async def remove_user_access(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User access assignment not found"
+            )
+
+        # Block super_admin revocation
+        access_level = db.query(AccessLevel).filter(AccessLevel.id == access_uuid).first()
+        if access_level and access_level.name == "super_admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot revoke super_admin access level"
             )
 
         # Get access level name for response
