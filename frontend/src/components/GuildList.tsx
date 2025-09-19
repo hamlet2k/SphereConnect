@@ -11,7 +11,7 @@ interface Guild {
   is_solo: boolean;
   is_deletable: boolean;
   type: string;
-  member_count?: number; // We'll calculate this from API
+  approved_count?: number; // Count of approved guild requests
 }
 
 interface GuildListProps {
@@ -62,16 +62,16 @@ const GuildList: React.FC<GuildListProps> = ({
   };
 
   const getMemberStatus = (guild: Guild) => {
-    const memberCount = guild.member_count || 0;
+    const approvedCount = guild.approved_count || 0;
     const limit = guild.member_limit;
-    const percentage = (memberCount / limit) * 100;
+    const percentage = (approvedCount / limit) * 100;
 
     if (percentage >= 100) {
-      return { text: `${memberCount}/${limit} (Full)`, color: theme.colors.error };
+      return { text: `${approvedCount}/${limit} (Full)`, color: theme.colors.error };
     } else if (percentage >= 80) {
-      return { text: `${memberCount}/${limit} (Near Limit)`, color: theme.colors.warning };
+      return { text: `${approvedCount}/${limit} (Near Limit)`, color: theme.colors.warning };
     } else {
-      return { text: `${memberCount}/${limit}`, color: theme.colors.success };
+      return { text: `${approvedCount}/${limit}`, color: theme.colors.success };
     }
   };
 
@@ -312,18 +312,18 @@ const GuildList: React.FC<GuildListProps> = ({
 
                       <button
                         onClick={() => handleInvite(guild.id)}
-                        disabled={(guild.member_count || 0) >= guild.member_limit}
+                        disabled={(guild.approved_count || 0) >= guild.member_limit}
                         style={{
                           padding: `${theme.spacing[1]} ${theme.spacing[2]}`,
-                          backgroundColor: (guild.member_count || 0) >= guild.member_limit ?
+                          backgroundColor: (guild.approved_count || 0) >= guild.member_limit ?
                             theme.colors.surfaceHover : theme.colors.success,
-                          color: (guild.member_count || 0) >= guild.member_limit ?
+                          color: (guild.approved_count || 0) >= guild.member_limit ?
                             theme.colors.textMuted : theme.colors.text,
                           border: 'none',
                           borderRadius: theme.borderRadius.sm,
                           fontSize: theme.typography.fontSize.xs,
                           fontWeight: theme.typography.fontWeight.medium,
-                          cursor: (guild.member_count || 0) >= guild.member_limit ? 'not-allowed' : 'pointer',
+                          cursor: (guild.approved_count || 0) >= guild.member_limit ? 'not-allowed' : 'pointer',
                           transition: 'all 0.2s ease-in-out'
                         }}
                       >

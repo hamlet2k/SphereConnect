@@ -606,6 +606,15 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
             access_level_id=access_super.id
         )
         db.add(user_access_super)
+
+        # Create approved GuildRequest for creator in their personal guild
+        creator_guild_request = GuildRequest(
+            id=uuid.uuid4(),
+            user_id=new_user.id,
+            guild_id=personal_guild_id,
+            status="approved"
+        )
+        db.add(creator_guild_request)
         db.commit()
 
         # If invite code was used, create guild request or join directly
@@ -675,8 +684,11 @@ async def get_user_guilds(
 
         guilds_data = []
         for guild in all_guilds:
-            # Count members (simplified - in real app would use membership table)
-            member_count = db.query(User).filter(User.guild_id == guild.id).count()
+            # Count approved members (users with approved guild requests)
+            approved_count = db.query(GuildRequest).filter(
+                GuildRequest.guild_id == guild.id,
+                GuildRequest.status == "approved"
+            ).count()
 
             guilds_data.append({
                 "id": str(guild.id),
@@ -687,7 +699,7 @@ async def get_user_guilds(
                 "is_solo": guild.is_solo,
                 "is_deletable": guild.is_deletable,
                 "type": guild.type,
-                "member_count": member_count
+                "approved_count": approved_count
             })
 
         return guilds_data
@@ -789,12 +801,16 @@ async def join_guild(
                 detail="Guild not found"
             )
 
-        # Count current members
-        member_count = db.query(User).filter(User.guild_id == guild.id).count()
-        if member_count >= guild.member_limit:
+        # Count approved members (users with approved guild requests)
+        approved_count = db.query(GuildRequest).filter(
+            GuildRequest.guild_id == guild.id,
+            GuildRequest.status == "approved"
+        ).count()
+
+        if approved_count >= guild.member_limit:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail="Guild member limit reached. Upgrade to add more members."
+                detail=f"Guild member limit reached ({approved_count}/{guild.member_limit}). Upgrade to add more members."
             )
 
         # Update invite uses
@@ -1402,12 +1418,16 @@ async def create_invite(invite_data: dict, current_user: User = Depends(get_curr
                 detail="Guild not found"
             )
 
-        # Count current members
-        member_count = db.query(User).filter(User.guild_id == guild.id).count()
-        if member_count >= guild.member_limit:
+        # Count approved members (users with approved guild requests)
+        approved_count = db.query(GuildRequest).filter(
+            GuildRequest.guild_id == guild.id,
+            GuildRequest.status == "approved"
+        ).count()
+
+        if approved_count >= guild.member_limit:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail="Guild member limit reached. Upgrade to add more members."
+                detail=f"Guild member limit reached ({approved_count}/{guild.member_limit}). Upgrade to add more members."
             )
 
         # Generate unique invite code

@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 
 from ..core.models import (
-    User, Rank, AccessLevel, UserAccess, Objective, Task, Squad, ObjectiveCategory, Guild, Invite,
+    User, Rank, AccessLevel, UserAccess, Objective, Task, Squad, ObjectiveCategory, Guild, Invite, GuildRequest,
     get_db, create_tables
 )
 from .routes import get_current_user, verify_token
@@ -189,7 +189,17 @@ async def get_users(
                 detail="Access denied: User does not belong to this guild"
             )
 
-        users = db.query(User).filter(User.guild_id == uuid.UUID(guild_id)).all()
+        # Get all users with approved guild requests for this guild
+        approved_requests = db.query(GuildRequest).filter(
+            GuildRequest.guild_id == uuid.UUID(guild_id),
+            GuildRequest.status == "approved"
+        ).all()
+
+        user_ids = [str(req.user_id) for req in approved_requests]
+        if not user_ids:
+            users = []
+        else:
+            users = db.query(User).filter(User.id.in_([uuid.UUID(uid) for uid in user_ids])).all()
 
         return [
             {
@@ -1362,8 +1372,6 @@ async def get_guild_requests(
                 detail="Access denied: User does not belong to this guild"
             )
 
-        from ..core.models import GuildRequest
-
         # Get guild requests for this guild
         guild_requests = db.query(GuildRequest).filter(GuildRequest.guild_id == uuid.UUID(guild_id)).all()
 
@@ -1406,8 +1414,6 @@ async def update_guild_request(
 ):
     """Approve or deny a guild request (admin only)"""
     try:
-        from ..core.models import GuildRequest
-
         request_uuid = uuid.UUID(request_id)
         guild_request = db.query(GuildRequest).filter(GuildRequest.id == request_uuid).first()
 

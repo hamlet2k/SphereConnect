@@ -1,0 +1,564 @@
+{
+  "info": {
+    "name": "SphereConnect Invite & Guild Management API",
+    "description": "Postman collection for testing invite creation, guild joining, and guild request approval functionality",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000/api",
+      "type": "string"
+    },
+    {
+      "key": "admin_base_url",
+      "value": "http://localhost:8000/api/admin",
+      "type": "string"
+    },
+    {
+      "key": "auth_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "test_guild_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "invite_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "request_user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "guild_request_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"testuser\",\n  \"username\": \"testuser\",\n  \"password\": \"testpass123\",\n  \"pin\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Register User with Invite Code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"inviteduser\",\n  \"username\": \"inviteduser\",\n  \"password\": \"testpass123\",\n  \"pin\": \"123456\",\n  \"invite_code\": \"{{invite_code}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "register"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('request_user_id', response.user_id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register User with Invite (Member Limit Exceeded - 402)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"overlimituser\",\n  \"username\": \"overlimituser\",\n  \"password\": \"testpass123\",\n  \"pin\": \"123456\",\n  \"invite_code\": \"full-guild-invite-code\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Login User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"testuser\",\n  \"password\": \"testpass123\",\n  \"guild_id\": \"{{test_guild_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('auth_token', response.access_token);",
+                  "    pm.collectionVariables.set('test_guild_id', response.user.guild_id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Invite Management",
+      "item": [
+        {
+          "name": "Create Invite (Default 7 days)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"guild_id\": \"{{test_guild_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/invites",
+              "host": ["{{base_url}}"],
+              "path": ["invites"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('invite_code', response.code);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Invite (Custom Expiration)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"guild_id\": \"{{test_guild_id}}\",\n  \"expires_at\": \"2025-10-19T23:59:59Z\",\n  \"uses_left\": 5\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/invites",
+              "host": ["{{base_url}}"],
+              "path": ["invites"]
+            }
+          }
+        },
+        {
+          "name": "Create Invite (Member Limit Exceeded - 402)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"guild_id\": \"full-guild-id-here\",\n  \"uses_left\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/invites",
+              "host": ["{{base_url}}"],
+              "path": ["invites"]
+            }
+          }
+        },
+        {
+          "name": "List Guild Invites",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{admin_base_url}}/invites?guild_id={{test_guild_id}}",
+              "host": ["{{admin_base_url}}"],
+              "path": ["invites"],
+              "query": [
+                {
+                  "key": "guild_id",
+                  "value": "{{test_guild_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Invite",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{admin_base_url}}/invites/{{invite_code}}",
+              "host": ["{{admin_base_url}}"],
+              "path": ["invites", "{{invite_code}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Guild Joining",
+      "item": [
+        {
+          "name": "Join Guild (Valid Invite)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invite_code\": \"{{invite_code}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/users/{{request_user_id}}/join",
+              "host": ["{{base_url}}"],
+              "path": ["users", "{{request_user_id}}", "join"]
+            }
+          }
+        },
+        {
+          "name": "Join Guild (Invalid Code - 422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invite_code\": \"invalid-code-123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/users/{{request_user_id}}/join",
+              "host": ["{{base_url}}"],
+              "path": ["users", "{{request_user_id}}", "join"]
+            }
+          }
+        },
+        {
+          "name": "Join Guild (Member Limit - 402)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invite_code\": \"full-guild-invite-code\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/users/{{request_user_id}}/join",
+              "host": ["{{base_url}}"],
+              "path": ["users", "{{request_user_id}}", "join"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Guild Request Approval",
+      "item": [
+        {
+          "name": "List Guild Requests",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{admin_base_url}}/guild_requests?guild_id={{test_guild_id}}",
+              "host": ["{{admin_base_url}}"],
+              "path": ["guild_requests"],
+              "query": [
+                {
+                  "key": "guild_id",
+                  "value": "{{test_guild_id}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.length > 0) {",
+                  "        pm.collectionVariables.set('guild_request_id', response[0].id);",
+                  "        pm.collectionVariables.set('request_user_id', response[0].user_id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Approve Guild Request",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"approved\"\n}"
+            },
+            "url": {
+              "raw": "{{admin_base_url}}/guild_requests/{{guild_request_id}}",
+              "host": ["{{admin_base_url}}"],
+              "path": ["guild_requests", "{{guild_request_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Deny Guild Request",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"denied\"\n}"
+            },
+            "url": {
+              "raw": "{{admin_base_url}}/guild_requests/{{guild_request_id}}",
+              "host": ["{{admin_base_url}}"],
+              "path": ["guild_requests", "{{guild_request_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Guild Management",
+      "item": [
+        {
+          "name": "List User Guilds (with approved_count)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/users/user-id-here/guilds",
+              "host": ["{{base_url}}"],
+              "path": ["users", "user-id-here", "guilds"]
+            }
+          }
+        },
+        {
+          "name": "List Guild Users (Approved Members Only)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{admin_base_url}}/users?guild_id={{test_guild_id}}",
+              "host": ["{{admin_base_url}}"],
+              "path": ["users"],
+              "query": [
+                {
+                  "key": "guild_id",
+                  "value": "{{test_guild_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Switch Guild",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"guild_id\": \"{{test_guild_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/users/user-id-here/switch-guild",
+              "host": ["{{base_url}}"],
+              "path": ["users", "user-id-here", "switch-guild"]
+            }
+          }
+        },
+        {
+          "name": "Leave Guild",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"guild_id\": \"{{test_guild_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/users/user-id-here/leave",
+              "host": ["{{base_url}}"],
+              "path": ["users", "user-id-here", "leave"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
