@@ -255,6 +255,8 @@ function AdminDashboard() {
     setJoinMessage('');
 
     try {
+      console.log("Join payload:", {user_id: user.id, invite_code: inviteCode});
+
       const response = await fetch(`http://localhost:8000/api/users/${user.id}/join`, {
         method: 'POST',
         headers: {
@@ -274,8 +276,9 @@ function AdminDashboard() {
         }
         return result;
       } else if (response.status === 402) {
-        setJoinMessage('Guild member limit reached. Cannot join at this time.');
-        throw new Error('Member limit reached');
+        const error = await response.json();
+        setJoinMessage(error.detail || "Guild member limit reached.");
+        throw new Error(error.detail || 'Member limit reached');
       } else if (response.status === 422) {
         setJoinMessage('Invalid or expired invite code.');
         throw new Error('Invalid invite code');

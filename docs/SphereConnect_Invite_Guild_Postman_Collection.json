@@ -345,6 +345,31 @@
           }
         },
         {
+          "name": "Join Guild (Non-full Guild - 200 Pending)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invite_code\": \"{{invite_code}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/users/{{request_user_id}}/join",
+              "host": ["{{base_url}}"],
+              "path": ["users", "{{request_user_id}}", "join"]
+            }
+          }
+        },
+        {
           "name": "Join Guild (Member Limit - 402)",
           "request": {
             "method": "POST",
@@ -460,6 +485,56 @@
               "raw": "{{admin_base_url}}/guild_requests/{{guild_request_id}}",
               "host": ["{{admin_base_url}}"],
               "path": ["guild_requests", "{{guild_request_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Approve Guild Request (Non-full Guild - 200)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"approved\"\n}"
+            },
+            "url": {
+              "raw": "{{admin_base_url}}/guild_requests/{{guild_request_id}}",
+              "host": ["{{admin_base_url}}"],
+              "path": ["guild_requests", "{{guild_request_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Approve Guild Request (Full Guild - 402)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"approved\"\n}"
+            },
+            "url": {
+              "raw": "{{admin_base_url}}/guild_requests/full-guild-request-id",
+              "host": ["{{admin_base_url}}"],
+              "path": ["guild_requests", "full-guild-request-id"]
             }
           }
         }

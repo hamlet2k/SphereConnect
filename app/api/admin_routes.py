@@ -1019,6 +1019,69 @@ async def create_objective_category(
         )
 
 # Guild Management Endpoints
+@router.post("/guilds")
+async def create_guild(
+    guild_data: dict,
+    current_user: User = Depends(require_access_level(["manage_guilds"])),
+    db: Session = Depends(get_db)
+):
+    """Create a new guild (admin only)"""
+    try:
+        name = guild_data.get("name")
+        if not name:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Guild name is required"
+            )
+
+        # Check guild limit
+        user_guilds = db.query(Guild).filter(Guild.creator_id == current_user.id).count()
+        if user_guilds >= current_user.max_guilds:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=f"Maximum guild limit of {current_user.max_guilds} reached"
+            )
+
+        # Create guild
+        guild_id = uuid.uuid4()
+        new_guild = Guild(
+            id=guild_id,
+            name=name,
+            creator_id=current_user.id,
+            member_limit=2,  # Free tier default
+            billing_tier="free",
+            is_solo=False,
+            is_active=True,
+            is_deletable=True,
+            type="game_star_citizen"
+        )
+
+        db.add(new_guild)
+
+        # Create approved GuildRequest for creator
+        creator_request = GuildRequest(
+            id=uuid.uuid4(),
+            user_id=current_user.id,
+            guild_id=guild_id,
+            status="approved"
+        )
+        db.add(creator_request)
+
+        db.commit()
+
+        return {
+            "message": f"Guild '{name}' created successfully",
+            "guild_id": str(guild_id)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create guild: {str(e)}"
+        )
+
 @router.get("/guilds")
 async def get_guilds(
     current_user: User = Depends(require_access_level(["manage_guilds"])),
@@ -1437,6 +1500,12 @@ async def update_guild_request(
                 detail="Status must be 'approved' or 'denied'"
             )
 
+        # If approving, switch user to the guild
+        if new_status == "approved":
+            user = db.query(User).filter(User.id == guild_request.user_id).first()
+            if user:
+                user.current_guild_id = str(guild_request.guild_id)
+
         # Update the request status
         guild_request.status = new_status
         guild_request.updated_at = datetime.utcnow()
@@ -1446,6 +1515,10 @@ async def update_guild_request(
             user = db.query(User).filter(User.id == guild_request.user_id).first()
             if user:
                 user.current_guild_id = str(guild_request.guild_id)
+
+        # Log: logging.debug(f"Approval: guild_request_id={request_id}, approved_count={approved_count}, user_guilds={user_guilds}")
+        import logging
+        logging.debug(f"Approval: guild_request_id={request_id}, approved_count={approved_count if 'approved_count' in locals() else 'N/A'}, user_guilds={user_guilds if 'user_guilds' in locals() else 'N/A'}")
 
         db.commit()
 

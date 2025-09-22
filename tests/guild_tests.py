@@ -1748,6 +1748,66 @@ class TestInviteCreationDefaults:
         assert data["uses_left"] == 5
 
 @pytest.mark.guild
+class TestJoinGuildNotFound402:
+    """Test join guild with invalid invite code returns 402"""
+
+    def test_join_guild_invalid_invite_code_returns_402(self):
+        """Test that POST /api/users/{id}/join with invalid invite_code returns 402 "Invalid invite code"."""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Try to join with invalid invite code
+        join_data = {"invite_code": "invalid-code-123"}
+        response = requests.post(f"{BASE_URL}/users/{test_state['admin_user']['id']}/join", json=join_data, headers=headers)
+        assert response.status_code == 402
+
+        data = response.json()
+        assert "Invalid invite code" in data.get("message", "")
+
+    def test_join_guild_expired_invite_code_returns_402(self):
+        """Test that POST /api/users/{id}/join with expired invite_code returns 402 "Invalid invite code"."""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Create an expired invite
+        expired_invite_data = {
+            "guild_id": TEST_GUILD_ID,
+            "expires_at": "2020-01-01T00:00:00Z",  # Past date
+            "uses_left": 1
+        }
+        response = requests.post(f"{BASE_URL}/invites", json=expired_invite_data, headers=headers)
+        assert response.status_code == 200
+        expired_code = response.json()["code"]
+
+        # Try to join with expired invite
+        join_data = {"invite_code": expired_code}
+        response = requests.post(f"{BASE_URL}/users/{test_state['admin_user']['id']}/join", json=join_data, headers=headers)
+        assert response.status_code == 402
+
+        data = response.json()
+        assert "Invalid invite code" in data.get("message", "")
+
+    def test_join_guild_used_up_invite_code_returns_402(self):
+        """Test that POST /api/users/{id}/join with used-up invite_code returns 402 "Invalid invite code"."""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Create invite with 0 uses left
+        used_invite_data = {
+            "guild_id": TEST_GUILD_ID,
+            "uses_left": 0
+        }
+        response = requests.post(f"{BASE_URL}/invites", json=used_invite_data, headers=headers)
+        assert response.status_code == 200
+        used_code = response.json()["code"]
+
+        # Try to join with used-up invite
+        join_data = {"invite_code": used_code}
+        response = requests.post(f"{BASE_URL}/users/{test_state['admin_user']['id']}/join", json=join_data, headers=headers)
+        assert response.status_code == 402
+
+        data = response.json()
+        assert "Invalid invite code" in data.get("message", "")
+
+
+@pytest.mark.guild
 class TestJoinLimit402:
     """Test join guild with member limit enforcement (402 errors)"""
 
@@ -2267,3 +2327,242 @@ class TestUsersListAllMembers:
         assert len(users_after) == 2
         user_ids = [u["id"] for u in users_after]
         assert pending_user_id in user_ids
+
+
+@pytest.mark.guild
+class TestJoinLimit402:
+    """Test join guild with member limit enforcement (402 errors)"""
+
+    def test_join_non_full_guild_returns_200_pending_request(self):
+        """Test that joining a non-full guild returns 200 and creates pending GuildRequest"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Create a guild with space available
+        guild_data = {
+            "name": "Non-Full Guild Test",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{BASE_URL}/guilds", json=guild_data, headers=headers)
+        assert response.status_code == 200
+        guild_id = response.json()["guild_id"]
+
+        # Create invite
+        invite_data = {
+            "guild_id": guild_id,
+            "uses_left": 1
+        }
+        response = requests.post(f"{BASE_URL}/invites", json=invite_data, headers=headers)
+        assert response.status_code == 200
+        invite_code = response.json()["code"]
+
+        # Create a test user to join
+        join_user_data = {
+            "name": "join_limit_test_user",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": guild_id
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=join_user_data, headers=headers)
+        assert response.status_code == 200
+        join_user_id = response.json()["user_id"]
+
+        # Login as test user and join
+        response = requests.post(f"{BASE_URL}/auth/login", json=join_user_data)
+        assert response.status_code == 200
+        join_token = response.json()["access_token"]
+
+        join_headers = {"Authorization": f"Bearer {join_token}"}
+        join_data = {"invite_code": invite_code}
+        response = requests.post(f"{BASE_URL}/users/{join_user_id}/join", json=join_data, headers=join_headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "message" in data
+        assert "pending" in data.get("status", "")
+        assert "guild_request_id" in data
+
+        # Verify GuildRequest was created with pending status
+        db_session = next(get_db())
+        try:
+            user_uuid = uuid.UUID(join_user_id)
+            guild_uuid = uuid.UUID(guild_id)
+            pending_request = db_session.query(GuildRequest).filter(
+                GuildRequest.user_id == user_uuid,
+                GuildRequest.guild_id == guild_uuid,
+                GuildRequest.status == "pending"
+            ).first()
+            assert pending_request is not None
+        finally:
+            db_session.close()
+
+    def test_join_full_guild_returns_402(self):
+        """Test that joining a full guild returns 402 from middleware"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Create a guild and fill it to the limit (2 members)
+        guild_data = {
+            "name": "Full Guild 402 Test",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{BASE_URL}/guilds", json=guild_data, headers=headers)
+        assert response.status_code == 200
+        full_guild_id = response.json()["guild_id"]
+
+        # Add second member to reach limit (guild creator + this user = 2)
+        user_data = {
+            "name": "second_member_402",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": full_guild_id
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=user_data, headers=headers)
+        assert response.status_code == 200
+
+        # Create invite
+        invite_data = {
+            "guild_id": full_guild_id,
+            "uses_left": 1
+        }
+        response = requests.post(f"{BASE_URL}/invites", json=invite_data, headers=headers)
+        assert response.status_code == 200
+        invite_code = response.json()["code"]
+
+        # Try to join (should fail with 402 from middleware)
+        join_data = {
+            "invite_code": invite_code
+        }
+        response = requests.post(f"{BASE_URL}/users/{test_state['admin_user']['id']}/join", json=join_data, headers=headers)
+        assert response.status_code == 402
+
+        data = response.json()
+        assert "limit" in data.get("message", "").lower()
+        assert "upgrade plan" in data.get("message", "").lower()
+
+
+@pytest.mark.guild
+class TestGuildRequestApprovalLimit:
+    """Test guild request approval with member limit enforcement"""
+
+    def test_approve_request_non_full_guild_returns_200(self):
+        """Test that approving a request for non-full guild returns 200"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Create guild and invite
+        guild_data = {
+            "name": "Approval Non-Full Test Guild",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{BASE_URL}/guilds", json=guild_data, headers=headers)
+        assert response.status_code == 200
+        guild_id = response.json()["guild_id"]
+
+        invite_data = {
+            "guild_id": guild_id,
+            "uses_left": 1
+        }
+        response = requests.post(f"{BASE_URL}/invites", json=invite_data, headers=headers)
+        assert response.status_code == 200
+        invite_code = response.json()["code"]
+
+        # Create user and have them join (creates pending request)
+        request_user_data = {
+            "name": "approval_non_full_user",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": guild_id
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=request_user_data, headers=headers)
+        assert response.status_code == 200
+        request_user_id = response.json()["user_id"]
+
+        # Login and join
+        response = requests.post(f"{BASE_URL}/auth/login", json=request_user_data)
+        assert response.status_code == 200
+        request_token = response.json()["access_token"]
+
+        request_headers = {"Authorization": f"Bearer {request_token}"}
+        join_data = {"invite_code": invite_code}
+        response = requests.post(f"{BASE_URL}/users/{request_user_id}/join", json=join_data, headers=request_headers)
+        assert response.status_code == 200
+
+        # Admin approves the request (should succeed)
+        response = requests.get(f"{ADMIN_BASE_URL}/guild_requests?guild_id={guild_id}", headers=headers)
+        assert response.status_code == 200
+        requests_list = response.json()
+        pending_request = next((r for r in requests_list if r["status"] == "pending"), None)
+        assert pending_request is not None
+
+        approve_data = {"status": "approved"}
+        response = requests.patch(f"{ADMIN_BASE_URL}/guild_requests/{pending_request['id']}", json=approve_data, headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "approved successfully" in data["message"]
+        assert data["status"] == "approved"
+
+    def test_approve_request_full_guild_returns_402(self):
+        """Test that approving a request for full guild returns 402 from middleware"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Create guild and fill it to limit
+        guild_data = {
+            "name": "Approval Full Test Guild",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{BASE_URL}/guilds", json=guild_data, headers=headers)
+        assert response.status_code == 200
+        full_guild_id = response.json()["guild_id"]
+
+        # Fill guild to limit (2 members: creator + 1 additional)
+        user_data = {
+            "name": "fill_member_approval",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": full_guild_id
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=user_data, headers=headers)
+        assert response.status_code == 200
+
+        # Create invite and have user join (creates pending request)
+        invite_data = {
+            "guild_id": full_guild_id,
+            "uses_left": 1
+        }
+        response = requests.post(f"{BASE_URL}/invites", json=invite_data, headers=headers)
+        assert response.status_code == 200
+        invite_code = response.json()["code"]
+
+        request_user_data = {
+            "name": "approval_full_user",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": full_guild_id
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=request_user_data, headers=headers)
+        assert response.status_code == 200
+        request_user_id = response.json()["user_id"]
+
+        # Login and join
+        response = requests.post(f"{BASE_URL}/auth/login", json=request_user_data)
+        assert response.status_code == 200
+        request_token = response.json()["access_token"]
+
+        request_headers = {"Authorization": f"Bearer {request_token}"}
+        join_data = {"invite_code": invite_code}
+        response = requests.post(f"{BASE_URL}/users/{request_user_id}/join", json=join_data, headers=request_headers)
+        assert response.status_code == 200
+
+        # Try to approve the request (should fail with 402 from middleware)
+        response = requests.get(f"{ADMIN_BASE_URL}/guild_requests?guild_id={full_guild_id}", headers=headers)
+        assert response.status_code == 200
+        requests_list = response.json()
+        pending_request = next((r for r in requests_list if r["status"] == "pending"), None)
+        assert pending_request is not None
+
+        approve_data = {"status": "approved"}
+        response = requests.patch(f"{ADMIN_BASE_URL}/guild_requests/{pending_request['id']}", json=approve_data, headers=headers)
+        assert response.status_code == 402
+
+        data = response.json()
+        assert "limit" in data.get("message", "").lower()
+        assert "upgrade plan" in data.get("message", "").lower()

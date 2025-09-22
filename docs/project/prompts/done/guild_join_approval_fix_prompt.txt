@@ -1,0 +1,30 @@
+@/docs/project/grok/mvp_grok.markdown @/docs/project/grok/use_cases.markdown @/docs/project/grok/project_context.markdown @/docs/project/grok/kilocode_output.markdown
+
+Fix guild membership bugs in SphereConnect MVP: Join guild button in AdminDashboard.tsx returns 402 on non-full guilds, approving guild requests exceeds max members (no 402 in PATCH /api/admin/guild_requests/{id}).
+
+1. Join Guild Button (frontend/src/pages/AdminDashboard.tsx):
+   - In handleJoinSubmit:
+     - Ensure POST /api/users/{user.id}/join with {invite_code: inviteCode}.
+     - Log payload: console.log("Join payload:", {user_id: user.id, invite_code: inviteCode})
+     - Handle 402: setJoinMessage(response.data.detail || "Guild member limit reached.")
+     - If 200, reload guilds and set current_guild_id from response.
+
+2. Guild Request Approval (app/api/admin_routes.py):
+   - In update_guild_request (PATCH /api/admin/guild_requests/{id}):
+     - Before setting status='approved':
+       - Query approved_count = db.execute("SELECT COUNT(*) FROM guild_requests WHERE guild_id=:guild_id AND status='approved'").scalar()
+       - Query user_guilds = db.execute("SELECT COUNT(*) FROM guild_requests WHERE user_id=:user_id AND status='approved'").scalar()
+       - Get guild = db.query(Guild).filter(Guild.id == guild_request.guild_id).first()
+       - Get user = db.query(User).filter(User.id == guild_request.user_id).first()
+       - If approved_count >= guild.member_limit: Raise HTTPException(status_code=402, detail=f"Guild at member limit (count: {approved_count}/{guild.member_limit}). Upgrade plan.")
+       - If user_guilds >= user.max_guilds: Raise HTTPException(status_code=402, detail=f"User at guild limit (count: {user_guilds}/{user.max_guilds}).")
+     - Else: Set status='approved', update user.current_guild_id = guild_request.guild_id.
+     - Log: logging.debug(f"Approval: guild_request_id={request_id}, approved_count={approved_count}, user_guilds={user_guilds}")
+
+3. Tests (tests/guild_tests.py):
+   - TestJoinLimit402: POST /api/users/{id}/join on non-full guild (200, pending GuildRequest), full guild (402).
+   - TestGuildRequestApprovalLimit: PATCH /api/admin/guild_requests/{id} on full guild (402), non-full (200, approved).
+
+No schema changes; align with v24 spec (member_limit=2, max_guilds=3, GuildRequests for membership).
+
+Generate: Updated files (frontend/src/pages/AdminDashboard.tsx, app/api/admin_routes.py), test stubs.

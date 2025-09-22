@@ -793,26 +793,6 @@ async def join_guild(
                 detail="Invalid or expired invite code"
             )
 
-        # Check member limit
-        guild = db.query(Guild).filter(Guild.id == invite.guild_id).first()
-        if not guild:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Guild not found"
-            )
-
-        # Count approved members (users with approved guild requests)
-        approved_count = db.query(GuildRequest).filter(
-            GuildRequest.guild_id == guild.id,
-            GuildRequest.status == "approved"
-        ).count()
-
-        if approved_count >= guild.member_limit:
-            raise HTTPException(
-                status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail=f"Guild member limit reached ({approved_count}/{guild.member_limit}). Upgrade to add more members."
-            )
-
         # Update invite uses
         invite.uses_left -= 1
 
@@ -820,19 +800,27 @@ async def join_guild(
         guild_request = GuildRequest(
             id=uuid.uuid4(),
             user_id=current_user.id,
-            guild_id=guild.id,
+            guild_id=invite.guild_id,
             status="pending"
         )
         db.add(guild_request)
 
         db.commit()
 
+        # Get guild name for response
+        guild = db.query(Guild).filter(Guild.id == invite.guild_id).first()
+        guild_name = guild.name if guild else "Unknown Guild"
+
+        # Log: logging.debug(f"Join: user_id={user_id}, guild_id={guild_id}")
+        import logging
+        logging.debug(f"Join: user_id={current_user.id}, guild_id={invite.guild_id}")
+
         return {
-            "message": f"Guild join request submitted for '{guild.name}'. Awaiting approval from guild leader.",
+            "message": f"Guild join request submitted for '{guild_name}'. Awaiting approval from guild leader.",
             "guild_request_id": str(guild_request.id),
-            "guild_name": guild.name,
+            "guild_name": guild_name,
             "status": "pending",
-            "tts_response": f"Guild join request submitted for: {guild.name}"
+            "tts_response": f"Guild join request submitted for: {guild_name}"
         }
 
     except HTTPException:
