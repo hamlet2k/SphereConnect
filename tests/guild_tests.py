@@ -2440,6 +2440,68 @@ class TestJoinLimit402:
 
 
 @pytest.mark.guild
+class TestJoinHang:
+    """Test that join requests complete without hanging"""
+
+    def test_join_request_completes_within_timeout(self):
+        """Test that POST /api/users/{id}/join completes within reasonable time"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Create a guild and invite
+        guild_data = {
+            "name": "Join Timeout Test Guild",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{BASE_URL}/guilds", json=guild_data, headers=headers)
+        assert response.status_code == 200
+        guild_id = response.json()["guild_id"]
+
+        invite_data = {
+            "guild_id": guild_id,
+            "uses_left": 1
+        }
+        response = requests.post(f"{BASE_URL}/invites", json=invite_data, headers=headers)
+        assert response.status_code == 200
+        invite_code = response.json()["code"]
+
+        # Create a test user
+        join_user_data = {
+            "name": "join_timeout_user",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": guild_id
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=join_user_data, headers=headers)
+        assert response.status_code == 200
+        join_user_id = response.json()["user_id"]
+
+        # Login as test user
+        response = requests.post(f"{BASE_URL}/auth/login", json=join_user_data)
+        assert response.status_code == 200
+        join_token = response.json()["access_token"]
+
+        join_headers = {"Authorization": f"Bearer {join_token}"}
+        join_data = {"invite_code": invite_code}
+
+        # Make the join request with a timeout
+        import time
+        start_time = time.time()
+        response = requests.post(f"{BASE_URL}/users/{join_user_id}/join", json=join_data, headers=join_headers, timeout=10)
+        end_time = time.time()
+
+        # Verify response completed within reasonable time (should be < 5 seconds)
+        duration = end_time - start_time
+        assert duration < 5.0, f"Join request took too long: {duration} seconds"
+
+        # Verify response is successful
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "message" in data
+        assert "pending" in data.get("status", "")
+        assert "guild_request_id" in data
+
+@pytest.mark.guild
 class TestGuildRequestApprovalLimit:
     """Test guild request approval with member limit enforcement"""
 

@@ -27,14 +27,17 @@ const JoinForm: React.FC<JoinFormProps> = ({
       return;
     }
 
+    console.log('JoinForm: Starting join request with invite code:', inviteCode.trim());
+
     try {
       const result = await onJoin(inviteCode.trim());
+      console.log('JoinForm: Join request completed, result:', result);
       if (result && result.guild_name) {
         setGuildName(result.guild_name);
         setJoined(true);
       }
     } catch (error) {
-      console.error('Failed to join guild:', error);
+      console.error('JoinForm: Failed to join guild:', error);
     }
   };
 
@@ -189,8 +192,8 @@ const JoinForm: React.FC<JoinFormProps> = ({
               <input
                 type="text"
                 value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                placeholder="Enter invite code (e.g., ABC123DEF456)"
+                onChange={(e) => setInviteCode(e.target.value)}
+                placeholder="Enter invite code (e.g., AbC123dEf456)"
                 required
                 style={{
                   width: '100%',
@@ -202,9 +205,7 @@ const JoinForm: React.FC<JoinFormProps> = ({
                   fontSize: theme.typography.fontSize.base,
                   fontFamily: theme.typography.fontFamily,
                   transition: 'all 0.2s ease-in-out',
-                  outline: 'none',
-                  textTransform: 'uppercase',
-                  letterSpacing: '2px'
+                  outline: 'none'
                 }}
                 onFocus={(e) => {
                   e.target.style.borderColor = theme.colors.primary;

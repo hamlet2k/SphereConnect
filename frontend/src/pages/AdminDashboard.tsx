@@ -255,7 +255,11 @@ function AdminDashboard() {
     setJoinMessage('');
 
     try {
-      console.log("Join payload:", {user_id: user.id, invite_code: inviteCode});
+      console.log("AdminDashboard: Starting join request");
+      console.log("AdminDashboard: Join payload:", {user_id: user.id, invite_code: inviteCode});
+
+      const requestBody = JSON.stringify({ invite_code: inviteCode });
+      console.log("AdminDashboard: Request body:", requestBody);
 
       const response = await fetch(`http://localhost:8000/api/users/${user.id}/join`, {
         method: 'POST',
@@ -263,11 +267,15 @@ function AdminDashboard() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ invite_code: inviteCode })
+        body: requestBody
       });
+
+      console.log("AdminDashboard: Response status:", response.status);
+      console.log("AdminDashboard: Response headers:", Object.fromEntries(response.headers.entries()));
 
       if (response.ok) {
         const result = await response.json();
+        console.log("AdminDashboard: Join successful, result:", result);
         setJoinMessage('Successfully joined guild!');
         // Reload guilds and switch to new guild
         loadData();
@@ -277,17 +285,21 @@ function AdminDashboard() {
         return result;
       } else if (response.status === 402) {
         const error = await response.json();
+        console.log("AdminDashboard: 402 error:", error);
         setJoinMessage(error.detail || "Guild member limit reached.");
         throw new Error(error.detail || 'Member limit reached');
       } else if (response.status === 422) {
+        console.log("AdminDashboard: 422 error - invalid invite code");
         setJoinMessage('Invalid or expired invite code.');
         throw new Error('Invalid invite code');
       } else {
         const error = await response.json();
+        console.log("AdminDashboard: Other error:", error);
         setJoinMessage(error.detail || 'Failed to join guild');
         throw new Error(error.detail || 'Failed to join guild');
       }
     } catch (error) {
+      console.log("AdminDashboard: Exception caught:", error);
       throw error;
     } finally {
       setJoinLoading(false);

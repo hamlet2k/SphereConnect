@@ -21,19 +21,28 @@ class GuildLimitMiddleware(BaseHTTPMiddleware):
         self.default_max_guilds = 3
 
     async def dispatch(self, request, call_next):
+        logging.debug(f"Middleware: Processing request {request.method} {request.url.path}")
+
         if self._should_check_limits(request):
+            logging.debug(f"Middleware: Request requires limit checking")
             user = self._get_current_user(request)
             if not user:
+                logging.debug(f"Middleware: No authenticated user found")
                 return await call_next(request)
 
-            limit_exceeded = self._check_limits(request, user)
+            logging.debug(f"Middleware: Authenticated user {user.id} for guild {user.guild_id}")
+            limit_exceeded = await self._check_limits(request, user)
             if limit_exceeded:
+                logging.debug(f"Middleware: Limit exceeded: {limit_exceeded}")
                 return JSONResponse(
                     status_code=402,
                     content={"detail": "Payment Required", "message": limit_exceeded}
                 )
+            logging.debug(f"Middleware: Limits check passed")
 
-        return await call_next(request)
+        response = await call_next(request)
+        logging.debug(f"Middleware: Request completed with status {response.status_code}")
+        return response
 
     def _should_check_limits(self, request) -> bool:
         path = request.url.path
@@ -81,67 +90,83 @@ class GuildLimitMiddleware(BaseHTTPMiddleware):
         except (jwt.ExpiredSignatureError, jwt.DecodeError, jwt.PyJWTError):
             return None
 
-    def _check_limits(self, request, user: User) -> Optional[str]:
+    async def _check_limits(self, request, user: User) -> Optional[str]:
         path = request.url.path
         method = request.method
+        logging.debug(f"Middleware: Checking limits for {method} {path}")
         db: Session = next(get_db())
 
         try:
             if path == "/api/guilds" and method == "POST":
+                logging.debug(f"Middleware: Checking guild creation limits for user {user.id}")
                 guild_count = db.query(Guild).filter(Guild.creator_id == user.id).count()
+                logging.debug(f"Middleware: User has {guild_count} guilds, max is {user.max_guilds}")
                 if guild_count >= user.max_guilds:
                     return f"Maximum guild limit of {user.max_guilds} reached (including personal)"
 
             elif re.match(r"/api/users/([^/]+)/join$", path) and method in ["PATCH", "POST"]:
-                # Get body = await request.json()
-                import json
+                logging.debug(f"Middleware: Processing join request for user {user.id}")
+
+                # Read the request body asynchronously
                 try:
-                    body = json.loads(request._body.decode('utf-8')) if hasattr(request, '_body') and request._body else {}
-                except:
+                    logging.debug(f"Middleware: Reading request body")
+                    body = await request.json()
+                    logging.debug(f"Middleware: Request body: {body}")
+                except Exception as e:
+                    logging.error(f"Middleware: Failed to read request body: {e}")
                     return "Invalid request body"
 
                 invite_code = body.get('invite_code')
+                logging.debug(f"Middleware: Invite code: {invite_code}")
                 if not invite_code:
                     return "Invalid invite code"
 
-                # Lookup invite = db.query(Invite).filter(Invite.code == invite_code).first()
+                # Lookup invite
+                logging.debug(f"Middleware: Looking up invite code {invite_code}")
                 invite = db.query(Invite).filter(Invite.code == invite_code).first()
                 if not invite:
+                    logging.debug(f"Middleware: Invite code not found")
                     return "Invalid invite code"
 
                 guild_id = invite.guild_id
+                logging.debug(f"Middleware: Invite belongs to guild {guild_id}")
 
-                # Query approved_count = db.execute("SELECT COUNT(*) FROM guild_requests WHERE guild_id=:guild_id AND status='approved'").scalar()
+                # Query approved_count
                 approved_count = db.query(GuildRequest).filter(
                     GuildRequest.guild_id == guild_id,
                     GuildRequest.status == "approved"
                 ).count()
+                logging.debug(f"Middleware: Guild {guild_id} has {approved_count} approved members")
 
-                # Query user_guilds = db.execute("SELECT COUNT(*) FROM guild_requests WHERE user_id=:user_id AND status='approved'").scalar()
+                # Query user_guilds
                 user_guilds = db.query(GuildRequest).filter(
                     GuildRequest.user_id == user.id,
                     GuildRequest.status == "approved"
                 ).count()
+                logging.debug(f"Middleware: User {user.id} has {user_guilds} approved guild memberships")
 
                 # Get guild for member_limit
                 guild = db.query(Guild).filter(Guild.id == guild_id).first()
                 if not guild:
+                    logging.debug(f"Middleware: Guild {guild_id} not found")
                     return "Guild not found"
 
-                # If approved_count >= (guild.member_limit or 2): return f"Guild at member limit ({approved_count}/{(guild.member_limit or 2)}). Upgrade plan."
+                # Check member limit
                 member_limit = guild.member_limit or 2
+                logging.debug(f"Middleware: Guild member limit is {member_limit}")
                 if approved_count >= member_limit:
+                    logging.debug(f"Middleware: Guild at member limit ({approved_count}/{member_limit})")
                     return f"Guild at member limit ({approved_count}/{member_limit}). Upgrade plan."
 
-                # If user_guilds >= user.max_guilds: return f"User at guild limit ({user_guilds}/{user.max_guilds})."
+                # Check user guild limit
                 if user_guilds >= user.max_guilds:
+                    logging.debug(f"Middleware: User at guild limit ({user_guilds}/{user.max_guilds})")
                     return f"User at guild limit ({user_guilds}/{user.max_guilds})."
 
-                # Log: logging.debug(f"Middleware: Join, user_id={user.id}, guild_id={guild_id}, invite_code={invite_code}, approved_count={approved_count}, user_guilds={user_guilds}")
-                logging.debug(f"Middleware: Join, user_id={user.id}, guild_id={guild_id}, invite_code={invite_code}, approved_count={approved_count}, user_guilds={user_guilds}")
+                logging.debug(f"Middleware: Join validation passed for user {user.id}, guild {guild_id}")
 
             elif re.match(r"/api/admin/guild_requests/([^/]+)$", path) and method == "PATCH":
-                # Get guild_request = db.query(GuildRequest).filter(GuildRequest.id == id).first()
+                logging.debug(f"Middleware: Processing guild request approval")
                 request_id = re.match(r"/api/admin/guild_requests/([^/]+)$", path).group(1)
                 try:
                     request_uuid = uuid.UUID(request_id)
@@ -177,10 +202,10 @@ class GuildLimitMiddleware(BaseHTTPMiddleware):
                 if user_guilds >= user.max_guilds:
                     return f"User at guild limit ({user_guilds}/{user.max_guilds})."
 
-                logging.debug(f"Middleware: Approval, request_id={request_id}, user_id={guild_request.user_id}, guild_id={guild_id}, approved_count={approved_count}, user_guilds={user_guilds}")
+                logging.debug(f"Middleware: Approval validation passed for request {request_id}")
 
             elif path == "/api/invites" and method == "POST":
-                # Placeholder: check user's max_guilds, assuming invite leads to joining
+                logging.debug(f"Middleware: Checking invite creation limits")
                 guild_count = db.query(Guild).filter(Guild.creator_id == user.id).count()
                 if guild_count >= user.max_guilds:
                     return f"Maximum guild limit of {user.max_guilds} reached"

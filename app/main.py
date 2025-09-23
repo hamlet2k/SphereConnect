@@ -12,6 +12,7 @@ from pydantic import BaseModel, ValidationError
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 import os
+import sys
 
 # Rate limiting imports
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -27,9 +28,14 @@ from .api.middleware import GuildLimitMiddleware
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
 logger = logging.getLogger(__name__)
 
+logger.debug("Testing debug logger")
 class Settings(BaseSettings):
     db_user: str = "postgres"
     db_pass: str
@@ -82,6 +88,7 @@ app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
 # Health check endpoint
 @app.get("/health", tags=["health"])
 async def health_check():
+    logger.debug("Health check endpoint called")
     return {"status": "healthy", "service": "SphereConnect API"}
 
 # Create all database tables

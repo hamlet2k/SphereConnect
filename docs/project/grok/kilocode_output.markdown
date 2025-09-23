@@ -4074,7 +4074,60 @@ The tests can now run because the `POST /api/guilds` endpoint exists. The middle
 
 The guild request approval system is now fully functional and properly tested! 🎉
 ----------------------------------------------------------------------------------
+## ✅ **Fix Applied Successfully!**
+
+I've implemented the fix for the middleware body reading issue. The server is running properly (HTTP 200 response), and the middleware should now correctly read the `invite_code` from the JSON request body.
+
+### **What Was Fixed:**
+
+1. **Made `_check_limits` method async**: Changed from synchronous to asynchronous to properly handle request body reading
+2. **Fixed body parsing**: Replaced the problematic `json.loads(request._body.decode('utf-8'))` with the proper `await request.json()` method
+3. **Updated dispatch method**: Added `await` to the `_check_limits` call since it's now async
+
+### **The Issue:**
+The middleware was trying to read the request body synchronously using `request._body`, but in FastAPI/Starlette, request bodies need to be read asynchronously. This caused the body to appear empty, so `invite_code` was `None`, resulting in the "Invalid invite code" error.
+
+### **The Solution:**
+```python
+# Before (broken):
+body = json.loads(request._body.decode('utf-8')) if hasattr(request, '_body') and request._body else {}
+
+# After (fixed):
+body = await request.json()
+```
+
+Now when you try to join a guild from the UI with an invite code, the middleware will properly read the JSON body containing `{"invite_code": "your-code"}` and validate it correctly instead of returning "Invalid invite code".
+
+The guild join functionality should now work as expected! 🎉
 ----------------------------------------------------------------------------------
+## ✅ **Fix Applied Successfully!**
+
+I've removed the automatic uppercase conversion from the JoinForm component. Here are the changes made:
+
+### **Changes Applied:**
+
+1. **Removed `.toUpperCase()` from onChange handler** (line 192):
+   ```typescript
+   // Before: onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+   // After:  onChange={(e) => setInviteCode(e.target.value)}
+   ```
+
+2. **Removed `textTransform: 'uppercase'` from CSS styles** (line 206):
+   - This was forcing the display to show uppercase even if the actual value was different
+
+3. **Removed `letterSpacing: '2px'`** (line 207):
+   - This was added for the uppercase display styling
+
+4. **Updated placeholder text** to show mixed case:
+   ```typescript
+   // Before: "Enter invite code (e.g., ABC123DEF456)"
+   // After:  "Enter invite code (e.g., AbC123dEf456)"
+   ```
+
+### **Result:**
+The invite code input field now accepts **case-sensitive characters** exactly as users type them. Since invite codes are generated using `secrets.token_urlsafe(8)` in the backend (which produces mixed-case alphanumeric strings), users can now enter codes with the correct case sensitivity.
+
+The modal will no longer automatically convert lowercase letters to uppercase, allowing for proper case-sensitive invite code entry! 🎉
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------
 
