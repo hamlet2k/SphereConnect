@@ -1,6 +1,9 @@
 # Copyright 2025 Federico Arce. All Rights Reserved.
 # Confidential - Do Not Distribute Without Permission.
 
+import logging
+logger = logging.getLogger(__name__)
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
@@ -1516,9 +1519,8 @@ async def update_guild_request(
             if user:
                 user.current_guild_id = str(guild_request.guild_id)
 
-        # Log: logging.debug(f"Approval: guild_request_id={request_id}, approved_count={approved_count}, user_guilds={user_guilds}")
-        import logging
-        logging.debug(f"Approval: guild_request_id={request_id}, approved_count={approved_count if 'approved_count' in locals() else 'N/A'}, user_guilds={user_guilds if 'user_guilds' in locals() else 'N/A'}")
+        #logger.debug(f"Approval: guild_request_id={request_id}, approved_count={approved_count}, user_guilds={user_guilds}")
+        logger.debug(f"Approval: guild_request_id={request_id}, approved_count={approved_count if 'approved_count' in locals() else 'N/A'}, user_guilds={user_guilds if 'user_guilds' in locals() else 'N/A'}")
 
         db.commit()
 

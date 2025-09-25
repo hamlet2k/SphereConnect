@@ -1,5 +1,7 @@
 # Copyright 2025 Federico Arce. All Rights Reserved.
 # Confidential - Do Not Distribute Without Permission.
+import logging
+logger = logging.getLogger(__name__)
 
 from sqlalchemy import Column, String, Boolean, Integer, ForeignKey, Table, DateTime, text
 from sqlalchemy.ext.declarative import declarative_base
@@ -44,21 +46,22 @@ retry_delay = 2  # seconds
 
 for attempt in range(max_retries):
     try:
-        print(f"Connecting to database (attempt {attempt + 1}/{max_retries}): {DATABASE_URL.replace(DB_PASS, '***')}")
+        logger.info(f"Connecting to database (attempt {attempt + 1}/{max_retries}): {DATABASE_URL.replace(DB_PASS, '***')}")
+        #print(f"Connecting to database (attempt {attempt + 1}/{max_retries}): {DATABASE_URL.replace(DB_PASS, '***')}")
         ENGINE = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
         # Test connection
         with ENGINE.connect() as conn:
             conn.execute(text("SELECT 1"))
-        print("Database connection successful")
+        logger.info("Database connection successful")
         break
     except Exception as e:
-        print(f"Database connection failed (attempt {attempt + 1}): {e}")
+        logger.error(f"Database connection failed (attempt {attempt + 1}): {e}")
         if attempt < max_retries - 1:
             print(f"Retrying in {retry_delay} seconds...")
             time.sleep(retry_delay)
             retry_delay *= 2  # exponential backoff
         else:
-            print("Max retries exceeded")
+            logger.error("Max retries exceeded")
             raise
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=ENGINE)
@@ -212,11 +215,16 @@ class UserSession(Base):
 
 # Database utility functions
 def get_db():
+    logger.debug("Models: Getting DB session")
     db = SessionLocal()
     try:
         yield db
     finally:
-        db.close()
+        try:
+            logger.debug("Models: Closing DB session")
+            db.close()
+        except Exception as e:
+            print(f"Warning: Error closing database session: {e}")
 
 def create_tables():
     Base.metadata.create_all(bind=ENGINE)

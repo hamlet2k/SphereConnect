@@ -1,6 +1,9 @@
 # Copyright 2025 Federico Arce. All Rights Reserved.
 # Confidential - Do Not Distribute Without Permission.
 
+import logging
+logger = logging.getLogger(__name__)
+
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 # Rate limiting disabled for now
@@ -9,7 +12,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 # from slowapi.errors import RateLimitExceeded
 # from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from typing import Optional, List, Dict, Any
 import uuid
 from datetime import datetime, timedelta
@@ -114,6 +117,10 @@ class MFAVerify(BaseModel):
 
 class GuildSwitch(BaseModel):
     guild_id: str
+
+class JoinRequest(BaseModel):
+    invite_code: str
+    # Future fields: expires_at, custom_message, etc.
 
 class AICommanderUpdate(BaseModel):
     system_prompt: Optional[str] = None
@@ -761,41 +768,55 @@ async def switch_guild(
 @router.post("/users/{user_id}/join")
 async def join_guild(
     user_id: str,
-    join_data: dict,
+    join_data: JoinRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Join a guild using an invite code"""
+    logger.debug(f"Join request start: user_id={user_id}, invite_code={join_data.invite_code}")
+
     try:
+        logger.debug(f"Verifying user owns account: current_user.id={current_user.id}, user_id={user_id}")
         # Verify user owns this account
         if str(current_user.id) != user_id:
+            logger.warning(f"Join request denied: user {current_user.id} tried to join for user {user_id}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied: Can only join guilds for yourself"
             )
+        logger.debug("User ownership verification passed")
 
-        invite_code = join_data.get("invite_code")
-        if not invite_code:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Invite code is required"
-            )
-
+        logger.debug(f"Looking up invite code: {join_data.invite_code}")
         # Find valid invite
         invite = db.query(Invite).filter(
-            Invite.code == invite_code,
+            Invite.code == join_data.invite_code,
             Invite.expires_at > datetime.utcnow()
         ).first()
+        logger.debug(f"Invite query result: {invite}")
 
-        if not invite or invite.uses_left <= 0:
+        if not invite:
+            logger.warning(f"Invite code not found or expired: {join_data.invite_code}")
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Invalid or expired invite code"
             )
 
+        logger.debug(f"Checking invite uses_left: {invite.uses_left}")
+        if invite.uses_left <= 0:
+            logger.warning(f"Invite code has no uses left: {join_data.invite_code}")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Invite code has no remaining uses"
+            )
+
+        logger.debug(f"Valid invite found: guild_id={invite.guild_id}, uses_left={invite.uses_left}")
+
+        logger.debug("Updating invite uses")
         # Update invite uses
         invite.uses_left -= 1
+        logger.debug(f"Decremented invite uses_left to: {invite.uses_left}")
 
+        logger.debug("Creating guild request")
         # Create guild request for approval instead of direct join
         guild_request = GuildRequest(
             id=uuid.uuid4(),
@@ -803,29 +824,53 @@ async def join_guild(
             guild_id=invite.guild_id,
             status="pending"
         )
+        logger.debug(f"GuildRequest object created: id={guild_request.id}, user_id={guild_request.user_id}, guild_id={guild_request.guild_id}, status={guild_request.status}")
         db.add(guild_request)
+        logger.debug(f"Added guild request to session: id={guild_request.id}")
 
-        db.commit()
+        logger.debug("Attempting database commit")
+        # Attempt to commit with error handling
+        try:
+            db.commit()
+            logger.debug("Database commit successful")
+        except Exception as commit_error:
+            logger.error(f"Database commit failed: {str(commit_error)}")
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to save guild join request to database"
+            )
 
+        logger.debug(f"Querying guild for name: guild_id={invite.guild_id}")
         # Get guild name for response
         guild = db.query(Guild).filter(Guild.id == invite.guild_id).first()
         guild_name = guild.name if guild else "Unknown Guild"
+        logger.debug(f"Guild query result: name={guild_name}")
 
-        # Log: logging.debug(f"Join: user_id={user_id}, guild_id={guild_id}")
-        import logging
-        logging.debug(f"Join: user_id={current_user.id}, guild_id={invite.guild_id}")
+        logger.debug(f"Join request completed successfully: user_id={current_user.id}, guild_id={invite.guild_id}, request_id={guild_request.id}")
 
-        return {
+        logger.debug("Preparing response data")
+        response_data = {
             "message": f"Guild join request submitted for '{guild_name}'. Awaiting approval from guild leader.",
             "guild_request_id": str(guild_request.id),
             "guild_name": guild_name,
             "status": "pending",
             "tts_response": f"Guild join request submitted for: {guild_name}"
         }
+        logger.debug(f"Response data prepared: {response_data}")
 
+        return response_data
+
+    except ValidationError as e:
+        logger.error(f"Validation error in join request: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid request body: {str(e)}"
+        )
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Unexpected error in join_guild: {str(e)}", exc_info=True)
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

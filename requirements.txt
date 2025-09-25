@@ -7,10 +7,12 @@ PyJWT            # For JWT token handling
 emails           # For SMTP (optional, replace with sendgrid if preferred)
 flask
 flask-cors
+httpx
 pytest
+pytest-asyncio
 requests
 python-dotenv
 bcrypt           # For password and PIN hashing
 pyotp            # For TOTP MFA
 slowapi          # For rate limiting
-pydantic-settings  # For configuration management
+pydantic-settings  # For configuration managementpip

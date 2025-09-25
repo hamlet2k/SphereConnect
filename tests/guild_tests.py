@@ -2440,6 +2440,224 @@ class TestJoinLimit402:
 
 
 @pytest.mark.guild
+class TestJoinRouteMatching:
+    """Test join route matching and handling"""
+
+    def test_join_route_exists_and_matches(self):
+        """Test that the join route exists and matches the expected pattern"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Test that the route exists by making a request to it
+        # This should fail with 422 due to invalid invite code, but the route should be found
+        join_data = {"invite_code": "nonexistent-code"}
+        response = requests.post(f"{BASE_URL}/users/{test_state['admin_user']['id']}/join", json=join_data, headers=headers)
+
+        # Should get 422 (validation error) not 404 (route not found)
+        assert response.status_code == 422
+        data = response.json()
+        assert "Invalid" in data.get("detail", "")
+
+    def test_join_route_method_restriction(self):
+        """Test that only POST method is allowed for join route"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Test GET request to join route should fail
+        response = requests.get(f"{BASE_URL}/users/{test_state['admin_user']['id']}/join", headers=headers)
+        assert response.status_code == 405  # Method Not Allowed
+
+        # Test PUT request to join route should fail
+        response = requests.put(f"{BASE_URL}/users/{test_state['admin_user']['id']}/join", json={}, headers=headers)
+        assert response.status_code == 405  # Method Not Allowed
+
+    def test_join_route_path_parameter_validation(self):
+        """Test that join route properly validates user_id path parameter"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Test with invalid UUID format
+        join_data = {"invite_code": "test-code"}
+        response = requests.post(f"{BASE_URL}/users/invalid-uuid-format/join", json=join_data, headers=headers)
+        # Should still reach the route (not 404), but may fail with 403 or other auth error
+        assert response.status_code != 404
+
+    def test_join_route_authentication_required(self):
+        """Test that join route requires authentication"""
+        # Test without authorization header
+        join_data = {"invite_code": "test-code"}
+        response = requests.post(f"{BASE_URL}/users/{str(uuid.uuid4())}/join", json=join_data)
+        assert response.status_code == 401  # Unauthorized
+
+    def test_join_route_matches_correct_pattern(self):
+        """Test that the join route matches the correct URL pattern"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Test various user IDs to ensure pattern matching works
+        test_user_ids = [
+            str(uuid.uuid4()),
+            "550e8400-e29b-41d4-a716-446655440000",  # Valid UUID format
+            test_state['admin_user']['id']  # Actual user ID
+        ]
+
+        for user_id in test_user_ids:
+            join_data = {"invite_code": "test-code"}
+            response = requests.post(f"{BASE_URL}/users/{user_id}/join", json=join_data, headers=headers)
+            # Should reach the route (not 404), even if it fails for other reasons
+            assert response.status_code != 404, f"Route not found for user_id: {user_id}"
+
+
+@pytest.mark.guild
+class TestJoinEndpoint:
+    """Test POST /api/users/{id}/join endpoint functionality"""
+
+    def test_join_endpoint_returns_200_with_guild_request_created(self):
+        """Test that POST /api/users/{id}/join returns 200 and creates GuildRequest with uses_left decremented"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Create a guild and invite
+        guild_data = {
+            "name": "Join Test Guild",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{BASE_URL}/guilds", json=guild_data, headers=headers)
+        assert response.status_code == 200
+        guild_id = response.json()["guild_id"]
+
+        invite_data = {
+            "guild_id": guild_id,
+            "uses_left": 2  # Start with 2 uses
+        }
+        response = requests.post(f"{BASE_URL}/invites", json=invite_data, headers=headers)
+        assert response.status_code == 200
+        invite_code = response.json()["code"]
+        initial_uses_left = response.json()["uses_left"]
+        assert initial_uses_left == 2
+
+        # Create a test user to join
+        join_user_data = {
+            "name": "join_endpoint_test_user",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": guild_id
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=join_user_data, headers=headers)
+        assert response.status_code == 200
+        join_user_id = response.json()["user_id"]
+
+        # Login as test user and join
+        response = requests.post(f"{BASE_URL}/auth/login", json=join_user_data)
+        assert response.status_code == 200
+        join_token = response.json()["access_token"]
+
+        join_headers = {"Authorization": f"Bearer {join_token}"}
+        join_data = {"invite_code": invite_code}
+        response = requests.post(f"{BASE_URL}/users/{join_user_id}/join", json=join_data, headers=join_headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "message" in data
+        assert "guild_request_id" in data
+        assert "guild_name" in data
+        assert "status" in data
+        assert data["status"] == "pending"
+
+        # Verify GuildRequest was created
+        db_session = next(get_db())
+        try:
+            user_uuid = uuid.UUID(join_user_id)
+            guild_uuid = uuid.UUID(guild_id)
+            guild_request = db_session.query(GuildRequest).filter(
+                GuildRequest.user_id == user_uuid,
+                GuildRequest.guild_id == guild_uuid,
+                GuildRequest.status == "pending"
+            ).first()
+            assert guild_request is not None
+            assert str(guild_request.id) == data["guild_request_id"]
+        finally:
+            db_session.close()
+
+        # Verify invite uses_left was decremented
+        response = requests.get(f"{BASE_URL}/invites?guild_id={guild_id}", headers=headers)
+        assert response.status_code == 200
+        invites = response.json()
+        invite_after = next((inv for inv in invites if inv["code"] == invite_code), None)
+        assert invite_after is not None
+        assert invite_after["uses_left"] == initial_uses_left - 1
+
+
+@pytest.mark.guild
+class TestJoinBodyValidation:
+    """Test POST /api/users/{id}/join body validation"""
+
+    def test_join_body_validation_returns_422_on_invalid_body(self):
+        """Test that POST /api/users/{id}/join returns 422 on invalid body (missing invite_code)"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Try to join with invalid body (missing invite_code)
+        invalid_join_data = {"some_other_field": "value"}
+        response = requests.post(f"{BASE_URL}/users/{test_state['admin_user']['id']}/join", json=invalid_join_data, headers=headers)
+        assert response.status_code == 422
+
+        data = response.json()
+        assert "Invalid request body" in data.get("detail", "")
+
+    def test_join_body_validation_returns_422_on_empty_body(self):
+        """Test that POST /api/users/{id}/join returns 422 on empty body"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Try to join with empty body
+        response = requests.post(f"{BASE_URL}/users/{test_state['admin_user']['id']}/join", json={}, headers=headers)
+        assert response.status_code == 422
+
+        data = response.json()
+        assert "Invalid request body" in data.get("detail", "")
+
+
+@pytest.mark.guild
+class TestJoinLimit:
+    """Test POST /api/users/{id}/join with member limit enforcement"""
+
+    def test_join_limit_returns_402_on_full_guild(self):
+        """Test that POST /api/users/{id}/join returns 402 when guild is at member limit"""
+        headers = {"Authorization": f"Bearer {test_state['admin_token']}"}
+
+        # Create a guild and fill it to the limit (2 members)
+        guild_data = {
+            "name": "Full Join Test Guild",
+            "guild_id": TEST_GUILD_ID
+        }
+        response = requests.post(f"{BASE_URL}/guilds", json=guild_data, headers=headers)
+        assert response.status_code == 200
+        full_guild_id = response.json()["guild_id"]
+
+        # Add second member to reach limit
+        user_data = {
+            "name": "second_member_join_limit",
+            "password": "testpass123",
+            "pin": "123456",
+            "guild_id": full_guild_id
+        }
+        response = requests.post(f"{ADMIN_BASE_URL}/users", json=user_data, headers=headers)
+        assert response.status_code == 200
+
+        # Create invite
+        invite_data = {
+            "guild_id": full_guild_id,
+            "uses_left": 1
+        }
+        response = requests.post(f"{BASE_URL}/invites", json=invite_data, headers=headers)
+        assert response.status_code == 200
+        invite_code = response.json()["code"]
+
+        # Try to join (should fail with 402)
+        join_data = {"invite_code": invite_code}
+        response = requests.post(f"{BASE_URL}/users/{test_state['admin_user']['id']}/join", json=join_data, headers=headers)
+        assert response.status_code == 402
+
+        data = response.json()
+        assert "limit" in data.get("message", "").lower()
+        assert "upgrade plan" in data.get("message", "").lower()
+
+
+@pytest.mark.guild
 class TestJoinHang:
     """Test that join requests complete without hanging"""
 

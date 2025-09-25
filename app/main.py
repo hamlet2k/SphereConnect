@@ -1,18 +1,29 @@
 # Copyright 2025 Federico Arce. All Rights Reserved.
 # Confidential - Do Not Distribute Without Permission.
+import os
+import sys
+import logging
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    #format="%(levelname)s:\t%(asctime)s\t%(name)s\t%(message)s",
+    format="%(levelname)s:     %(message)s (%(name)s)",
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
+from fastapi.responses import JSONResponse
 import jwt
-import logging
+
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ValidationError
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
-import os
-import sys
+import uuid
 
 # Rate limiting imports
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -28,14 +39,7 @@ from .api.middleware import GuildLimitMiddleware
 
 load_dotenv()
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)]
-)
-logger = logging.getLogger(__name__)
 
-logger.debug("Testing debug logger")
 class Settings(BaseSettings):
     db_user: str = "postgres"
     db_pass: str
@@ -66,7 +70,7 @@ except Exception as e:
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins.split(",") if "," in settings.cors_origins else [settings.cors_origins],
+    allow_origins=[origin.strip() for origin in (settings.cors_origins or "http://localhost:3000").split(",")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -84,6 +88,20 @@ app.add_middleware(GuildLimitMiddleware)
 # Include the API routes
 app.include_router(router, prefix="/api", tags=["sphereconnect"])
 app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
+
+# Log all routes on startup
+logger.info("Logging all registered routes:")
+for route in app.routes:
+    logger.info(f"Route: {route.methods} {route.path}")
+
+# Global exception handler for unhandled errors
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error(f"Unhandled exception in {request.method} {request.url.path}: {str(exc)}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error", "error_id": str(uuid.uuid4())},
+    )
 
 # Health check endpoint
 @app.get("/health", tags=["health"])
