@@ -57,7 +57,5 @@ wingman-ai/skills/sphereconnect/dependencies/*
 #Skill Messages
 wingman-ai/configs/*/*.last-message.txt
 
-#Grok online chat context
-docs\project\mvp_grok.markdown
-docs\project\kilocode_output.markdown
-docs\project\use_cases.markdown
+#Deprecated documents
+docs/project/deprecated
