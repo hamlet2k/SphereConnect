@@ -183,6 +183,29 @@ def create_adhoc_squad(db: Session, guild_id: str, user_id: str = None) -> str:
     db.commit()
     return str(squad.id)
 
+async def update_tasks_on_objective_progress(db: Session, objective: Objective):
+    """Update related tasks when objective progress changes"""
+    try:
+        # Get all tasks for this objective
+        tasks = db.query(Task).filter(Task.objective_id == objective.id).all()
+
+        objective_status = objective.progress.get("status", "active")
+
+        for task in tasks:
+            # If objective is completed, mark tasks as completed
+            if objective_status == "completed":
+                task.status = "Completed"
+                task.progress = {**task.progress, "completed_via_objective": True}
+            # If objective is cancelled, mark tasks as cancelled
+            elif objective_status == "cancelled":
+                task.status = "Failed"
+                task.progress = {**task.progress, "cancelled_via_objective": True}
+
+        db.commit()
+    except Exception as e:
+        # Log error but don't fail the objective update
+        print(f"Warning: Failed to update tasks on objective progress: {str(e)}")
+
 # Authentication helper functions
 def hash_password(password: str) -> str:
     """Hash password using bcrypt"""
@@ -265,6 +288,26 @@ def check_admin_access(user: User, db: Session) -> bool:
 
     # Check if rank has admin access levels
     return "Admin" in rank.access_levels or "manage_prompts" in rank.access_levels
+
+def check_objective_access(user: User, db: Session, action: str = "view") -> bool:
+    """Check if user has objective access for their guild"""
+    # Check user access levels first (direct grants)
+    user_access_levels = db.query(UserAccess).filter(UserAccess.user_id == user.id).all()
+    for ua in user_access_levels:
+        access_level = db.query(AccessLevel).filter(AccessLevel.id == ua.access_level_id).first()
+        if access_level and action in access_level.user_actions:
+            return True
+
+    # Check rank-based access levels
+    if user.rank:
+        rank = db.query(Rank).filter(Rank.id == user.rank).first()
+        if rank:
+            for access_level_id in rank.access_levels:
+                access_level = db.query(AccessLevel).filter(AccessLevel.id == access_level_id).first()
+                if access_level and action in access_level.user_actions:
+                    return True
+
+    return False
 
 def create_session_token(user_id: str, token: str, expires_at: datetime) -> str:
     """Create a hash for session token storage"""
@@ -1104,6 +1147,13 @@ async def create_objective(
 ):
     """Create a new objective"""
     try:
+        # Check access control
+        if not check_objective_access(current_user, db, "create_objective"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Insufficient permissions to create objectives"
+            )
+
         # Verify user belongs to the guild
         if str(current_user.guild_id) != objective.guild_id:
             raise HTTPException(
@@ -1124,11 +1174,22 @@ async def create_objective(
             guild_id=guild_uuid,
             name=objective.name,
             description=objective.description,
-            categories=objective.categories,
+            preferences=[],  # Will be set based on user preferences if needed
             priority=objective.priority,
             applicable_rank=objective.applicable_rank,
-            squad_id=uuid.UUID(squad_id) if squad_id else None
+            squad_id=uuid.UUID(squad_id) if squad_id else None,
+            lead_id=current_user.id  # Set creator as lead
         )
+
+        # Link categories via junction table
+        if objective.categories:
+            for category_name in objective.categories:
+                category = db.query(ObjectiveCategory).filter(
+                    ObjectiveCategory.guild_id == guild_uuid,
+                    ObjectiveCategory.name == category_name
+                ).first()
+                if category:
+                    new_objective.categories.append(category)
 
         db.add(new_objective)
         db.commit()
@@ -1143,31 +1204,124 @@ async def create_objective(
         raise HTTPException(status_code=500, detail=f"Failed to create objective: {str(e)}")
 
 @router.get("/objectives/{objective_id}")
-async def get_objective(objective_id: str, db: Session = Depends(get_db)):
+async def get_objective(
+    objective_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Get objective details"""
     try:
+        # Check access control
+        if not check_objective_access(current_user, db, "view_objectives"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Insufficient permissions to view objectives"
+            )
+
         obj_uuid = uuid.UUID(objective_id)
-        objective = db.query(Objective).filter(Objective.id == obj_uuid).first()
+        objective = db.query(Objective).filter(
+            Objective.id == obj_uuid,
+            Objective.is_deleted == False
+        ).first()
 
         if not objective:
             raise HTTPException(status_code=404, detail="Objective not found")
+
+        # Verify user belongs to the guild
+        if str(current_user.guild_id) != str(objective.guild_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: User does not belong to this guild"
+            )
 
         return {
             "id": str(objective.id),
             "name": objective.name,
             "description": objective.description,
-            "categories": objective.categories,
+            "categories": [cat.name for cat in objective.categories],
             "priority": objective.priority,
             "progress": objective.progress,
-            "tasks": objective.tasks
+            "tasks": objective.tasks,
+            "lead_id": str(objective.lead_id) if objective.lead_id else None,
+            "squad_id": str(objective.squad_id) if objective.squad_id else None
         }
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid objective ID format")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve objective: {str(e)}")
 
+
+@router.put("/objectives/{objective_id}")
+async def update_objective(
+    objective_id: str,
+    update: ObjectiveUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update objective details and progress"""
+    try:
+        # Check access control
+        if not check_objective_access(current_user, db, "manage_objectives"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Insufficient permissions to update objectives"
+            )
+
+        obj_uuid = uuid.UUID(objective_id)
+        objective = db.query(Objective).filter(
+            Objective.id == obj_uuid,
+            Objective.is_deleted == False
+        ).first()
+
+        if not objective:
+            raise HTTPException(status_code=404, detail="Objective not found")
+
+        # Verify user belongs to the guild
+        if str(current_user.guild_id) != str(objective.guild_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: User does not belong to this guild"
+            )
+
+        # Update fields
+        if update.description is not None:
+            objective.description = update.description
+
+        if update.progress is not None:
+            objective.progress = update.progress
+            # Progress tracking: update related tasks
+            await update_tasks_on_objective_progress(db, objective)
+
+        if update.categories is not None:
+            # Clear existing categories and add new ones
+            objective.categories.clear()
+            guild_uuid = objective.guild_id
+            for category_name in update.categories:
+                category = db.query(ObjectiveCategory).filter(
+                    ObjectiveCategory.guild_id == guild_uuid,
+                    ObjectiveCategory.name == category_name
+                ).first()
+                if category:
+                    objective.categories.append(category)
+
+        if update.priority is not None:
+            objective.priority = update.priority
+
+        db.commit()
+
+        return {
+            "message": "Objective updated successfully",
+            "tts_response": "Objective updated"
+        }
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid objective ID format")
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update objective: {str(e)}")
 
 @router.patch("/objectives/{objective_id}")
-async def update_objective(objective_id: str, update: ObjectiveUpdate, db: Session = Depends(get_db)):
-    """Update objective progress or description"""
+async def patch_objective(objective_id: str, update: ObjectiveUpdate, db: Session = Depends(get_db)):
+    """Update objective progress or description (partial update)"""
     try:
         obj_uuid = uuid.UUID(objective_id)
         objective = db.query(Objective).filter(Objective.id == obj_uuid).first()
@@ -1204,6 +1358,51 @@ async def update_objective(objective_id: str, update: ObjectiveUpdate, db: Sessi
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to update objective: {str(e)}")
+
+@router.delete("/objectives/{objective_id}")
+async def delete_objective(
+    objective_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Soft delete an objective"""
+    try:
+        # Check access control
+        if not check_objective_access(current_user, db, "manage_objectives"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Insufficient permissions to delete objectives"
+            )
+
+        obj_uuid = uuid.UUID(objective_id)
+        objective = db.query(Objective).filter(
+            Objective.id == obj_uuid,
+            Objective.is_deleted == False
+        ).first()
+
+        if not objective:
+            raise HTTPException(status_code=404, detail="Objective not found")
+
+        # Verify user belongs to the guild
+        if str(current_user.guild_id) != str(objective.guild_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: User does not belong to this guild"
+            )
+
+        # Soft delete
+        objective.is_deleted = True
+        db.commit()
+
+        return {
+            "message": "Objective deleted successfully",
+            "tts_response": "Objective deleted"
+        }
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid objective ID format")
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete objective: {str(e)}")
 
 @router.patch("/objectives/{objective_id}/progress")
 async def update_objective_progress(objective_id: str, progress: ProgressUpdate, db: Session = Depends(get_db)):
@@ -1325,29 +1524,72 @@ async def schedule_task(task_id: str, schedule_data: TaskSchedule, db: Session =
         raise HTTPException(status_code=500, detail=f"Failed to schedule task: {str(e)}")
 
 @router.get("/objectives")
-async def get_objectives(guild_id: str = None, db: Session = Depends(get_db)):
-    """Get objectives for a guild"""
+async def get_objectives(
+    guild_id: str = None,
+    status: str = None,
+    category: str = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get objectives for a guild with optional filtering"""
     try:
+        # Check access control
+        if not check_objective_access(current_user, db, "view_objectives"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Insufficient permissions to view objectives"
+            )
+
+        # guild_id is required for multitenancy
         if not guild_id:
             raise HTTPException(status_code=400, detail="guild_id parameter required")
 
+        # Verify user belongs to the guild
+        if str(current_user.guild_id) != guild_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: User does not belong to this guild"
+            )
+
         guild_uuid = uuid.UUID(guild_id)
-        objectives = db.query(Objective).filter(Objective.guild_id == guild_uuid).all()
+        query = db.query(Objective).filter(
+            Objective.guild_id == guild_uuid,
+            Objective.is_deleted == False
+        )
+
+        # Filter by category if provided (join with categories)
+        if category:
+            query = query.join(Objective.categories).filter(ObjectiveCategory.name == category)
+
+        objectives = query.all()
+
+        # Filter by status if provided (status derived from progress)
+        if status:
+            filtered_objectives = []
+            for obj in objectives:
+                obj_status = obj.progress.get("status", "active")  # Default to active
+                if obj_status == status:
+                    filtered_objectives.append(obj)
+            objectives = filtered_objectives
 
         return [
             {
                 "id": str(obj.id),
                 "name": obj.name,
                 "description": obj.description,
-                "categories": obj.categories,
+                "categories": [cat.name for cat in obj.categories],
                 "priority": obj.priority,
                 "progress": obj.progress,
-                "guild_id": str(obj.guild_id)
+                "guild_id": str(obj.guild_id),
+                "lead_id": str(obj.lead_id) if obj.lead_id else None,
+                "squad_id": str(obj.squad_id) if obj.squad_id else None
             }
             for obj in objectives
         ]
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid guild ID format")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve objectives: {str(e)}")
 
 @router.get("/guilds/{guild_id}/objectives/recent")
 async def get_recent_objectives(guild_id: str, limit: int = 5, db: Session = Depends(get_db)):

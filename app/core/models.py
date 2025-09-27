@@ -130,6 +130,7 @@ class Objective(Base):
     tasks = Column(ARRAY(PG_UUID(as_uuid=True)), default=[])
     lead_id = Column(PG_UUID(as_uuid=True), ForeignKey('users.id'))
     squad_id = Column(PG_UUID(as_uuid=True), ForeignKey('squads.id'))
+    is_deleted = Column(Boolean, default=False)
 
 class Task(Base):
     __tablename__ = 'tasks'

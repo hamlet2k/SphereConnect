@@ -124,13 +124,14 @@ This file provides the **detailed entity definitions and data model** used in Sp
 - `name`: Mission name.
 - `description`: JSONB (brief, tactical, classified, metrics).
 - `preferences`: Traits linked to users.
-- `categories`: Outcome groups (economy, military).
+- `categories`: Outcome groups (economy, military) - linked via junction table.
 - `priority`: Urgency level.
 - `applicable_rank`: Restricted visibility.
 - `progress`: JSONB.
 - `tasks`: Array of task UUIDs.
 - `lead_id`: FK to users.
 - `squad_id`: FK to squads.
+- `is_deleted`: BOOLEAN (soft delete flag).
 
 **See also**: [Objective & Task Management](./project_flows.md#4-objective--task-management).
 

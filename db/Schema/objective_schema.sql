@@ -14,6 +14,7 @@ CREATE TABLE objectives (
     tasks UUID[] DEFAULT '{}',
     lead_id UUID,
     squad_id UUID,
+    is_deleted BOOLEAN DEFAULT FALSE,
     FOREIGN KEY (guild_id) REFERENCES guilds(id),
     FOREIGN KEY (lead_id) REFERENCES users(id),
     FOREIGN KEY (squad_id) REFERENCES squads(id)

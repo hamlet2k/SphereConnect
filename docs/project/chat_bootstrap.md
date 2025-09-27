@@ -153,11 +153,11 @@ You have access to multiple ecosystems (Copilot Pro, KiloCode, Codex extension, 
 ```
 Project: Sphere Connect
 
-Load first:
-- docs/project/project_context.md
-- docs/project/ai_output_history.md
-- docs/project/project_flows.md (if routes/UX change)
-- docs/project/project_data_structures.md (if models/migrations change)
+Add Context:
+@/docs/project/project_context.md
+@/docs/project/ai_output_history.md
+@/docs/project/project_flows.md (if routes/UX change)
+@/docs/project/project_data_structures.md (if models/migrations change)
 
 Task:
 <describe the concrete change>
