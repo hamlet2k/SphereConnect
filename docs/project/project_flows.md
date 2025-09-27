@@ -2,7 +2,7 @@
 
 This file describes the **use case flows** of Sphere Connect, with Mermaid diagrams for clarity.
 
-For detailed data entities referenced here, see [`project-data-structures.md`](./project-data-structures.md). For the broader project context, see [`project-context.md`](./project-context.md).
+For detailed data entities referenced here, see [`project_data_structures.md`](./project_data_structures.md). For the broader project context, see [`project_context.md`](./project_context.md).
 
 ---
 
@@ -188,10 +188,10 @@ sequenceDiagram
 ---
 
 ## Entities Referenced in These Flows
-- [Users](./project-data-structures.md#2-users)
-- [Guilds](./project-data-structures.md#1-guilds)
-- [Invites & Requests](./project-data-structures.md#3-invites--requests)
-- [Objectives](./project-data-structures.md#7-objectives)
-- [Tasks](./project-data-structures.md#8-tasks)
-- [Ranks & Access Levels](./project-data-structures.md#6-ranks--access-levels)
+- [Users](./project_data_structures.md#2-users)
+- [Guilds](./project_data_structures.md#1-guilds)
+- [Invites & Requests](./project_data_structures.md#3-invites--requests)
+- [Objectives](./project_data_structures.md#7-objectives)
+- [Tasks](./project_data_structures.md#8-tasks)
+- [Ranks & Access Levels](./project_data_structures.md#6-ranks--access-levels)
 

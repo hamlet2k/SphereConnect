@@ -85,7 +85,7 @@ Sphere Connect is a **multitenant AI-powered app** for community organization an
 - **Objectives & Tasks**: Hierarchical mission and sub-task tracking.
 - **Categories**: Grouping of objectives by outcomes (e.g., economy, military).
 
-(Detailed schemas are provided in [`project-data-structures.md`](./project-data-structures.md).)
+(Detailed schemas are provided in [`project_data_structures.md`](./project_data_structures.md).)
 
 ---
 
@@ -122,8 +122,8 @@ Sphere Connect is a **multitenant AI-powered app** for community organization an
 
 ---
 
-## References
+## 9. References
 - Active backlog: see [`TODO.md`](../../TODO.md)
-- Detailed **flows**: see [`project-flows.md`](./project-flows.md).
-- Detailed **data structures**: see [`project-data-structures.md`](./project-data-structures.md).
+- Detailed **flows**: see [`project_flows.md`](./project_flows.md).
+- Detailed **data structures**: see [`project_data_structures.md`](./project_data_structures.md).
 

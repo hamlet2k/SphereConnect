@@ -8,10 +8,10 @@ This file defines how ChatGPT should behave when assisting with the Sphere Conne
 
 - **Repo (remote):** [https://github.com/hamlet2k/SphereConnect](https://github.com/hamlet2k/SphereConnect)
 - **Docs folder:** `/docs/project/`
-  - `project-context.md` – high-signal context for IDE agents
-  - `project-flows.md` – user/system flows
-  - `project-data-structures.md` – entities, fields, relationships
-  - `ai-output-history.md` – append-only history of AI runs
+  - `project_context.md` – high-signal context for IDE agents
+  - `project_flows.md` – user/system flows
+  - `project_data_structures.md` – entities, fields, relationships
+  - `ai_output_history.md` – append-only history of AI runs
 - `TODO.md` – evolving backlog by phase, functionality, priority
 
 > Always treat `/docs/project/` as the **source of truth**. Do not maintain separate local copies outside the repo.
@@ -28,9 +28,9 @@ This file defines how ChatGPT should behave when assisting with the Sphere Conne
 
 ## **Behavior Guidelines**
 
-- **Load context first**: review `project-context.md`, `ai-output-history.md`, and, if relevant, `project-flows.md` and `project-data-structures.md` before proposing changes.
+- **Load context first**: review `project_context.md`, `ai_output_history.md`, and, if relevant, `project_flows.md` and `project_data_structures.md` before proposing changes.
 
-  - **Check current repo version**: Before editing design docs (`/docs/project/project-context.md`, `/docs/project/project-flows.md`, `/docs/project/data-structures.md`, `/todo.md`), always review the existing file contents in the repository to avoid overwriting or dropping sections.
+  - **Check current repo version**: Before editing design docs (`/docs/project/project_context.md`, `/docs/project/project_flows.md`, `/docs/project/project_data_structures.md`, `/todo.md`), always review the existing file contents in the repository to avoid overwriting or dropping sections.
 
 - **Consistency first**: follow existing repo conventions.
 
@@ -40,9 +40,9 @@ This file defines how ChatGPT should behave when assisting with the Sphere Conne
 
 - **Ask first**: clarify unclear requirements before coding.
 
-- **Traceability**: ensure all significant outputs are appended to `ai-output-history.md`.
+- **Traceability**: ensure all significant outputs are appended to `ai_output_history.md`.
 
-- **Documentation hygiene**: update `project-context.md` (and flows/data model when applicable) when structure/architecture changes.
+- **Documentation hygiene**: update `project_context.md` (and flows/data model when applicable) when structure/architecture changes.
 
 
 
@@ -99,7 +99,7 @@ You have access to multiple ecosystems (Copilot Pro, KiloCode, Codex extension, 
 
 - Always produce **Markdown-friendly output**.
 - For code, assume it will live in the Sphere Connect repo unless specified.
-- Append all outputs of substance (design drafts, generated code, structured notes) into `ai-output-history.md`.
+- Append all outputs of substance (design drafts, generated code, structured notes) into `ai_output_history.md`.
 - If something is exploratory or speculative, still log it for context.
 
 ---
@@ -119,7 +119,7 @@ You have access to multiple ecosystems (Copilot Pro, KiloCode, Codex extension, 
   1. Full updated file (in a code block with the correct source language, e.g., `python, `markdown, etc.),
   2. Or update the file inside the Canvas,
   3. Or attach a downloadable link to the full updated file.
-- Partial snippets are allowed **as long as they are in proper source-language fenced blocks** (e.g., `python, `markdown, `json, `bash).
+- Partial snippets are allowed **as long as they are in proper source-language fenced blocks** (e.g., `python, `markdown, `json, `bash).
 - Never provide “floating” text without code fences when the user might need to copy/paste.
 - Keep `/docs/` files as the **single source of truth** for project context, flows, and history.
 
@@ -154,10 +154,10 @@ You have access to multiple ecosystems (Copilot Pro, KiloCode, Codex extension, 
 Project: Sphere Connect
 
 Load first:
-- docs/project/project-context.md
-- docs/project/ai-output-history.md
-- docs/project/project-flows.md (if routes/UX change)
-- docs/project/project-data-structures.md (if models/migrations change)
+- docs/project/project_context.md
+- docs/project/ai_output_history.md
+- docs/project/project_flows.md (if routes/UX change)
+- docs/project/project_data_structures.md (if models/migrations change)
 
 Task:
 <describe the concrete change>
@@ -172,7 +172,7 @@ Deliverables:
 1) Exact file diffs or full file contents.
 2) Brief rationale (what & why).
 3) Migration commands (if any) and run notes.
-4) A short entry to append to docs/project/ai-output-history.md:
+4) A short entry to append to docs/project/ai_output_history.md:
    "YYYY-MM-DD – <task> – summary & follow-ups".
 ```
 

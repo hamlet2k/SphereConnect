@@ -1,6 +1,6 @@
 # Sphere Connect – Project Data Structures
 
-This file provides the **detailed entity definitions and data model** used in Sphere Connect. Cross-links are provided to relevant flows in [`project-flows.md`](./project-flows.md).
+This file provides the **detailed entity definitions and data model** used in Sphere Connect. Cross-links are provided to relevant flows in [`project_flows.md`](./project_flows.md).
 
 ---
 
@@ -30,7 +30,7 @@ This file provides the **detailed entity definitions and data model** used in Sp
 - `creator_id`: UUID, FK to Users.
 - `is_deletable`: BOOLEAN (false for personal guilds).
 
-**See also**: [Guild Management Flows](./project-flows.md#3-guild-management).
+**See also**: [Guild Management Flows](./project_flows.md#3-guild-management).
 
 ---
 
@@ -52,7 +52,7 @@ This file provides the **detailed entity definitions and data model** used in Sp
 - `max_guilds`: INTEGER (default 3 for free tier).
 - `is_system_admin`: BOOLEAN, platform-level flag.
 
-**See also**: [Registration](./project-flows.md#1-registration), [Login](./project-flows.md#2-login).
+**See also**: [Registration](./project_flows.md#1-registration), [Login](./project_flows.md#2-login).
 
 ---
 
@@ -70,7 +70,7 @@ This file provides the **detailed entity definitions and data model** used in Sp
 - `guild_id`: FK to guilds.
 - `status`: TEXT (pending, approved, denied).
 
-**See also**: [Invite & Join](./project-flows.md#invite--join), [Invite Management](./project-flows.md#5-invite-management).
+**See also**: [Invite & Join](./project_flows.md#invite--join), [Invite Management](./project_flows.md#5-invite-management).
 
 ---
 
@@ -83,7 +83,7 @@ This file provides the **detailed entity definitions and data model** used in Sp
 - `system_prompt`: Default: strategic tone.
 - `user_prompt`: Custom tone overrides.
 
-**See also**: [Registration](./project-flows.md#1-registration).
+**See also**: [Registration](./project_flows.md#1-registration).
 
 ---
 
@@ -94,7 +94,7 @@ This file provides the **detailed entity definitions and data model** used in Sp
 - `name`: Squad identifier.
 - `squad_lead`: FK to users.
 
-**See also**: [Objective & Task Management](./project-flows.md#4-objective--task-management).
+**See also**: [Objective & Task Management](./project_flows.md#4-objective--task-management).
 
 ---
 
@@ -113,7 +113,7 @@ This file provides the **detailed entity definitions and data model** used in Sp
 - `user_actions`: VARCHAR[] (permissions like `view_guilds`, `manage_rbac`).
 - Special: `super_admin` is non-revocable, creator-only.
 
-**See also**: [Access Level Management](./project-flows.md#6-access-level-management), [Registration](./project-flows.md#1-registration).
+**See also**: [Access Level Management](./project_flows.md#6-access-level-management), [Registration](./project_flows.md#1-registration).
 
 ---
 
@@ -132,7 +132,7 @@ This file provides the **detailed entity definitions and data model** used in Sp
 - `lead_id`: FK to users.
 - `squad_id`: FK to squads.
 
-**See also**: [Objective & Task Management](./project-flows.md#4-objective--task-management).
+**See also**: [Objective & Task Management](./project_flows.md#4-objective--task-management).
 
 ---
 
@@ -151,7 +151,7 @@ This file provides the **detailed entity definitions and data model** used in Sp
 - `squad_id`: FK to squads.
 - `schedule`: JSONB (start, end, duration, flexible, timezone).
 
-**See also**: [Objective & Task Management](./project-flows.md#4-objective--task-management).
+**See also**: [Objective & Task Management](./project_flows.md#4-objective--task-management).
 
 ---
 
@@ -162,7 +162,7 @@ This file provides the **detailed entity definitions and data model** used in Sp
 - `name`: e.g., Economy, Military.
 - `description`: TEXT.
 
-**See also**: [Objective & Task Management](./project-flows.md#4-objective--task-management).
+**See also**: [Objective & Task Management](./project_flows.md#4-objective--task-management).
 
 ---
 
