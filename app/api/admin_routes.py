@@ -136,6 +136,13 @@ def check_admin_access(user: User, db: Session) -> bool:
 
 def check_access_level(user: User, required_actions: List[str], db: Session) -> bool:
     """Check if user has required access levels from both rank and user_access table"""
+    # SUPER_ADMIN BYPASS: If user has super_admin access level, grant access immediately
+    user_access_levels = db.query(UserAccess).filter(UserAccess.user_id == user.id).all()
+    for ua in user_access_levels:
+        access_level = db.query(AccessLevel).filter(AccessLevel.id == ua.access_level_id).first()
+        if access_level and access_level.name == "super_admin":
+            return True
+
     # Check rank-based access levels
     rank_has_access = False
     if user.rank:
@@ -145,7 +152,6 @@ def check_access_level(user: User, required_actions: List[str], db: Session) -> 
 
     # Check user_access table for additional permissions
     user_access_actions = set()
-    user_access_levels = db.query(UserAccess).filter(UserAccess.user_id == user.id).all()
     for ua in user_access_levels:
         access_level = db.query(AccessLevel).filter(AccessLevel.id == ua.access_level_id).first()
         if access_level:

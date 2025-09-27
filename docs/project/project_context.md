@@ -99,6 +99,10 @@ Sphere Connect is a **multitenant AI-powered app** for community organization an
 - Voice PIN for Wingman-AI.
 - RBAC with ranks, access levels, overrides.
 - Personal guilds undeletable; non-personal guilds deletable only by creator.
+- **Access Control Strategy**:
+  - Deny-by-default: all actions require explicit grants via access levels.
+  - `super_admin` (granted to guild creators) is **non-revocable** and **always bypasses access checks**.
+  - Any new user functions must be automatically included in the `super_admin` role to ensure continuity of full control.
 
 ### User Actions
 - **Admins**: Manage users, guilds, ranks, access.

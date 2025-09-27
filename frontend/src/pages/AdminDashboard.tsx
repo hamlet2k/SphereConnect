@@ -1065,30 +1065,32 @@ function AdminDashboard() {
       />
 
       {/* Objective Modals */}
-      {objectiveDetailOpen && selectedObjective && (
-        <ObjectiveDetail
-          objectiveId={selectedObjective.id}
-          onClose={() => {
-            setObjectiveDetailOpen(false);
-            setSelectedObjective(null);
-          }}
-          onEdit={handleEditObjective}
-          canEdit={checkObjectivePermissions().canEdit}
-        />
-      )}
+      <ObjectivesAPIProvider>
+        {objectiveDetailOpen && selectedObjective && (
+          <ObjectiveDetail
+            objectiveId={selectedObjective.id}
+            onClose={() => {
+              setObjectiveDetailOpen(false);
+              setSelectedObjective(null);
+            }}
+            onEdit={handleEditObjective}
+            canEdit={checkObjectivePermissions().canEdit}
+          />
+        )}
 
-      {objectiveFormOpen && (
-        <ObjectiveForm
-          objective={selectedObjective || undefined}
-          guildId={currentGuildId || ''}
-          onSuccess={handleObjectiveFormSuccess}
-          onCancel={() => {
-            setObjectiveFormOpen(false);
-            setSelectedObjective(null);
-          }}
-          isOpen={objectiveFormOpen}
-        />
-      )}
+        {objectiveFormOpen && (
+          <ObjectiveForm
+            objective={selectedObjective || undefined}
+            guildId={currentGuildId || ''}
+            onSuccess={handleObjectiveFormSuccess}
+            onCancel={() => {
+              setObjectiveFormOpen(false);
+              setSelectedObjective(null);
+            }}
+            isOpen={objectiveFormOpen}
+          />
+        )}
+      </ObjectivesAPIProvider>
 
       <style>{`
         @keyframes spin {

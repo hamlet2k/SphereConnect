@@ -13,6 +13,7 @@ const USER_ACTIONS = [
   'view_users',
   'manage_users',
   'manage_user_access',
+  'view_objectives',
   'create_objective',
   'manage_objectives',
   'manage_rbac',
@@ -312,33 +313,41 @@ function AccessLevelManager() {
                     ).join(', ')}
                   </td>
                   <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>
-                    <button
-                      onClick={() => handleEdit(level)}
-                      style={{
-                        marginRight: '8px',
-                        padding: '4px 8px',
-                        backgroundColor: '#3182ce',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(level.id)}
-                      style={{
-                        padding: '4px 8px',
-                        backgroundColor: '#e53e3e',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Delete
-                    </button>
+                    {level.name === 'super_admin' ? (
+                      <span style={{ color: '#718096', fontStyle: 'italic' }}>
+                        Immutable (Full Access)
+                      </span>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleEdit(level)}
+                          style={{
+                            marginRight: '8px',
+                            padding: '4px 8px',
+                            backgroundColor: '#3182ce',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(level.id)}
+                          style={{
+                            padding: '4px 8px',
+                            backgroundColor: '#e53e3e',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -6,15 +6,15 @@ This file defines how ChatGPT should behave when assisting with the Sphere Conne
 
 ## **Canonical Docs (Repository)**
 
-- **Repo (remote):** [https://github.com/hamlet2k/SphereConnect](https://github.com/hamlet2k/SphereConnect)
-- **Docs folder:** `/docs/project/`
-  - `project_context.md` – high-signal context for IDE agents
-  - `project_flows.md` – user/system flows
-  - `project_data_structures.md` – entities, fields, relationships
-  - `ai_output_history.md` – append-only history of AI runs
-- `TODO.md` – evolving backlog by phase, functionality, priority
+- **Repo (remote):** [https://github.com/hamlet2k/SphereConnect](https://github.com/hamlet2k/SphereConnect)
+- **Docs folder:** `/docs/project/`
+  - `project_context.md` – high-signal context for IDE agents
+  - `project_flows.md` – user/system flows
+  - `project_data_structures.md` – entities, fields, relationships
+  - `ai_output_history.md` – append-only history of AI runs
+- `TODO.md` – evolving backlog by phase, functionality, priority
 
-> Always treat `/docs/project/` as the **source of truth**. Do not maintain separate local copies outside the repo.
+> Always treat `/docs/project/` as the **source of truth**. Do not maintain separate local copies outside the repo.
 
 ---
 
@@ -28,21 +28,19 @@ This file defines how ChatGPT should behave when assisting with the Sphere Conne
 
 ## **Behavior Guidelines**
 
-- **Load context first**: review `project_context.md`, `ai_output_history.md`, and, if relevant, `project_flows.md` and `project_data_structures.md` before proposing changes.
+- **Load context first**: review `project_context.md`, `ai_output_history.md`, and, if relevant, `project_flows.md` and `project_data_structures.md` before proposing changes.
   - **Check current repo version**: Before editing design docs (`/docs/project/project_context.md`, `/docs/project/project_flows.md`, `/docs/project/project_data_structures.md`, `/todo.md`), always review the existing file contents in the repository to avoid overwriting or dropping sections.
 - **Consistency first**: follow existing repo conventions.
 - **Clarity**: explain assumptions and design decisions.
 - **Incremental delivery**: propose small, testable steps.
 - **Ask first**: clarify unclear requirements before coding.
 - **Traceability**: ensure all significant outputs are appended to `ai_output_history.md`.
-- **Documentation hygiene**: update `project_context.md` (and flows/data model when applicable) when structure/architecture changes.
-- **Authorization rules**: 
+- **Documentation hygiene**: update `project_context.md` (and flows/data model when applicable) when structure/architecture changes.
+- **Authorization rules**:
   - Always enforce deny-by-default and explicit grants.
   - Ensure new features add corresponding user functions.
-  - Validate that `super_admin` is updated with any new functions and bypasses access checks in logic.
-
-
-
+  - Validate that `super_admin` is updated with any new functions and bypasses access checks in logic.
+  - Keep frontend Access Level Manager (`frontend/src/components/AccessLevelManager.tsx`) updated so UI reflects new user functions and super_admin override.
 
 ---
 
@@ -117,7 +115,7 @@ You have access to multiple ecosystems (Copilot Pro, KiloCode, Codex extension, 
   1. Full updated file (in a code block with the correct source language, e.g., `python, `markdown, etc.),
   2. Or update the file inside the Canvas,
   3. Or attach a downloadable link to the full updated file.
-- Partial snippets are allowed **as long as they are in proper source-language fenced blocks** (e.g., `python, `markdown, `json, `bash).
+- Partial snippets are allowed **as long as they are in proper source-language fenced blocks** (e.g., `python, `markdown, `json, `bash).
 - Never provide “floating” text without code fences when the user might need to copy/paste.
 - Keep `/docs/` files as the **single source of truth** for project context, flows, and history.
 
@@ -129,10 +127,12 @@ You have access to multiple ecosystems (Copilot Pro, KiloCode, Codex extension, 
   example code
   \`\`\`
 
+
   ```
 - Alternatively, use indentation (4 spaces) to represent nested code fences:
   ```
   example code
+
 
   ```
 - For large files with many nested fences, prefer delivering via:
@@ -146,7 +146,7 @@ You have access to multiple ecosystems (Copilot Pro, KiloCode, Codex extension, 
 - Always accompany snippets with a **clear, copy-pasteable prompt** phrased for the AI agent to execute the task at hand.
 - Goal: maximize portability of outputs between ChatGPT and other coding assistants.
 
-### Minimal Prompt Template
+### **Minimal Prompt Template**
 
 ```
 Project: Sphere Connect
@@ -172,9 +172,10 @@ Deliverables:
 3) Migration commands (if any) and run notes.
 4) A short entry to append to docs/project/ai_output_history.md:
    "YYYY-MM-DD – <task> – summary & follow-ups".
+
 ```
 
-### Tool‑Specific Prompt Hints
+### **Tool‑Specific Prompt Hints**
 
 - **Copilot (inline/Chat)**: include the target file path(s) and a succinct “apply this patch” block; keep each patch small.
 - **KiloCode**: enumerate all files to touch, provide a checklist, then supply diffs per file.
