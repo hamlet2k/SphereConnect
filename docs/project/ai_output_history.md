@@ -4245,6 +4245,9 @@ The join endpoint now properly handles invite codes, creates pending guild reque
 
 All acceptance criteria for debugging the hanging join endpoint have been met.
 ----------------------------------------------------------------------------------
+d98fa1c: renamed the KiloCode transcript to docs/project/ai-output-history.md:1 and checked in the full AI output log (≈4.2k lines), preserving every historical entry under the new filename.
+8313250: rewrote docs/project/chat_bootstrap.md:1 to add bolded section headings, expand guidance on canonical docs, tool orchestration, and prompt templates, and clarify how agents should load context before working.
+aab9a32: broad documentation sweep—retired the legacy grok/prompt/proposal files, tightened .gitignore, introduced a repo-wide backlog at TODO.md:1, and published fresh reference docs (docs/project/project_context.md:1, docs/project/project_data_structures.md:1, docs/project/project_flows.md:1) while removing the obsolete docs/project/changelog.md.
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------

@@ -8,14 +8,15 @@ Update freely as ideas emerge; keep it evolving.
 
 ## Phase 1 – Core MVP (barebones functionality)
 - **Authentication**  
-  - [ ] User registration with personal guild creation (P1 – must have)  
-  - [ ] Login with PIN + status (P1)  
-  - [ ] Basic session handling (P1)  
+  - [x] User registration with personal guild creation (P1 – must have)  
+  - [x] Login with PIN + status (P1)  
+  - [x] Basic session handling (P1)  
 
 - **Guild Management**  
-  - [ ] Switch guild (P1)  
-  - [ ] Invite/join guild (P1)  
-  - [ ] Leave/kick guild (P1)  
+  - [x] Switch guild (P1)  
+  - [x] Invite/join guild (P1)  
+  - [ ] Leave/kick guild (P1)
+  - [ ] Create guild (P1)  
 
 - **Objectives & Tasks**  
   - [ ] Create objectives with tasks (P1)  
@@ -23,8 +24,8 @@ Update freely as ideas emerge; keep it evolving.
   - [ ] Notifications (P2 – nice to have)  
 
 - **Access Control**  
-  - [ ] Default ranks & access levels (P1)  
-  - [ ] Manage access levels (P2)  
+  - [x] Default ranks & access levels (P1)  
+  - [x] Manage access levels (P2)  
 
 ---
 
