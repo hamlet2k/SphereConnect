@@ -10,6 +10,10 @@ import InviteManagement from '../components/InviteManagement';
 import AccessLevelManager from '../components/AccessLevelManager';
 import RanksManager from '../components/RanksManager';
 import UsersManager from '../components/UsersManager';
+import ObjectivesList from '../components/ObjectivesList';
+import ObjectiveDetail from '../components/ObjectiveDetail';
+import ObjectiveForm from '../components/ObjectiveForm';
+import { ObjectivesAPIProvider, useObjectivesAPI, Objective } from '../contexts/ObjectivesAPI';
 
 type ActiveTab = 'users' | 'ranks' | 'objectives' | 'tasks' | 'squads' | 'access-levels' | 'categories' | 'guilds' | 'invites' | 'guild-requests';
 
@@ -27,14 +31,6 @@ interface Rank {
   access_levels: string[];
 }
 
-interface Objective {
-  id: string;
-  name: string;
-  description: any;
-  priority: string;
-  progress: any;
-  categories: string[];
-}
 
 interface Task {
   id: string;
@@ -77,6 +73,13 @@ function AdminDashboard() {
   const [joinLoading, setJoinLoading] = useState(false);
   const [inviteMessage, setInviteMessage] = useState('');
   const [joinMessage, setJoinMessage] = useState('');
+
+  // Objective modal states
+  const [objectiveDetailOpen, setObjectiveDetailOpen] = useState(false);
+  const [objectiveFormOpen, setObjectiveFormOpen] = useState(false);
+  const [selectedObjective, setSelectedObjective] = useState<Objective | null>(null);
+  const [objectiveLoading, setObjectiveLoading] = useState(false);
+  const [objectiveMessage, setObjectiveMessage] = useState('');
 
   const token = localStorage.getItem('token');
   const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -362,61 +365,75 @@ function AdminDashboard() {
     }
   };
 
+  // Objective handlers
+  const handleViewObjective = (objective: Objective) => {
+    setSelectedObjective(objective);
+    setObjectiveDetailOpen(true);
+  };
+
+  const handleEditObjective = (objective: Objective) => {
+    setSelectedObjective(objective);
+    setObjectiveFormOpen(true);
+  };
+
+  const handleCreateObjective = () => {
+    setSelectedObjective(null);
+    setObjectiveFormOpen(true);
+  };
+
+  const handleDeleteObjective = async (objectiveId: string) => {
+    try {
+      const { deleteObjective } = useObjectivesAPI();
+      await deleteObjective(objectiveId);
+      setMessage('Objective deleted successfully');
+      // Reload objectives
+      loadData();
+    } catch (error: any) {
+      setMessage(error.message || 'Failed to delete objective');
+    }
+  };
+
+  const handleObjectiveFormSuccess = (objective: Objective) => {
+    setObjectiveFormOpen(false);
+    setSelectedObjective(null);
+    setMessage(`Objective ${objective.id ? 'updated' : 'created'} successfully`);
+    // Reload objectives
+    loadData();
+  };
+
+  // Access control helpers
+  const checkObjectivePermissions = () => {
+    // For now, assume super_admin has all permissions
+    // TODO: Implement proper permission checking
+    return {
+      canCreate: true,
+      canEdit: true,
+      canDelete: true,
+      canView: true
+    };
+  };
+
   const renderUsersTab = () => <UsersManager />;
 
   const renderRanksTab = () => <RanksManager />;
 
-  const renderObjectivesTab = () => (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h3 style={{ margin: 0 }}>Objectives Management</h3>
-        <button
-          style={{
-            padding: '8px 16px',
-            backgroundColor: '#3182ce',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Create Objective
-        </button>
-      </div>
+  const renderObjectivesTab = () => {
+    const permissions = checkObjectivePermissions();
 
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#f7fafc' }}>
-              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Name</th>
-              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Priority</th>
-              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Progress</th>
-              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {objectives.map(objective => (
-              <tr key={objective.id}>
-                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>{objective.name}</td>
-                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>{objective.priority}</td>
-                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>
-                  {JSON.stringify(objective.progress)}
-                </td>
-                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>
-                  <button style={{ marginRight: '8px', padding: '4px 8px', backgroundColor: '#3182ce', color: 'white', border: 'none', borderRadius: '4px' }}>
-                    Edit
-                  </button>
-                  <button style={{ padding: '4px 8px', backgroundColor: '#e53e3e', color: 'white', border: 'none', borderRadius: '4px' }}>
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+    return (
+      <ObjectivesAPIProvider>
+        <ObjectivesList
+          onViewObjective={handleViewObjective}
+          onEditObjective={handleEditObjective}
+          onDeleteObjective={handleDeleteObjective}
+          canCreate={permissions.canCreate}
+          canEdit={permissions.canEdit}
+          canDelete={permissions.canDelete}
+          onCreateObjective={handleCreateObjective}
+        />
+      </ObjectivesAPIProvider>
+    );
+  };
 
   const renderTasksTab = () => (
     <div>
@@ -1046,6 +1063,32 @@ function AdminDashboard() {
         loading={joinLoading}
         message={joinMessage}
       />
+
+      {/* Objective Modals */}
+      {objectiveDetailOpen && selectedObjective && (
+        <ObjectiveDetail
+          objectiveId={selectedObjective.id}
+          onClose={() => {
+            setObjectiveDetailOpen(false);
+            setSelectedObjective(null);
+          }}
+          onEdit={handleEditObjective}
+          canEdit={checkObjectivePermissions().canEdit}
+        />
+      )}
+
+      {objectiveFormOpen && (
+        <ObjectiveForm
+          objective={selectedObjective || undefined}
+          guildId={currentGuildId || ''}
+          onSuccess={handleObjectiveFormSuccess}
+          onCancel={() => {
+            setObjectiveFormOpen(false);
+            setSelectedObjective(null);
+          }}
+          isOpen={objectiveFormOpen}
+        />
+      )}
 
       <style>{`
         @keyframes spin {

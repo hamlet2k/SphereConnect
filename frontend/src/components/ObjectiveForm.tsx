@@ -1,37 +1,24 @@
 import React, { useState, useEffect } from 'react';
-
-interface ObjectiveDescription {
-  brief: string;
-  tactical: string;
-  classified: string;
-  metrics: { [key: string]: any };
-}
-
-interface Objective {
-  id?: string;
-  name: string;
-  description: ObjectiveDescription;
-  categories: string[];
-  priority: string;
-  applicable_rank: string;
-  squad_id?: string;
-  guild_id: string;
-}
+import { useObjectivesAPI, Objective, ObjectiveDescription } from '../contexts/ObjectivesAPI';
 
 interface ObjectiveFormProps {
   objective?: Objective;
   guildId: string;
-  onSave: (objective: Objective) => void;
+  onSuccess: (objective: Objective) => void;
   onCancel: () => void;
+  isOpen: boolean;
 }
 
 const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
   objective,
   guildId,
-  onSave,
-  onCancel
+  onSuccess,
+  onCancel,
+  isOpen
 }) => {
+  const { createObjective, updateObjective } = useObjectivesAPI();
   const [formData, setFormData] = useState<Objective>({
+    id: '',
     name: '',
     description: {
       brief: '',
@@ -42,6 +29,7 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
     categories: [],
     priority: 'Medium',
     applicable_rank: 'Recruit',
+    progress: {},
     guild_id: guildId
   });
 
@@ -138,7 +126,18 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
         throw new Error('Brief description is required');
       }
 
-      await onSave(formData);
+      let result: Objective;
+      if (objective?.id) {
+        // Update existing objective
+        result = await updateObjective(objective.id, formData);
+      } else {
+        // Create new objective
+        const createData = { ...formData };
+        delete (createData as any).id; // Remove id for create
+        result = await createObjective(createData as any);
+      }
+
+      onSuccess(result);
     } catch (err: any) {
       setError(err.message);
     } finally {

@@ -113,6 +113,8 @@ This file provides the **detailed entity definitions and data model** used in Sp
 - `user_actions`: VARCHAR[] (permissions like `view_guilds`, `manage_rbac`).
 - Special: `super_admin` is non-revocable, creator-only.
 
+Note: Guild owners automatically receive the super_admin access level. This level always has full permissions and must include any new user functions added in the future.
+
 **See also**: [Access Level Management](./project_flows.md#6-access-level-management), [Registration](./project_flows.md#1-registration).
 
 ---
