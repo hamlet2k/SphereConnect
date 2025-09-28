@@ -40,15 +40,6 @@ Sphere Connect is a **multitenant AI-powered app** for community organization an
 
 ---
 
-## 3. Personas
-- **User**: Any participant (solo, member, leader). Access depends on rank and overrides.
-- **System Administrator**: Oversees platform-level operations (approvals, billing).
-- **Guild Leader**: Pays for upgrades, manages members and guild features.
-- **Guild Member**: Uses leader-provided features.
-- **Solo Player**: Free tier with personal guild.
-
----
-
 ## 4. Architecture
 ### Central Backend
 - **Stack**: FastAPI (Python), PostgreSQL, containerized (AWS Lambda/RDS for scale or local PoC).
@@ -76,38 +67,82 @@ Sphere Connect is a **multitenant AI-powered app** for community organization an
 ---
 
 ## 5. Entities (Summary)
-- **Guilds**: Core organizational units; personal guilds undeletable.
+- **Guilds**: Core organizational units; personal guilds undeletable; non-personal guilds deletable only by creator.
 - **Users**: Registered participants with ranks, preferences, and multiple guild memberships.
 - **Invites & Requests**: Control entry into guilds via codes and approvals.
-- **AI Commander**: Default persona for immersive interactions.
-- **Squads**: Sub-groups for objectives and tasks.
+- **AI Commander**: AI persona for immersive interactions.
+- **Squads**: User groups; can be assigned to objectives and tasks.
 - **Ranks & Access Levels**: Define permissions, with a non-revocable `super_admin` for guild creators.
 - **Objectives & Tasks**: Hierarchical mission and sub-task tracking.
-- **Categories**: Grouping of objectives by outcomes (e.g., economy, military).
+- **Categories**: For grouping of objectives by outcomes (e.g., economy, military).
 
 (Detailed schemas are provided in [`project_data_structures.md`](./project_data_structures.md).)
 
 ---
 
-## 6. Features
+## 3. Commercials
 ### Revenue Model
-- **Free Tier**: Personal guilds, max 2 members per guild, up to 3 guilds per user.
-- **Paid Guild Plans**: Tiered member limits with Stripe integration (mock in MVP).
+- **Free Tier**: Personal guild, max 2 members per guild, up to 3 guilds per user (own + 2 joins).
+- **Paid Guild Plans**: Tiered member limits with Stripe integration. Unlocks unlimited joins.
+  - **Tier 1:** 10 guild members.
+  - **Tier 2:** 50 guild members, in-app donations.
+  - **Tier 3:** Unlimited guild members, in-app donations, AI analytics.
 
-### Authentication & Authorization
+### Customers
+- **Guild Leader**: Pays for upgrades, manages members and guild features.
+- **Guild Member**: Uses leader-provided features.
+- **Solo Player**: Free tier with personal guild.
+
+---
+
+## 6. Features
+
+### User Roles
+- **System Administrator**: Oversees platform-level operations (approvals, billing).
+- **Guild Admins**: Guild owner, Manage users, guilds, ranks, access.
+- **Users/Members**: Update profile, join/leave guilds, sign up for tasks.
+
+### Authentication
 - Login with username/email + password, MFA optional.
 - Voice PIN for Wingman-AI.
-- RBAC with ranks, access levels, overrides.
-- Personal guilds undeletable; non-personal guilds deletable only by creator.
-- **Access Control Strategy**:
-  - Deny-by-default: all actions require explicit grants via access levels.
-  - `super_admin` (granted to guild creators) is **non-revocable** and **always bypasses access checks**.
-  - Any new user functions must be automatically included in the `super_admin` role to ensure continuity of full control.
+- Auto-deactivation after failed attempts (configurable).
+- Auto-logoff after inactivity.
 
-### User Actions
-- **Admins**: Manage users, guilds, ranks, access.
-- **Members**: Update profile, join/leave guilds, sign up for tasks.
-- **System Admins**: Approvals and billing.
+### Authorization & Access Control Model
+
+- Hierarchical, flexible RBAC system:
+- Deny-by-default: all actions require explicit grants via access levels.
+  
+#### 1. User Actions (atomic permissions)
+- The most granular unit of access, mapped directly to functionality in the codebase.
+- Examples: `create_objective`, `delete_guild`, `view_tasks`.
+- All access control checks in the backend reference **user actions**.
+
+#### 2. Access Levels (bundles of actions)
+- Groupings of related user actions for easier management.
+- Customizable per guild — admins can mix and match actions into new access levels.
+- Example: `manage_guilds` might include `view_guilds`, `edit_guilds`, `delete_guilds`.
+
+#### 3. Ranks (organizational roles)
+- Containers of access levels.
+- Represent guild hierarchy (Recruit, NCO, Officer, CO).
+- Assigning a rank to a user grants them all access levels linked to that rank.
+
+#### 4. User Permissions = Rank + Overrides
+- A user inherits all access levels from their rank(s).
+- Overrides allow **direct assignment of access levels** to a user in addition to their rank.
+- Overrides are always at the **access level** layer, not raw user actions.
+- This enables flexibility: e.g. one NCO can be given Recruiting permissions without redefining the NCO rank.
+
+#### 5. Super Admin
+- Special non-revocable access level, automatically granted to guild creators.
+- Always includes **all current and future user actions**.
+- Always bypasses access checks.
+- Cannot be modified or deleted.
+
+#### 6. Defaults
+- System ships with sensible **default ranks** (Recruit, NCO, Officer, CO) and **default access levels** (grouped around major UI areas).
+- Guild admins may modify or create new ones to match their organizational needs.
 
 ---
 

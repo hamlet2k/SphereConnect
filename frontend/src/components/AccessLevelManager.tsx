@@ -18,7 +18,10 @@ const USER_ACTIONS = [
   'manage_objectives',
   'manage_rbac',
   'view_ranks',
-  'manage_ranks'
+  'manage_ranks',
+  'view_categories',
+  'create_category',
+  'manage_categories'
 ];
 
 function AccessLevelManager() {

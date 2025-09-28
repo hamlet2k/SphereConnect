@@ -16,8 +16,9 @@ For detailed data entities referenced here, see [`project_data_structures.md`](.
 4. [Objective & Task Management](#4-objective--task-management)
 5. [Invite Management](#5-invite-management)
 6. [Access Level Management](#6-access-level-management)
-7. [Notes](#notes)
-8. [Entities Referenced in These Flows](#entities-referenced-in-these-flows)
+7. [Category Management](#7-category-management)
+8. [Notes](#notes)
+9. [Entities Referenced in These Flows](#entities-referenced-in-these-flows)
 
 ---
 
@@ -178,6 +179,53 @@ sequenceDiagram
     D-->>B: Success/Failure
     B-->>W: Response
 ```
+
+---
+
+## 7. Category Management
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant W as Web PWA (CategoryForm.tsx)
+    participant B as Backend (/api/categories)
+    participant D as Database
+
+    U->>W: Create new category
+    W->>B: POST /api/categories {name, description, guild_id}
+    B->>D: Insert category linked to guild
+    D-->>B: Category.id
+    B-->>W: 201 {category_id}
+    W->>U: Show in categories list
+
+    U->>W: View categories
+    W->>B: GET /api/categories?guild_id
+    B->>D: Fetch all categories for guild
+    D-->>B: Category list
+    B-->>W: 200 {categories}
+    W->>U: Render table
+
+    U->>W: Edit category
+    W->>B: PUT /api/categories/{id}
+    B->>D: Update category
+    D-->>B: Success
+    B-->>W: 200 {category}
+
+    U->>W: Delete category
+    W->>B: DELETE /api/categories/{id}
+    B->>D: Remove or mark deleted
+    D-->>B: Success
+    B-->>W: 204 No Content
+    W->>U: Remove from UI
+```
+
+**Notes:**  
+- All routes are **guild-scoped** (`guild_id` required).  
+- Access control enforced via new user functions:  
+  - `view_categories`  
+  - `create_category`  
+  - `manage_categories`  
+- `super_admin` bypass applies automatically.  
+- For now, categories are basic CRUD; advanced filtering/usage comes when Objectives reference them.
 
 ---
 

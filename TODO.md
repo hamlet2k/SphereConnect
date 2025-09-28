@@ -36,11 +36,15 @@ Update freely as ideas emerge; keep it evolving.
 
 - **Webapp UI**  
   - [ ] React PWA baseline dashboard (P1)  
-  - [ ] CRUD forms for guilds, objectives, tasks (P2)  
+  - [ ] CRUD forms for guilds, objectives, tasks (P2)
+  - [ ] Extend Categories with filters and Objective linkage (post-skeleton)
 
 - **Data Model Enhancements**  
   - [ ] JSONB for objectives/tasks progress (P2)  
   - [ ] Categories for objectives (P2)  
+
+  **Backlog**
+  - [ ] Define complete list of user actions, group into default access levels, and map into default ranks once UX is designed.
 
 ---
 

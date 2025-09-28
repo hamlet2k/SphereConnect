@@ -127,6 +127,16 @@ class AICommanderUpdate(BaseModel):
     user_prompt: Optional[str] = None
     phonetic: Optional[str] = None
 
+# Category models
+class CategoryCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    guild_id: str
+
+class CategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
 # Helper functions
 def parse_metrics_from_text(text: str) -> Dict[str, Any]:
     """Parse metrics from voice command text"""
@@ -291,8 +301,40 @@ def check_admin_access(user: User, db: Session) -> bool:
 
 def check_objective_access(user: User, db: Session, action: str = "view") -> bool:
     """Check if user has objective access for their guild"""
-    # Check user access levels first (direct grants)
+    # Check for super_admin bypass - super_admin always has all permissions
     user_access_levels = db.query(UserAccess).filter(UserAccess.user_id == user.id).all()
+    for ua in user_access_levels:
+        access_level = db.query(AccessLevel).filter(AccessLevel.id == ua.access_level_id).first()
+        if access_level and access_level.name == 'super_admin':
+            return True
+
+    # Check user access levels first (direct grants)
+    for ua in user_access_levels:
+        access_level = db.query(AccessLevel).filter(AccessLevel.id == ua.access_level_id).first()
+        if access_level and action in access_level.user_actions:
+            return True
+
+    # Check rank-based access levels
+    if user.rank:
+        rank = db.query(Rank).filter(Rank.id == user.rank).first()
+        if rank:
+            for access_level_id in rank.access_levels:
+                access_level = db.query(AccessLevel).filter(AccessLevel.id == access_level_id).first()
+                if access_level and action in access_level.user_actions:
+                    return True
+
+    return False
+
+def check_category_access(user: User, db: Session, action: str = "view") -> bool:
+    """Check if user has category access for their guild"""
+    # Check for super_admin bypass - super_admin always has all permissions
+    user_access_levels = db.query(UserAccess).filter(UserAccess.user_id == user.id).all()
+    for ua in user_access_levels:
+        access_level = db.query(AccessLevel).filter(AccessLevel.id == ua.access_level_id).first()
+        if access_level and access_level.name == 'super_admin':
+            return True
+
+    # Check user access levels first (direct grants)
     for ua in user_access_levels:
         access_level = db.query(AccessLevel).filter(AccessLevel.id == ua.access_level_id).first()
         if access_level and action in access_level.user_actions:
@@ -609,7 +651,7 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
             id=uuid.uuid4(),
             guild_id=personal_guild_id,
             name='super_admin',
-            user_actions=['view_guilds', 'manage_guilds', 'view_users', 'manage_users', 'manage_user_access', 'manage_rbac', 'view_objectives', 'create_objective', 'manage_objectives', 'view_ranks', 'manage_ranks']
+            user_actions=['view_guilds', 'manage_guilds', 'view_users', 'manage_users', 'manage_user_access', 'manage_rbac', 'view_objectives', 'create_objective', 'manage_objectives', 'view_ranks', 'manage_ranks', 'view_categories', 'create_category', 'manage_categories']
         )
         db.add_all([access_view, access_manage, access_objectives, access_rbac, access_view_ranks, access_manage_ranks, access_super])
         db.commit()
@@ -1833,3 +1875,218 @@ async def update_ai_commander(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update AI Commander: {str(e)}"
         )
+
+# Category Endpoints
+@router.post("/categories")
+async def create_category(
+    category: CategoryCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new category"""
+    try:
+        # Check access control
+        if not check_category_access(current_user, db, "create_category"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Insufficient permissions to create categories"
+            )
+
+        # Verify user belongs to the guild
+        if str(current_user.guild_id) != category.guild_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: User does not belong to this guild"
+            )
+
+        cat_id = uuid.uuid4()
+        guild_uuid = uuid.UUID(category.guild_id)
+
+        new_category = ObjectiveCategory(
+            id=cat_id,
+            guild_id=guild_uuid,
+            name=category.name,
+            description=category.description
+        )
+
+        db.add(new_category)
+        db.commit()
+
+        return {
+            "id": str(cat_id),
+            "message": f"Category '{category.name}' created successfully",
+            "tts_response": f"Category created: {category.name}"
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to create category: {str(e)}")
+
+@router.get("/categories/{category_id}")
+async def get_category(
+    category_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get category details"""
+    try:
+        # Check access control
+        if not check_category_access(current_user, db, "view_categories"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Insufficient permissions to view categories"
+            )
+
+        cat_uuid = uuid.UUID(category_id)
+        category = db.query(ObjectiveCategory).filter(ObjectiveCategory.id == cat_uuid).first()
+
+        if not category:
+            raise HTTPException(status_code=404, detail="Category not found")
+
+        # Verify user belongs to the guild
+        if str(current_user.guild_id) != str(category.guild_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: User does not belong to this guild"
+            )
+
+        return {
+            "id": str(category.id),
+            "name": category.name,
+            "description": category.description,
+            "guild_id": str(category.guild_id)
+        }
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid category ID format")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve category: {str(e)}")
+
+@router.put("/categories/{category_id}")
+async def update_category(
+    category_id: str,
+    update: CategoryUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update category details"""
+    try:
+        # Check access control
+        if not check_category_access(current_user, db, "manage_categories"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Insufficient permissions to update categories"
+            )
+
+        cat_uuid = uuid.UUID(category_id)
+        category = db.query(ObjectiveCategory).filter(ObjectiveCategory.id == cat_uuid).first()
+
+        if not category:
+            raise HTTPException(status_code=404, detail="Category not found")
+
+        # Verify user belongs to the guild
+        if str(current_user.guild_id) != str(category.guild_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: User does not belong to this guild"
+            )
+
+        # Update fields
+        if update.name is not None:
+            category.name = update.name
+        if update.description is not None:
+            category.description = update.description
+
+        db.commit()
+
+        return {
+            "message": "Category updated successfully",
+            "tts_response": "Category updated"
+        }
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid category ID format")
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update category: {str(e)}")
+
+@router.delete("/categories/{category_id}")
+async def delete_category(
+    category_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a category"""
+    try:
+        # Check access control
+        if not check_category_access(current_user, db, "manage_categories"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Insufficient permissions to delete categories"
+            )
+
+        cat_uuid = uuid.UUID(category_id)
+        category = db.query(ObjectiveCategory).filter(ObjectiveCategory.id == cat_uuid).first()
+
+        if not category:
+            raise HTTPException(status_code=404, detail="Category not found")
+
+        # Verify user belongs to the guild
+        if str(current_user.guild_id) != str(category.guild_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: User does not belong to this guild"
+            )
+
+        db.delete(category)
+        db.commit()
+
+        return {
+            "message": "Category deleted successfully",
+            "tts_response": "Category deleted"
+        }
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid category ID format")
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete category: {str(e)}")
+
+@router.get("/categories")
+async def get_categories(
+    guild_id: str = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get categories for a guild"""
+    try:
+        # Check access control
+        if not check_category_access(current_user, db, "view_categories"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Insufficient permissions to view categories"
+            )
+
+        # guild_id is required for multitenancy
+        if not guild_id:
+            raise HTTPException(status_code=400, detail="guild_id parameter required")
+
+        # Verify user belongs to the guild
+        if str(current_user.guild_id) != guild_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: User does not belong to this guild"
+            )
+
+        guild_uuid = uuid.UUID(guild_id)
+        categories = db.query(ObjectiveCategory).filter(ObjectiveCategory.guild_id == guild_uuid).all()
+
+        return [
+            {
+                "id": str(cat.id),
+                "name": cat.name,
+                "description": cat.description,
+                "guild_id": str(cat.guild_id)
+            }
+            for cat in categories
+        ]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid guild ID format")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve categories: {str(e)}")

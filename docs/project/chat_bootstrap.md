@@ -40,7 +40,7 @@ This file defines how ChatGPT should behave when assisting with the Sphere Conne
   - Always enforce deny-by-default and explicit grants.
   - Ensure new features add corresponding user functions.
   - Validate that `super_admin` is updated with any new functions and bypasses access checks in logic.
-
+  - Keep frontend Access Level Manager (`frontend/src/components/AccessLevelManager.tsx`) updated so UI reflects new user functions and super_admin override.
 
 
 

@@ -13,6 +13,8 @@ import UsersManager from '../components/UsersManager';
 import ObjectivesList from '../components/ObjectivesList';
 import ObjectiveDetail from '../components/ObjectiveDetail';
 import ObjectiveForm from '../components/ObjectiveForm';
+import CategoriesList from '../components/CategoriesList';
+import CategoryForm from '../components/CategoryForm';
 import { ObjectivesAPIProvider, useObjectivesAPI, Objective } from '../contexts/ObjectivesAPI';
 
 type ActiveTab = 'users' | 'ranks' | 'objectives' | 'tasks' | 'squads' | 'access-levels' | 'categories' | 'guilds' | 'invites' | 'guild-requests';
@@ -90,6 +92,13 @@ function AdminDashboardContent() {
   const [objectiveLoading, setObjectiveLoading] = useState(false);
   const [objectiveMessage, setObjectiveMessage] = useState('');
 
+  // Category modal states
+  const [categoryFormOpen, setCategoryFormOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<any | null>(null);
+  const [categoryLoading, setCategoryLoading] = useState(false);
+  const [categoryMessage, setCategoryMessage] = useState('');
+  const [categoryRefreshTrigger, setCategoryRefreshTrigger] = useState(0);
+
   const token = localStorage.getItem('token');
   const user = JSON.parse(localStorage.getItem('user') || '{}');
 
@@ -119,6 +128,11 @@ function AdminDashboardContent() {
     loadGuilds();
   }, [activeTab, token, navigate]);
 
+  // Clear message when switching tabs
+  useEffect(() => {
+    setMessage('');
+  }, [activeTab]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -146,6 +160,9 @@ function AdminDashboardContent() {
             const objectivesData = await objectivesResponse.json();
             setObjectives(objectivesData);
           }
+          break;
+        case 'categories':
+          // Categories are loaded by the CategoriesList component itself
           break;
         case 'tasks':
           const tasksResponse = await fetch(`http://localhost:8000/api/admin/tasks?guild_id=${currentGuildId}`, { headers });
@@ -409,6 +426,47 @@ function AdminDashboardContent() {
     loadData();
   };
 
+  // Category handlers
+  const handleEditCategory = (category: any) => {
+    setSelectedCategory(category);
+    setCategoryFormOpen(true);
+  };
+
+  const handleCreateCategory = () => {
+    setSelectedCategory(null);
+    setCategoryFormOpen(true);
+  };
+
+  const handleDeleteCategory = async (categoryId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:8000/api/categories/${categoryId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        setMessage('Category deleted successfully');
+        // Trigger refresh of categories list
+        setCategoryRefreshTrigger(prev => prev + 1);
+      } else {
+        const error = await response.json();
+        setMessage(error.detail || 'Failed to delete category');
+      }
+    } catch (error: any) {
+      setMessage(error.message || 'Error deleting category');
+    }
+  };
+
+  const handleCategoryFormSuccess = (category: any) => {
+    setCategoryFormOpen(false);
+    const wasCreate = selectedCategory === null;
+    setSelectedCategory(null);
+    setMessage(`Category ${wasCreate ? 'created' : 'updated'} successfully`);
+    // Trigger refresh of categories list
+    setCategoryRefreshTrigger(prev => prev + 1);
+  };
+
   // Access control helpers
   const checkObjectivePermissions = () => {
     // For now, assume super_admin has all permissions
@@ -437,6 +495,28 @@ function AdminDashboardContent() {
         canEdit={permissions.canEdit}
         canDelete={permissions.canDelete}
         onCreateObjective={handleCreateObjective}
+      />
+    );
+  };
+
+  const renderCategoriesTab = () => {
+    // For now, assume super_admin has all permissions
+    const permissions = {
+      canCreate: true,
+      canEdit: true,
+      canDelete: true,
+      canView: true
+    };
+
+    return (
+      <CategoriesList
+        onEditCategory={handleEditCategory}
+        onDeleteCategory={handleDeleteCategory}
+        canCreate={permissions.canCreate}
+        canEdit={permissions.canEdit}
+        canDelete={permissions.canDelete}
+        onCreateCategory={handleCreateCategory}
+        refreshTrigger={categoryRefreshTrigger}
       />
     );
   };
@@ -518,6 +598,8 @@ function AdminDashboardContent() {
         return renderRanksTab();
       case 'objectives':
         return renderObjectivesTab();
+      case 'categories':
+        return renderCategoriesTab();
       case 'tasks':
         return renderTasksTab();
       case 'guilds':
@@ -1093,6 +1175,19 @@ function AdminDashboardContent() {
             setSelectedObjective(null);
           }}
           isOpen={objectiveFormOpen}
+        />
+      )}
+
+      {categoryFormOpen && (
+        <CategoryForm
+          category={selectedCategory || undefined}
+          guildId={currentGuildId || ''}
+          onSuccess={handleCategoryFormSuccess}
+          onCancel={() => {
+            setCategoryFormOpen(false);
+            setSelectedCategory(null);
+          }}
+          isOpen={categoryFormOpen}
         />
       )}
 
