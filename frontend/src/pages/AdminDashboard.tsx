@@ -54,6 +54,14 @@ interface Guild {
 }
 
 function AdminDashboard() {
+  return (
+    <ObjectivesAPIProvider>
+      <AdminDashboardContent />
+    </ObjectivesAPIProvider>
+  );
+}
+
+function AdminDashboardContent() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('users');
   const [users, setUsers] = useState<User[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
@@ -64,6 +72,7 @@ function AdminDashboard() {
   const [message, setMessage] = useState('');
   const navigate = useNavigate();
   const { currentGuildId, guildName, setCurrentGuild } = useGuild();
+  const { deleteObjective } = useObjectivesAPI();
 
   // Modal states
   const [inviteFormOpen, setInviteFormOpen] = useState(false);
@@ -383,7 +392,6 @@ function AdminDashboard() {
 
   const handleDeleteObjective = async (objectiveId: string) => {
     try {
-      const { deleteObjective } = useObjectivesAPI();
       await deleteObjective(objectiveId);
       setMessage('Objective deleted successfully');
       // Reload objectives
@@ -421,17 +429,15 @@ function AdminDashboard() {
     const permissions = checkObjectivePermissions();
 
     return (
-      <ObjectivesAPIProvider>
-        <ObjectivesList
-          onViewObjective={handleViewObjective}
-          onEditObjective={handleEditObjective}
-          onDeleteObjective={handleDeleteObjective}
-          canCreate={permissions.canCreate}
-          canEdit={permissions.canEdit}
-          canDelete={permissions.canDelete}
-          onCreateObjective={handleCreateObjective}
-        />
-      </ObjectivesAPIProvider>
+      <ObjectivesList
+        onViewObjective={handleViewObjective}
+        onEditObjective={handleEditObjective}
+        onDeleteObjective={handleDeleteObjective}
+        canCreate={permissions.canCreate}
+        canEdit={permissions.canEdit}
+        canDelete={permissions.canDelete}
+        onCreateObjective={handleCreateObjective}
+      />
     );
   };
 
@@ -1065,32 +1071,30 @@ function AdminDashboard() {
       />
 
       {/* Objective Modals */}
-      <ObjectivesAPIProvider>
-        {objectiveDetailOpen && selectedObjective && (
-          <ObjectiveDetail
-            objectiveId={selectedObjective.id}
-            onClose={() => {
-              setObjectiveDetailOpen(false);
-              setSelectedObjective(null);
-            }}
-            onEdit={handleEditObjective}
-            canEdit={checkObjectivePermissions().canEdit}
-          />
-        )}
+      {objectiveDetailOpen && selectedObjective && (
+        <ObjectiveDetail
+          objectiveId={selectedObjective.id}
+          onClose={() => {
+            setObjectiveDetailOpen(false);
+            setSelectedObjective(null);
+          }}
+          onEdit={handleEditObjective}
+          canEdit={checkObjectivePermissions().canEdit}
+        />
+      )}
 
-        {objectiveFormOpen && (
-          <ObjectiveForm
-            objective={selectedObjective || undefined}
-            guildId={currentGuildId || ''}
-            onSuccess={handleObjectiveFormSuccess}
-            onCancel={() => {
-              setObjectiveFormOpen(false);
-              setSelectedObjective(null);
-            }}
-            isOpen={objectiveFormOpen}
-          />
-        )}
-      </ObjectivesAPIProvider>
+      {objectiveFormOpen && (
+        <ObjectiveForm
+          objective={selectedObjective || undefined}
+          guildId={currentGuildId || ''}
+          onSuccess={handleObjectiveFormSuccess}
+          onCancel={() => {
+            setObjectiveFormOpen(false);
+            setSelectedObjective(null);
+          }}
+          isOpen={objectiveFormOpen}
+        />
+      )}
 
       <style>{`
         @keyframes spin {

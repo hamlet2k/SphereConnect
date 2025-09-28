@@ -178,5 +178,5 @@ Deliverables:
 
 - **Copilot (inline/Chat)**: include the target file path(s) and a succinct “apply this patch” block; keep each patch small.
 - **KiloCode**: enumerate all files to touch, provide a checklist, then supply diffs per file.
-- **Codex**: ask for a plan first; then request the diffs; finally ask for tests and migration notes.
+- **Codex**: ask for a plan first; then request the diffs; finally ask for tests and migration notes. Only edit files using the standard file edit tool, not with commands
 
