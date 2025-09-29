@@ -33,6 +33,10 @@ const CategoriesList: React.FC<CategoriesListProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Filter states
+  const [nameFilter, setNameFilter] = useState('');
+  const [descriptionFilter, setDescriptionFilter] = useState('');
+
   const loadCategories = useCallback(async () => {
     if (!currentGuildId) return;
 
@@ -41,7 +45,11 @@ const CategoriesList: React.FC<CategoriesListProps> = ({
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:8000/api/categories?guild_id=${currentGuildId}`, {
+      const params = new URLSearchParams({ guild_id: currentGuildId });
+      if (nameFilter) params.append('name', nameFilter);
+      if (descriptionFilter) params.append('description', descriptionFilter);
+
+      const response = await fetch(`http://localhost:8000/api/categories?${params}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -56,7 +64,7 @@ const CategoriesList: React.FC<CategoriesListProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [currentGuildId]);
+  }, [currentGuildId, nameFilter, descriptionFilter]);
 
   useEffect(() => {
     loadCategories();
@@ -129,6 +137,64 @@ const CategoriesList: React.FC<CategoriesListProps> = ({
             Create Category
           </button>
         )}
+      </div>
+
+      {/* Filters */}
+      <div style={{
+        display: 'flex',
+        gap: theme.spacing[4],
+        marginBottom: theme.spacing[6],
+        flexWrap: 'wrap'
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing[1] }}>
+          <label style={{
+            fontSize: theme.typography.fontSize.sm,
+            fontWeight: theme.typography.fontWeight.medium,
+            color: theme.colors.textSecondary
+          }}>
+            Filter by Name
+          </label>
+          <input
+            type="text"
+            value={nameFilter}
+            onChange={(e) => setNameFilter(e.target.value)}
+            placeholder="Search by name"
+            style={{
+              padding: `${theme.spacing[2]} ${theme.spacing[3]}`,
+              backgroundColor: theme.colors.background,
+              border: `2px solid ${theme.colors.border}`,
+              borderRadius: theme.borderRadius.lg,
+              color: theme.colors.text,
+              fontSize: theme.typography.fontSize.sm,
+              outline: 'none'
+            }}
+          />
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing[1] }}>
+          <label style={{
+            fontSize: theme.typography.fontSize.sm,
+            fontWeight: theme.typography.fontWeight.medium,
+            color: theme.colors.textSecondary
+          }}>
+            Filter by Description
+          </label>
+          <input
+            type="text"
+            value={descriptionFilter}
+            onChange={(e) => setDescriptionFilter(e.target.value)}
+            placeholder="Search by description"
+            style={{
+              padding: `${theme.spacing[2]} ${theme.spacing[3]}`,
+              backgroundColor: theme.colors.background,
+              border: `2px solid ${theme.colors.border}`,
+              borderRadius: theme.borderRadius.lg,
+              color: theme.colors.text,
+              fontSize: theme.typography.fontSize.sm,
+              outline: 'none'
+            }}
+          />
+        </div>
       </div>
 
       {error && (

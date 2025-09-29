@@ -23,7 +23,7 @@ export interface Objective {
 
 interface ObjectivesAPIContextType {
   createObjective: (objective: Objective) => Promise<Objective>;
-  getObjectives: (guildId: string, filters?: { status?: string; category?: string }) => Promise<Objective[]>;
+  getObjectives: (guildId: string, filters?: { status?: string; category_id?: string }) => Promise<Objective[]>;
   getObjective: (id: string) => Promise<Objective>;
   updateObjective: (id: string, objective: Partial<Objective>) => Promise<Objective>;
   deleteObjective: (id: string) => Promise<void>;
@@ -67,10 +67,10 @@ export const ObjectivesAPIProvider: React.FC<ObjectivesAPIProviderProps> = ({ ch
     return response.json();
   };
 
-  const getObjectives = async (guildId: string, filters?: { status?: string; category?: string }): Promise<Objective[]> => {
+  const getObjectives = async (guildId: string, filters?: { status?: string; category_id?: string }): Promise<Objective[]> => {
     const params = new URLSearchParams({ guild_id: guildId });
     if (filters?.status) params.append('status', filters.status);
-    if (filters?.category) params.append('category', filters.category);
+    if (filters?.category_id) params.append('category_id', filters.category_id);
 
     const response = await fetch(`${baseURL}/api/objectives?${params}`, {
       headers: getHeaders()

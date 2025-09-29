@@ -37,14 +37,17 @@ Update freely as ideas emerge; keep it evolving.
 - **Webapp UI**  
   - [ ] React PWA baseline dashboard (P1)  
   - [ ] CRUD forms for guilds, objectives, tasks (P2)
-  - [ ] Extend Categories with filters and Objective linkage (post-skeleton)
+  - [x] Extend Categories with filters and Objective linkage (post-skeleton)
+  - [ ] Extend Linkage between Objectives and Ranks
 
 - **Data Model Enhancements**  
   - [ ] JSONB for objectives/tasks progress (P2)  
-  - [ ] Categories for objectives (P2)  
+  - [x] Categories for objectives (P2)  
 
   **Backlog**
   - [ ] Define complete list of user actions, group into default access levels, and map into default ranks once UX is designed.
+  - [ ] Determine how to report progress towards an objective
+  - [ ] Define Objective statuses and add to the CRUD (configurable?)
 
 ---
 
@@ -65,4 +68,5 @@ Update freely as ideas emerge; keep it evolving.
 - [ ] Advanced AI analytics (post-MVP).  
 - [ ] Farming co-op templates (non-gaming extension).  
 - [ ] Mobile app (post-MVP).  
+- [ ] Integration with starcitizen logs to identify server and shard the user has logged in
 

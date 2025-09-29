@@ -171,7 +171,7 @@ Deliverables:
 2) Brief rationale (what & why).
 3) Migration commands (if any) and run notes.
 4) A short entry to append to docs/project/ai_output_history.md:
-   "YYYY-MM-DD – <task> – summary & follow-ups".
+   "YYYY-MM-DD – <task> | summary & follow-ups".
 ```
 
 ### Tool‑Specific Prompt Hints

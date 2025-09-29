@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useObjectivesAPI, Objective, ObjectiveDescription } from '../contexts/ObjectivesAPI';
 import { theme } from '../theme';
 
@@ -34,17 +34,34 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
     guild_id: guildId
   });
 
-  const [newCategory, setNewCategory] = useState('');
+  const [availableCategories, setAvailableCategories] = useState<{id: string, name: string, description?: string}[]>([]);
   const [newMetricKey, setNewMetricKey] = useState('');
   const [newMetricValue, setNewMetricValue] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const loadCategories = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:8000/api/categories?guild_id=${guildId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAvailableCategories(data);
+      }
+    } catch (err: any) {
+      console.error('Error loading categories:', err);
+    }
+  }, [guildId]);
+
   useEffect(() => {
     if (objective) {
       setFormData(objective);
     }
-  }, [objective]);
+    loadCategories();
+  }, [objective, loadCategories]);
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({
@@ -63,20 +80,12 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
     }));
   };
 
-  const handleAddCategory = () => {
-    if (newCategory.trim() && !formData.categories.includes(newCategory.trim())) {
-      setFormData(prev => ({
-        ...prev,
-        categories: [...prev.categories, newCategory.trim()]
-      }));
-      setNewCategory('');
-    }
-  };
-
-  const handleRemoveCategory = (category: string) => {
+  const handleCategoryChange = (categoryId: string, checked: boolean) => {
     setFormData(prev => ({
       ...prev,
-      categories: prev.categories.filter(c => c !== category)
+      categories: checked
+        ? [...prev.categories, categoryId]
+        : prev.categories.filter(id => id !== categoryId)
     }));
   };
 
@@ -424,75 +433,48 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
           </h4>
 
           <div style={{ marginBottom: theme.spacing[4] }}>
-            <div style={{ display: 'flex', gap: theme.spacing[2], marginBottom: theme.spacing[2] }}>
-              <input
-                type="text"
-                value={newCategory}
-                onChange={(e) => setNewCategory(e.target.value)}
-                placeholder="Add category"
-                style={{
-                  flex: 1,
-                  padding: `${theme.spacing[2]} ${theme.spacing[3]}`,
-                  border: `2px solid ${theme.colors.border}`,
-                  borderRadius: theme.borderRadius.lg,
-                  fontSize: theme.typography.fontSize.base,
-                  backgroundColor: theme.colors.background,
-                  color: theme.colors.text,
-                  outline: 'none'
-                }}
-              />
-              <button
-                type="button"
-                onClick={handleAddCategory}
-                style={{
-                  padding: `${theme.spacing[2]} ${theme.spacing[4]}`,
-                  backgroundColor: theme.colors.primary,
-                  color: theme.colors.background,
-                  border: 'none',
-                  borderRadius: theme.borderRadius.lg,
-                  cursor: 'pointer',
-                  fontSize: theme.typography.fontSize.sm,
-                  fontWeight: theme.typography.fontWeight.semibold
-                }}
-              >
-                Add
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: theme.spacing[2] }}>
-              {formData.categories.map(category => (
-                <span
-                  key={category}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing[2] }}>
+              {availableCategories.map(category => (
+                <label
+                  key={category.id}
                   style={{
-                    display: 'inline-flex',
+                    display: 'flex',
                     alignItems: 'center',
-                    gap: theme.spacing[1],
-                    padding: `${theme.spacing[1]} ${theme.spacing[3]}`,
+                    gap: theme.spacing[2],
+                    padding: theme.spacing[2],
                     backgroundColor: theme.colors.surfaceHover,
-                    color: theme.colors.text,
-                    borderRadius: theme.borderRadius.full,
-                    fontSize: theme.typography.fontSize.sm,
-                    fontWeight: theme.typography.fontWeight.medium
+                    borderRadius: theme.borderRadius.lg,
+                    cursor: 'pointer',
+                    border: `1px solid ${theme.colors.border}`
                   }}
                 >
-                  {category}
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveCategory(category)}
+                  <input
+                    type="checkbox"
+                    checked={formData.categories.includes(category.id)}
+                    onChange={(e) => handleCategoryChange(category.id, e.target.checked)}
                     style={{
-                      background: 'none',
-                      border: 'none',
-                      color: theme.colors.textSecondary,
-                      cursor: 'pointer',
-                      fontSize: theme.typography.fontSize.base,
-                      lineHeight: 1,
-                      padding: 0,
-                      marginLeft: theme.spacing[1]
+                      width: '16px',
+                      height: '16px',
+                      cursor: 'pointer'
                     }}
-                  >
-                    ×
-                  </button>
-                </span>
+                  />
+                  <span style={{
+                    color: theme.colors.text,
+                    fontSize: theme.typography.fontSize.sm,
+                    fontWeight: theme.typography.fontWeight.medium
+                  }}>
+                    {category.name}
+                    {category.description && (
+                      <span style={{
+                        color: theme.colors.textSecondary,
+                        fontWeight: theme.typography.fontWeight.normal,
+                        marginLeft: theme.spacing[2]
+                      }}>
+                        - {category.description}
+                      </span>
+                    )}
+                  </span>
+                </label>
               ))}
             </div>
           </div>

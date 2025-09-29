@@ -1225,13 +1225,23 @@ async def create_objective(
 
         # Link categories via junction table
         if objective.categories:
-            for category_name in objective.categories:
-                category = db.query(ObjectiveCategory).filter(
-                    ObjectiveCategory.guild_id == guild_uuid,
-                    ObjectiveCategory.name == category_name
-                ).first()
-                if category:
-                    new_objective.categories.append(category)
+            for category_id in objective.categories:
+                try:
+                    category_uuid = uuid.UUID(category_id)
+                    category = db.query(ObjectiveCategory).filter(
+                        ObjectiveCategory.id == category_uuid,
+                        ObjectiveCategory.guild_id == guild_uuid
+                    ).first()
+                    if category:
+                        new_objective.categories.append(category)
+                except ValueError:
+                    # If it's not a valid UUID, try treating it as a name (backward compatibility)
+                    category = db.query(ObjectiveCategory).filter(
+                        ObjectiveCategory.guild_id == guild_uuid,
+                        ObjectiveCategory.name == category_id
+                    ).first()
+                    if category:
+                        new_objective.categories.append(category)
 
         db.add(new_objective)
         db.commit()
@@ -1280,7 +1290,7 @@ async def get_objective(
             "id": str(objective.id),
             "name": objective.name,
             "description": objective.description,
-            "categories": [cat.name for cat in objective.categories],
+            "categories": [str(cat.id) for cat in objective.categories],
             "priority": objective.priority,
             "progress": objective.progress,
             "tasks": objective.tasks,
@@ -1338,13 +1348,23 @@ async def update_objective(
             # Clear existing categories and add new ones
             objective.categories.clear()
             guild_uuid = objective.guild_id
-            for category_name in update.categories:
-                category = db.query(ObjectiveCategory).filter(
-                    ObjectiveCategory.guild_id == guild_uuid,
-                    ObjectiveCategory.name == category_name
-                ).first()
-                if category:
-                    objective.categories.append(category)
+            for category_id in update.categories:
+                try:
+                    category_uuid = uuid.UUID(category_id)
+                    category = db.query(ObjectiveCategory).filter(
+                        ObjectiveCategory.id == category_uuid,
+                        ObjectiveCategory.guild_id == guild_uuid
+                    ).first()
+                    if category:
+                        objective.categories.append(category)
+                except ValueError:
+                    # If it's not a valid UUID, try treating it as a name (backward compatibility)
+                    category = db.query(ObjectiveCategory).filter(
+                        ObjectiveCategory.guild_id == guild_uuid,
+                        ObjectiveCategory.name == category_id
+                    ).first()
+                    if category:
+                        objective.categories.append(category)
 
         if update.priority is not None:
             objective.priority = update.priority
@@ -1570,6 +1590,7 @@ async def get_objectives(
     guild_id: str = None,
     status: str = None,
     category: str = None,
+    category_id: str = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -1599,9 +1620,14 @@ async def get_objectives(
             Objective.is_deleted == False
         )
 
-        # Filter by category if provided (join with categories)
+        # Filter by category name if provided (join with categories)
         if category:
             query = query.join(Objective.categories).filter(ObjectiveCategory.name == category)
+
+        # Filter by category_id if provided (join with categories)
+        if category_id:
+            category_uuid = uuid.UUID(category_id)
+            query = query.join(Objective.categories).filter(ObjectiveCategory.id == category_uuid)
 
         objectives = query.all()
 
@@ -1619,7 +1645,7 @@ async def get_objectives(
                 "id": str(obj.id),
                 "name": obj.name,
                 "description": obj.description,
-                "categories": [cat.name for cat in obj.categories],
+                "categories": [str(cat.id) for cat in obj.categories],
                 "priority": obj.priority,
                 "progress": obj.progress,
                 "guild_id": str(obj.guild_id),
@@ -1650,7 +1676,7 @@ async def get_recent_objectives(guild_id: str, limit: int = 5, db: Session = Dep
                 "id": str(obj.id),
                 "name": obj.name,
                 "description": obj.description,
-                "categories": obj.categories,
+                "categories": [str(cat.id) for cat in obj.categories],
                 "priority": obj.priority,
                 "guild_id": str(obj.guild_id)
             }
@@ -2013,7 +2039,7 @@ async def delete_category(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Delete a category"""
+    """Delete a category and unlink it from all objectives"""
     try:
         # Check access control
         if not check_category_access(current_user, db, "manage_categories"):
@@ -2035,6 +2061,12 @@ async def delete_category(
                 detail="Access denied: User does not belong to this guild"
             )
 
+        # Unlink category from all objectives (clear relationships)
+        objectives_with_category = db.query(Objective).join(Objective.categories).filter(ObjectiveCategory.id == cat_uuid).all()
+        for objective in objectives_with_category:
+            objective.categories.remove(category)
+
+        # Delete the category
         db.delete(category)
         db.commit()
 
@@ -2051,10 +2083,12 @@ async def delete_category(
 @router.get("/categories")
 async def get_categories(
     guild_id: str = None,
+    name: str = None,
+    description: str = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get categories for a guild"""
+    """Get categories for a guild with optional filtering"""
     try:
         # Check access control
         if not check_category_access(current_user, db, "view_categories"):
@@ -2075,7 +2109,15 @@ async def get_categories(
             )
 
         guild_uuid = uuid.UUID(guild_id)
-        categories = db.query(ObjectiveCategory).filter(ObjectiveCategory.guild_id == guild_uuid).all()
+        query = db.query(ObjectiveCategory).filter(ObjectiveCategory.guild_id == guild_uuid)
+
+        # Apply filters
+        if name:
+            query = query.filter(ObjectiveCategory.name.ilike(f"%{name}%"))
+        if description:
+            query = query.filter(ObjectiveCategory.description.ilike(f"%{description}%"))
+
+        categories = query.all()
 
         return [
             {

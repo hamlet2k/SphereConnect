@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useObjectivesAPI, Objective } from '../contexts/ObjectivesAPI';
+import { useGuild } from '../contexts/GuildContext';
 import { theme } from '../theme';
 
 interface Task {
@@ -26,10 +27,12 @@ const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
   canEdit
 }) => {
   const { getObjective } = useObjectivesAPI();
+  const { currentGuildId } = useGuild();
   const [objective, setObjective] = useState<Objective | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [categoryLookup, setCategoryLookup] = useState<{ [id: string]: string }>({});
 
   useEffect(() => {
     loadObjective();
@@ -50,6 +53,35 @@ const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      const guildId = objective?.guild_id || currentGuildId;
+      if (!guildId) {
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`http://localhost:8000/api/categories?guild_id=${guildId}`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
+        });
+
+        if (response?.ok) {
+          const data = await response.json();
+          const lookup: { [id: string]: string } = {};
+          data.forEach((category: { id: string; name: string }) => {
+            lookup[category.id] = category.name;
+          });
+          setCategoryLookup(lookup);
+        }
+      } catch (categoryError) {
+        console.error('Error loading categories:', categoryError);
+      }
+    };
+
+    loadCategories();
+  }, [objective?.guild_id, currentGuildId]);
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -299,9 +331,31 @@ const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
               Categories
             </h4>
             <div style={{ display: 'flex', gap: theme.spacing[2], flexWrap: 'wrap' }}>
-              {objective.categories.map(category => (
+              {objective.categories.map(category => {
+                const categoryLabel = (() => {
+                  if (typeof category === 'string') {
+                    return categoryLookup[category] || category;
+                  }
+
+                  if (category && typeof category === 'object') {
+                    const categoryId = (category as { id?: string }).id;
+                    const categoryName = (category as { name?: string }).name;
+                    if (categoryName) {
+                      return categoryName;
+                    }
+                    if (categoryId) {
+                      return categoryLookup[categoryId] || categoryId;
+                    }
+                  }
+
+                  return String(category);
+                })();
+
+                const key = typeof category === 'string' ? category : (category as { id?: string }).id || categoryLabel;
+
+                return (
                 <span
-                  key={category}
+                  key={key}
                   style={{
                     padding: `${theme.spacing[1]} ${theme.spacing[3]}`,
                     backgroundColor: theme.colors.surfaceHover,
@@ -311,9 +365,10 @@ const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
                     fontWeight: theme.typography.fontWeight.medium
                   }}
                 >
-                  {category}
+                  {categoryLabel}
                 </span>
-              ))}
+              );
+              })}
             </div>
           </div>
         )}

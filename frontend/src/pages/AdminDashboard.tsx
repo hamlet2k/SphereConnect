@@ -419,9 +419,10 @@ function AdminDashboardContent() {
   };
 
   const handleObjectiveFormSuccess = (objective: Objective) => {
+    const wasEditing = Boolean(selectedObjective);
     setObjectiveFormOpen(false);
     setSelectedObjective(null);
-    setMessage(`Objective ${objective.id ? 'updated' : 'created'} successfully`);
+    setMessage(`Objective ${wasEditing ? 'updated' : 'created'} successfully`);
     // Reload objectives
     loadData();
   };

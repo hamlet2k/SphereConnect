@@ -142,6 +142,11 @@ sequenceDiagram
     B-->>W: 201 {objective_id}
     W->>U: Show in dashboard
 ```
+**Notes:**
+- Objective CRUD now returns categories as IDs; frontend resolves them to names.
+- Editing objectives pre-checks assigned categories in the form using IDs.
+- Category deletion unlinks categories from objectives without removing objectives.
+
 
 ---
 
@@ -225,7 +230,11 @@ sequenceDiagram
   - `create_category`  
   - `manage_categories`  
 - `super_admin` bypass applies automatically.  
-- For now, categories are basic CRUD; advanced filtering/usage comes when Objectives reference them.
+- Categories can be filtered by name/description.
+- Objectives filter by `category_id`.
+- Deleting a category only unlinks it from objectives.
+
+
 
 ---
 

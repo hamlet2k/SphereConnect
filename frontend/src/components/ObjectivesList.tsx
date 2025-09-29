@@ -28,10 +28,12 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
   const [objectives, setObjectives] = useState<Objective[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [categories, setCategories] = useState<{[id: string]: string}>({});
+  const [categoryOptions, setCategoryOptions] = useState<{id: string, name: string}[]>([]);
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('');
+  const [categoryIdFilter, setCategoryIdFilter] = useState('');
 
   const loadObjectives = useCallback(async () => {
     if (!currentGuildId) return;
@@ -40,9 +42,9 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
     setError('');
 
     try {
-      const filters: { status?: string; category?: string } = {};
+      const filters: { status?: string; category_id?: string } = {};
       if (statusFilter) filters.status = statusFilter;
-      if (categoryFilter) filters.category = categoryFilter;
+      if (categoryIdFilter) filters.category_id = categoryIdFilter;
 
       const data = await getObjectives(currentGuildId, filters);
       setObjectives(data);
@@ -51,11 +53,36 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [currentGuildId, getObjectives, statusFilter, categoryFilter]);
+  }, [currentGuildId, getObjectives, statusFilter, categoryIdFilter]);
+
+  const loadCategories = useCallback(async () => {
+    if (!currentGuildId) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:8000/api/categories?guild_id=${currentGuildId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Create lookup object for displaying names
+        const lookup: {[id: string]: string} = {};
+        data.forEach((cat: {id: string, name: string}) => {
+          lookup[cat.id] = cat.name;
+        });
+        setCategories(lookup);
+        setCategoryOptions(data);
+      }
+    } catch (err: any) {
+      console.error('Error loading categories:', err);
+    }
+  }, [currentGuildId]);
 
   useEffect(() => {
     loadObjectives();
-  }, [loadObjectives]);
+    loadCategories();
+  }, [loadObjectives, loadCategories]);
 
   const handleDelete = async (objectiveId: string) => {
     if (window.confirm('Are you sure you want to delete this objective? This action cannot be undone.')) {
@@ -87,6 +114,9 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
       default: return theme.colors.textSecondary;
     }
   };
+
+  const resolveCategoryNames = (ids: string[]) =>
+    ids.map(id => categories[id] || id);
 
   return (
     <div style={{
@@ -185,11 +215,9 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
           }}>
             Category Filter
           </label>
-          <input
-            type="text"
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            placeholder="Filter by category"
+          <select
+            value={categoryIdFilter}
+            onChange={(e) => setCategoryIdFilter(e.target.value)}
             style={{
               padding: `${theme.spacing[2]} ${theme.spacing[3]}`,
               backgroundColor: theme.colors.background,
@@ -197,9 +225,17 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
               borderRadius: theme.borderRadius.lg,
               color: theme.colors.text,
               fontSize: theme.typography.fontSize.sm,
+              cursor: 'pointer',
               outline: 'none'
             }}
-          />
+          >
+            <option value="">All Categories</option>
+            {categoryOptions.map(category => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -321,7 +357,7 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
                     padding: theme.spacing[4],
                     color: theme.colors.textSecondary
                   }}>
-                    {objective.categories.length > 0 ? objective.categories.join(', ') : 'None'}
+                    {objective.categories.length > 0 ? resolveCategoryNames(objective.categories).join(', ') : 'None'}
                   </td>
                   <td style={{
                     padding: theme.spacing[4]
@@ -332,7 +368,14 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
                       flexWrap: 'wrap'
                     }}>
                       <button
-                        onClick={() => onViewObjective(objective)}
+                        onClick={() => {
+                          // Create a display version with category names resolved
+                          const displayObjective = {
+                            ...objective,
+                            categories: resolveCategoryNames(objective.categories)
+                          };
+                          onViewObjective(displayObjective);
+                        }}
                         style={{
                           padding: `${theme.spacing[1]} ${theme.spacing[2]}`,
                           backgroundColor: theme.colors.info,

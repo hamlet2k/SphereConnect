@@ -126,7 +126,6 @@ Note: Guild owners automatically receive the super_admin access level. This leve
 - `name`: Mission name.
 - `description`: JSONB (brief, tactical, classified, metrics).
 - `preferences`: Traits linked to users.
-- `categories`: Outcome groups (economy, military) - linked via junction table.
 - `priority`: Urgency level.
 - `applicable_rank`: Restricted visibility.
 - `progress`: JSONB.
@@ -134,6 +133,15 @@ Note: Guild owners automatically receive the super_admin access level. This leve
 - `lead_id`: FK to users.
 - `squad_id`: FK to squads.
 - `is_deleted`: BOOLEAN (soft delete flag).
+- `categories`: Array of linked category IDs (many-to-many via junction table).
+  - Used for filtering objectives by category.
+  - Populated when creating or updating objectives.
+
+**Notes:**
+- Objectives reference categories by **ID**, not by name.
+- Backend accepts IDs (preferred) but maintains backward compatibility with names.
+- Objective endpoints always return category IDs; frontend resolves them to names for display.
+
 
 **See also**: [Objective & Task Management](./project_flows.md#4-objective--task-management).
 
@@ -164,6 +172,12 @@ Note: Guild owners automatically receive the super_admin access level. This leve
 - `guild_id`: FK to guilds.
 - `name`: e.g., Economy, Military.
 - `description`: TEXT.
+
+**Notes:**
+- Objectives reference categories by **ID**, not by name.
+- Backend accepts IDs (preferred) but maintains backward compatibility with names.
+- Objective endpoints always return category IDs; frontend resolves them to names for display.
+
 
 **See also**: [Objective & Task Management](./project_flows.md#4-objective--task-management).
 
