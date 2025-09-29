@@ -1,6 +1,9 @@
-//import React, { useState, useEffect } from 'react';
 import React, { useState, useCallback } from 'react';
 import { theme } from '../theme';
+import { adminPageStyles } from './AdminPageStyles';
+import GuildForm from './GuildForm';
+import JoinForm from './JoinForm';
+import InviteForm from './InviteForm';
 
 interface Guild {
   id: string;
@@ -23,6 +26,8 @@ interface GuildListProps {
   onLeave: (guildId: string) => void;
   onKick: (userId: string) => void;
   onDelete: (guildId: string) => void;
+  onGuildCreateSuccess?: (guild: any) => void;
+  onInviteSuccess?: () => void;
   loading?: boolean;
   message?: string;
 }
@@ -36,12 +41,24 @@ const GuildList: React.FC<GuildListProps> = ({
   onLeave,
   onKick,
   onDelete,
+  onGuildCreateSuccess,
+  onInviteSuccess,
   loading = false,
   message = ''
 }) => {
+  // Form states
+  const [showForm, setShowForm] = useState(false);
+  const [showJoinForm, setShowJoinForm] = useState(false);
+  const [showInviteForm, setShowInviteForm] = useState<{guildId: string, guildName: string} | null>(null);
+  const [formMessage, setFormMessage] = useState('');
+
   const handleInvite = useCallback((guildId: string) => {
-    onInvite(guildId);
-  }, [onInvite]);
+    const guild = guilds.find(g => g.id === guildId);
+    if (guild) {
+      setShowInviteForm({guildId, guildName: guild.name});
+      setFormMessage('');
+    }
+  }, [guilds]);
 
   const handleLeave = async (guildId: string) => {
     if (window.confirm('Are you sure you want to leave this guild? You will be switched to your personal guild.')) {
@@ -61,6 +78,60 @@ const GuildList: React.FC<GuildListProps> = ({
     }
   };
 
+  const handleCreateGuild = () => {
+    setShowForm(true);
+    setFormMessage('');
+  };
+
+  const handleFormSuccess = (guild: any) => {
+    setShowForm(false);
+    setFormMessage('');
+    if (onGuildCreateSuccess) {
+      onGuildCreateSuccess(guild);
+    }
+  };
+
+  const handleFormCancel = () => {
+    setShowForm(false);
+    setFormMessage('');
+  };
+
+  const handleJoinClick = () => {
+    setShowJoinForm(true);
+    setFormMessage('');
+  };
+
+  const handleJoinFormSuccess = async (result: any) => {
+    setShowJoinForm(false);
+    setFormMessage(`Request to join ${result.guild_name || 'guild'} sent`);
+    // Reload data after a short delay
+    setTimeout(() => {
+      if (onGuildCreateSuccess) {
+        onGuildCreateSuccess(null); // Trigger reload
+      }
+    }, 1000);
+  };
+
+  const handleJoinFormCancel = () => {
+    setShowJoinForm(false);
+    setFormMessage('');
+  };
+
+  const handleInviteFormSuccess = async (result: any) => {
+    setShowInviteForm(null);
+    setFormMessage('Invite code generated successfully!');
+    if (onInviteSuccess) {
+      onInviteSuccess();
+    }
+  };
+
+  const handleInviteFormCancel = () => {
+    setShowInviteForm(null);
+    setFormMessage('');
+  };
+
+  const displayMessage = formMessage || message;
+
   const getMemberStatus = (guild: Guild) => {
     const approvedCount = guild.approved_count || 0;
     const limit = guild.member_limit;
@@ -76,13 +147,7 @@ const GuildList: React.FC<GuildListProps> = ({
   };
 
   return (
-    <div style={{
-      backgroundColor: theme.colors.surface,
-      borderRadius: theme.borderRadius.xl,
-      padding: theme.spacing[6],
-      border: `1px solid ${theme.colors.border}`,
-      boxShadow: theme.shadows.lg
-    }}>
+    <div style={adminPageStyles.container}>
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -103,7 +168,32 @@ const GuildList: React.FC<GuildListProps> = ({
           gap: theme.spacing[3]
         }}>
           <button
-            onClick={onJoin}
+            onClick={handleCreateGuild}
+            style={{
+              padding: `${theme.spacing[2]} ${theme.spacing[4]}`,
+              backgroundColor: theme.colors.primary,
+              color: theme.colors.background,
+              border: 'none',
+              borderRadius: theme.borderRadius.lg,
+              fontSize: theme.typography.fontSize.sm,
+              fontWeight: theme.typography.fontWeight.semibold,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease-in-out',
+              boxShadow: `0 0 10px ${theme.colors.primary}40`
+            }}
+            onMouseEnter={(e) => {
+              (e.target as HTMLElement).style.backgroundColor = '#E55A2B';
+              (e.target as HTMLElement).style.transform = 'translateY(-1px)';
+            }}
+            onMouseLeave={(e) => {
+              (e.target as HTMLElement).style.backgroundColor = '#FF6B35';
+              (e.target as HTMLElement).style.transform = 'translateY(0)';
+            }}
+          >
+            Create Guild
+          </button>
+          <button
+            onClick={handleJoinClick}
             style={{
               padding: `${theme.spacing[2]} ${theme.spacing[4]}`,
               backgroundColor: theme.colors.secondary,
@@ -130,19 +220,103 @@ const GuildList: React.FC<GuildListProps> = ({
         </div>
       </div>
 
-      {message && (
+      {showForm && (
+        <div style={adminPageStyles.formContainer}>
+          <h4 style={adminPageStyles.formTitle}>Create New Guild</h4>
+          <GuildForm
+            onSuccess={handleFormSuccess}
+            onCancel={handleFormCancel}
+            isOpen={showForm}
+            modal={false}
+          />
+        </div>
+      )}
+
+      {showJoinForm && (
+        <div style={adminPageStyles.formContainer}>
+          <JoinForm
+            onJoin={async (inviteCode: string) => {
+              // Call the API directly
+              const token = localStorage.getItem('token');
+              const user = JSON.parse(localStorage.getItem('user') || '{}');
+              const userId = user.id;
+
+              if (!userId) {
+                throw new Error('User not found');
+              }
+
+              const response = await fetch(`http://localhost:8000/api/users/${userId}/join`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ invite_code: inviteCode })
+              });
+
+              if (response.ok) {
+                const result = await response.json();
+                handleJoinFormSuccess(result);
+                return result;
+              } else {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Failed to join guild');
+              }
+            }}
+            onClose={handleJoinFormCancel}
+            isOpen={showJoinForm}
+            modal={false}
+            message={formMessage}
+          />
+        </div>
+      )}
+
+      {showInviteForm && (
+        <div style={adminPageStyles.formContainer}>
+          <InviteForm
+            guildId={showInviteForm.guildId}
+            guildName={showInviteForm.guildName}
+            onInvite={async (guildId: string, inviteData: any) => {
+              // Call the API directly
+              const token = localStorage.getItem('token');
+              const response = await fetch('http://localhost:8000/api/invites', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(inviteData)
+              });
+
+              if (response.ok) {
+                const result = await response.json();
+                handleInviteFormSuccess(result);
+                return result;
+              } else {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Failed to create invite');
+              }
+            }}
+            onClose={handleInviteFormCancel}
+            isOpen={true}
+            modal={false}
+          />
+        </div>
+      )}
+
+      {displayMessage && !showJoinForm && (
         <div style={{
           marginBottom: theme.spacing[4],
           padding: theme.spacing[3],
-          backgroundColor: message.includes('Error') || message.includes('Failed') ?
+          backgroundColor: displayMessage.includes('Error') || displayMessage.includes('Failed') ?
             `${theme.colors.error}20` : `${theme.colors.success}20`,
-          border: `1px solid ${message.includes('Error') || message.includes('Failed') ?
+          border: `1px solid ${displayMessage.includes('Error') || displayMessage.includes('Failed') ?
             theme.colors.error : theme.colors.success}`,
           borderRadius: theme.borderRadius.lg,
-          color: message.includes('Error') || message.includes('Failed') ?
+          color: displayMessage.includes('Error') || displayMessage.includes('Failed') ?
             theme.colors.error : theme.colors.success
         }}>
-          {message}
+          {displayMessage}
         </div>
       )}
 

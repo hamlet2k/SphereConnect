@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useGuild } from '../contexts/GuildContext';
 import { theme } from '../theme';
 import GuildList from '../components/GuildList';
+import GuildForm from '../components/GuildForm';
 import InviteForm from '../components/InviteForm';
 import JoinForm from '../components/JoinForm';
 import GuildRequestApproval from '../components/GuildRequestApproval';
@@ -85,19 +86,11 @@ function AdminDashboardContent() {
   const [inviteMessage, setInviteMessage] = useState('');
   const [joinMessage, setJoinMessage] = useState('');
 
-  // Objective modal states
-  const [objectiveDetailOpen, setObjectiveDetailOpen] = useState(false);
-  const [objectiveFormOpen, setObjectiveFormOpen] = useState(false);
+  // Objective states
   const [selectedObjective, setSelectedObjective] = useState<Objective | null>(null);
-  const [objectiveLoading, setObjectiveLoading] = useState(false);
-  const [objectiveMessage, setObjectiveMessage] = useState('');
+  const [objectiveDetailOpen, setObjectiveDetailOpen] = useState(false);
 
-  // Category modal states
-  const [categoryFormOpen, setCategoryFormOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<any | null>(null);
-  const [categoryLoading, setCategoryLoading] = useState(false);
-  const [categoryMessage, setCategoryMessage] = useState('');
-  const [categoryRefreshTrigger, setCategoryRefreshTrigger] = useState(0);
+  // Category states (removed modal, now inline)
 
   const token = localStorage.getItem('token');
   const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -391,20 +384,18 @@ function AdminDashboardContent() {
     }
   };
 
+  const handleGuildCreateSuccess = (guild: any) => {
+    if (guild) {
+      setMessage('Guild created successfully');
+    }
+    // Reload guilds to show the new guild
+    loadData();
+  };
+
   // Objective handlers
   const handleViewObjective = (objective: Objective) => {
     setSelectedObjective(objective);
     setObjectiveDetailOpen(true);
-  };
-
-  const handleEditObjective = (objective: Objective) => {
-    setSelectedObjective(objective);
-    setObjectiveFormOpen(true);
-  };
-
-  const handleCreateObjective = () => {
-    setSelectedObjective(null);
-    setObjectiveFormOpen(true);
   };
 
   const handleDeleteObjective = async (objectiveId: string) => {
@@ -418,55 +409,7 @@ function AdminDashboardContent() {
     }
   };
 
-  const handleObjectiveFormSuccess = (objective: Objective) => {
-    const wasEditing = Boolean(selectedObjective);
-    setObjectiveFormOpen(false);
-    setSelectedObjective(null);
-    setMessage(`Objective ${wasEditing ? 'updated' : 'created'} successfully`);
-    // Reload objectives
-    loadData();
-  };
-
-  // Category handlers
-  const handleEditCategory = (category: any) => {
-    setSelectedCategory(category);
-    setCategoryFormOpen(true);
-  };
-
-  const handleCreateCategory = () => {
-    setSelectedCategory(null);
-    setCategoryFormOpen(true);
-  };
-
-  const handleDeleteCategory = async (categoryId: string) => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:8000/api/categories/${categoryId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        setMessage('Category deleted successfully');
-        // Trigger refresh of categories list
-        setCategoryRefreshTrigger(prev => prev + 1);
-      } else {
-        const error = await response.json();
-        setMessage(error.detail || 'Failed to delete category');
-      }
-    } catch (error: any) {
-      setMessage(error.message || 'Error deleting category');
-    }
-  };
-
-  const handleCategoryFormSuccess = (category: any) => {
-    setCategoryFormOpen(false);
-    const wasCreate = selectedCategory === null;
-    setSelectedCategory(null);
-    setMessage(`Category ${wasCreate ? 'created' : 'updated'} successfully`);
-    // Trigger refresh of categories list
-    setCategoryRefreshTrigger(prev => prev + 1);
-  };
+  // Category handlers removed - now handled inline in CategoriesList component
 
   // Access control helpers
   const checkObjectivePermissions = () => {
@@ -490,36 +433,16 @@ function AdminDashboardContent() {
     return (
       <ObjectivesList
         onViewObjective={handleViewObjective}
-        onEditObjective={handleEditObjective}
         onDeleteObjective={handleDeleteObjective}
         canCreate={permissions.canCreate}
         canEdit={permissions.canEdit}
         canDelete={permissions.canDelete}
-        onCreateObjective={handleCreateObjective}
       />
     );
   };
 
   const renderCategoriesTab = () => {
-    // For now, assume super_admin has all permissions
-    const permissions = {
-      canCreate: true,
-      canEdit: true,
-      canDelete: true,
-      canView: true
-    };
-
-    return (
-      <CategoriesList
-        onEditCategory={handleEditCategory}
-        onDeleteCategory={handleDeleteCategory}
-        canCreate={permissions.canCreate}
-        canEdit={permissions.canEdit}
-        canDelete={permissions.canDelete}
-        onCreateCategory={handleCreateCategory}
-        refreshTrigger={categoryRefreshTrigger}
-      />
-    );
+    return <CategoriesList />;
   };
 
   const renderTasksTab = () => (
@@ -586,6 +509,8 @@ function AdminDashboardContent() {
       onLeave={handleLeave}
       onKick={handleKick}
       onDelete={handleDelete}
+      onGuildCreateSuccess={handleGuildCreateSuccess}
+      onInviteSuccess={() => setActiveTab('invites')}
       loading={loading}
       message={message}
     />
@@ -1153,7 +1078,7 @@ function AdminDashboardContent() {
         message={joinMessage}
       />
 
-      {/* Objective Modals */}
+      {/* Objective Modal */}
       {objectiveDetailOpen && selectedObjective && (
         <ObjectiveDetail
           objectiveId={selectedObjective.id}
@@ -1161,36 +1086,11 @@ function AdminDashboardContent() {
             setObjectiveDetailOpen(false);
             setSelectedObjective(null);
           }}
-          onEdit={handleEditObjective}
-          canEdit={checkObjectivePermissions().canEdit}
+          onEdit={() => {}} // Edit is now handled inline in the list
+          canEdit={false} // Disable edit from modal since we have inline form
         />
       )}
 
-      {objectiveFormOpen && (
-        <ObjectiveForm
-          objective={selectedObjective || undefined}
-          guildId={currentGuildId || ''}
-          onSuccess={handleObjectiveFormSuccess}
-          onCancel={() => {
-            setObjectiveFormOpen(false);
-            setSelectedObjective(null);
-          }}
-          isOpen={objectiveFormOpen}
-        />
-      )}
-
-      {categoryFormOpen && (
-        <CategoryForm
-          category={selectedCategory || undefined}
-          guildId={currentGuildId || ''}
-          onSuccess={handleCategoryFormSuccess}
-          onCancel={() => {
-            setCategoryFormOpen(false);
-            setSelectedCategory(null);
-          }}
-          isOpen={categoryFormOpen}
-        />
-      )}
 
       <style>{`
         @keyframes spin {

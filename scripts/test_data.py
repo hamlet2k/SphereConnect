@@ -89,6 +89,7 @@ def seed_test_data():
             guild_id=personal_guild_id,
             name="Commander",
             phonetic="Commander",
+            hierarchy_level=1,  # Commander is highest rank
             access_levels=[]  # Will update after creating access levels
         )
         db.add(admin_rank)
@@ -98,6 +99,7 @@ def seed_test_data():
             guild_id=personal_guild_id,
             name="Recruit",
             phonetic="Recruit",
+            hierarchy_level=6,  # Recruit is lowest rank
             access_levels=[]  # Will update after creating access levels
         )
         db.add(member_rank)
@@ -261,7 +263,7 @@ def seed_test_data():
                 "metrics": {"gold scu": 0}
             },
             priority="High",
-            applicable_rank="Recruit",
+            allowed_ranks=[str(member_rank.id)],  # Allow Recruit rank to see this objective
             progress={},
             tasks=[],
             lead_id=test_user.id,

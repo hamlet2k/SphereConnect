@@ -9,7 +9,7 @@ CREATE TABLE objectives (
     description JSONB NOT NULL DEFAULT '{"brief": "", "tactical": "", "classified": "", "metrics": {}}',
     preferences TEXT[] DEFAULT '{}',
     priority TEXT DEFAULT 'Medium',
-    applicable_rank TEXT DEFAULT 'Recruit',
+    allowed_ranks UUID[] DEFAULT '{}',
     progress JSONB DEFAULT '{}',
     tasks UUID[] DEFAULT '{}',
     lead_id UUID,

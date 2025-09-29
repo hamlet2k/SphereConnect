@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useGuild } from '../contexts/GuildContext';
+import { theme } from '../theme';
+import { adminPageStyles, getMessageStyle } from './AdminPageStyles';
 
 interface Rank {
   id: string;
   name: string;
-  access_levels: string[];
   phonetic?: string;
+  hierarchy_level: number;
+  access_levels: string[];
 }
 
 interface AccessLevel {
@@ -22,6 +25,8 @@ function RanksManager() {
   const [editingRank, setEditingRank] = useState<Rank | null>(null);
   const [formData, setFormData] = useState({
     name: '',
+    phonetic: '',
+    hierarchy_level: 1,
     access_levels: [] as string[]
   });
   const [message, setMessage] = useState('');
@@ -116,7 +121,7 @@ function RanksManager() {
         setMessage(result.message || `Rank ${editingRank ? 'updated' : 'created'} successfully`);
         setShowForm(false);
         setEditingRank(null);
-        setFormData({ name: '', access_levels: [] });
+        setFormData({ name: '', phonetic: '', hierarchy_level: 1, access_levels: [] });
         loadRanks();
       } else if (response.status === 403) {
         setMessage('Insufficient permissions to manage ranks. You need manage_ranks permission.');
@@ -133,6 +138,8 @@ function RanksManager() {
     setEditingRank(rank);
     setFormData({
       name: rank.name,
+      phonetic: rank.phonetic || '',
+      hierarchy_level: rank.hierarchy_level,
       access_levels: [...rank.access_levels]
     });
     setShowForm(true);
@@ -189,7 +196,7 @@ function RanksManager() {
   const resetForm = () => {
     setShowForm(false);
     setEditingRank(null);
-    setFormData({ name: '', access_levels: [] });
+    setFormData({ name: '', phonetic: '', hierarchy_level: 1, access_levels: [] });
     setMessage('');
   };
 
@@ -198,18 +205,21 @@ function RanksManager() {
   }
 
   return (
-    <div style={{ padding: '24px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h3 style={{ margin: 0 }}>Ranks Management</h3>
+    <div style={adminPageStyles.container}>
+      <div style={adminPageStyles.header}>
+        <h3 style={adminPageStyles.title}>
+          Ranks Management
+        </h3>
         <button
           onClick={() => setShowForm(true)}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: '#3182ce',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
+          style={adminPageStyles.primaryButton}
+          onMouseEnter={(e) => {
+            (e.target as HTMLElement).style.backgroundColor = '#E55A2B';
+            (e.target as HTMLElement).style.transform = 'translateY(-1px)';
+          }}
+          onMouseLeave={(e) => {
+            (e.target as HTMLElement).style.backgroundColor = '#FF6B35';
+            (e.target as HTMLElement).style.transform = 'translateY(0)';
           }}
         >
           Create Rank
@@ -217,20 +227,20 @@ function RanksManager() {
       </div>
 
       {showForm && (
-        <div style={{
-          backgroundColor: '#f7fafc',
-          padding: '24px',
-          borderRadius: '8px',
-          marginBottom: '24px',
-          border: '1px solid #e2e8f0'
-        }}>
-          <h4 style={{ margin: '0 0 16px 0' }}>
+        <div style={adminPageStyles.formContainer}>
+          <h4 style={adminPageStyles.formTitle}>
             {editingRank ? 'Edit Rank' : 'Create New Rank'}
           </h4>
 
           <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+            <div style={{ marginBottom: theme.spacing[4] }}>
+              <label style={{
+                display: 'block',
+                marginBottom: theme.spacing[2],
+                fontWeight: theme.typography.fontWeight.bold,
+                color: theme.colors.text,
+                fontSize: theme.typography.fontSize.sm
+              }}>
                 Name:
               </label>
               <input
@@ -239,50 +249,165 @@ function RanksManager() {
                 onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                 style={{
                   width: '100%',
-                  padding: '8px',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '4px',
-                  fontSize: '14px'
+                  padding: `${theme.spacing[2]} ${theme.spacing[3]}`,
+                  backgroundColor: theme.colors.background,
+                  border: `2px solid ${theme.colors.border}`,
+                  borderRadius: theme.borderRadius.lg,
+                  color: theme.colors.text,
+                  fontSize: theme.typography.fontSize.sm,
+                  outline: 'none',
+                  transition: 'all 0.2s ease-in-out'
                 }}
                 placeholder="Enter rank name (e.g., Recruit, NCO, Commander)"
                 required
               />
             </div>
 
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+            <div style={{ marginBottom: theme.spacing[4] }}>
+              <label style={{
+                display: 'block',
+                marginBottom: theme.spacing[2],
+                fontWeight: theme.typography.fontWeight.bold,
+                color: theme.colors.text,
+                fontSize: theme.typography.fontSize.sm
+              }}>
+                Phonetic:
+              </label>
+              <input
+                type="text"
+                value={formData.phonetic}
+                onChange={(e) => setFormData(prev => ({ ...prev, phonetic: e.target.value }))}
+                style={{
+                  width: '100%',
+                  padding: `${theme.spacing[2]} ${theme.spacing[3]}`,
+                  backgroundColor: theme.colors.background,
+                  border: `2px solid ${theme.colors.border}`,
+                  borderRadius: theme.borderRadius.lg,
+                  color: theme.colors.text,
+                  fontSize: theme.typography.fontSize.sm,
+                  outline: 'none',
+                  transition: 'all 0.2s ease-in-out'
+                }}
+                placeholder="Enter phonetic pronunciation (optional)"
+              />
+            </div>
+
+            <div style={{ marginBottom: theme.spacing[4] }}>
+              <label style={{
+                display: 'block',
+                marginBottom: theme.spacing[2],
+                fontWeight: theme.typography.fontWeight.bold,
+                color: theme.colors.text,
+                fontSize: theme.typography.fontSize.sm
+              }}>
+                Hierarchy Level:
+              </label>
+              <input
+                type="number"
+                value={formData.hierarchy_level}
+                onChange={(e) => setFormData(prev => ({ ...prev, hierarchy_level: parseInt(e.target.value) || 1 }))}
+                style={{
+                  width: '100%',
+                  padding: `${theme.spacing[2]} ${theme.spacing[3]}`,
+                  backgroundColor: theme.colors.background,
+                  border: `2px solid ${theme.colors.border}`,
+                  borderRadius: theme.borderRadius.lg,
+                  color: theme.colors.text,
+                  fontSize: theme.typography.fontSize.sm,
+                  outline: 'none',
+                  transition: 'all 0.2s ease-in-out'
+                }}
+                placeholder="Enter hierarchy level (lower number = higher rank)"
+                min="1"
+                required
+              />
+              <small style={{
+                color: theme.colors.textMuted,
+                fontSize: theme.typography.fontSize.xs,
+                marginTop: theme.spacing[1],
+                display: 'block'
+              }}>
+                Lower numbers indicate higher ranks (e.g., Commander = 1, Recruit = 6)
+              </small>
+            </div>
+
+            <div style={{ marginBottom: theme.spacing[4] }}>
+              <label style={{
+                display: 'block',
+                marginBottom: theme.spacing[2],
+                fontWeight: theme.typography.fontWeight.bold,
+                color: theme.colors.text,
+                fontSize: theme.typography.fontSize.sm
+              }}>
                 Access Levels:
               </label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: theme.spacing[2]
+              }}>
                 {accessLevels.map(level => (
-                  <label key={level.id} style={{ display: 'flex', alignItems: 'center' }}>
+                  <label key={level.id} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: theme.spacing[2],
+                    backgroundColor: theme.colors.surface,
+                    borderRadius: theme.borderRadius.md,
+                    border: `1px solid ${theme.colors.border}`,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease-in-out'
+                  }}>
                     <input
                       type="checkbox"
                       checked={formData.access_levels.includes(level.id)}
                       onChange={() => handleAccessLevelToggle(level.id)}
-                      style={{ marginRight: '8px' }}
+                      style={{
+                        marginRight: theme.spacing[2],
+                        accentColor: theme.colors.primary
+                      }}
                     />
-                    {level.name}
+                    <span style={{
+                      color: theme.colors.text,
+                      fontSize: theme.typography.fontSize.sm
+                    }}>
+                      {level.name}
+                    </span>
                   </label>
                 ))}
                 {accessLevels.length === 0 && (
-                  <p style={{ color: '#718096', fontStyle: 'italic' }}>
+                  <p style={{
+                    color: theme.colors.textMuted,
+                    fontStyle: 'italic',
+                    fontSize: theme.typography.fontSize.sm
+                  }}>
                     No access levels available. Create access levels first.
                   </p>
                 )}
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: theme.spacing[2] }}>
               <button
                 type="submit"
                 style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#3182ce',
-                  color: 'white',
+                  padding: `${theme.spacing[2]} ${theme.spacing[4]}`,
+                  backgroundColor: theme.colors.primary,
+                  color: theme.colors.background,
                   border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
+                  borderRadius: theme.borderRadius.lg,
+                  fontSize: theme.typography.fontSize.sm,
+                  fontWeight: theme.typography.fontWeight.semibold,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease-in-out',
+                  boxShadow: `0 0 10px ${theme.colors.primary}40`
+                }}
+                onMouseEnter={(e) => {
+                  (e.target as HTMLElement).style.backgroundColor = theme.colors.primaryHover;
+                  (e.target as HTMLElement).style.transform = 'translateY(-1px)';
+                }}
+                onMouseLeave={(e) => {
+                  (e.target as HTMLElement).style.backgroundColor = theme.colors.primary;
+                  (e.target as HTMLElement).style.transform = 'translateY(0)';
                 }}
               >
                 {editingRank ? 'Update' : 'Create'}
@@ -291,12 +416,21 @@ function RanksManager() {
                 type="button"
                 onClick={resetForm}
                 style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#e2e8f0',
-                  color: '#4a5568',
+                  padding: `${theme.spacing[2]} ${theme.spacing[4]}`,
+                  backgroundColor: theme.colors.surfaceHover,
+                  color: theme.colors.text,
                   border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
+                  borderRadius: theme.borderRadius.lg,
+                  fontSize: theme.typography.fontSize.sm,
+                  fontWeight: theme.typography.fontWeight.medium,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease-in-out'
+                }}
+                onMouseEnter={(e) => {
+                  (e.target as HTMLElement).style.backgroundColor = theme.colors.border;
+                }}
+                onMouseLeave={(e) => {
+                  (e.target as HTMLElement).style.backgroundColor = theme.colors.surfaceHover;
                 }}
               >
                 Cancel
@@ -307,63 +441,154 @@ function RanksManager() {
       )}
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px' }}>
+        <div style={{
+          textAlign: 'center',
+          padding: theme.spacing[8]
+        }}>
           <div style={{
             width: '40px',
             height: '40px',
-            border: '4px solid #e2e8f0',
-            borderTop: '4px solid #3182ce',
+            border: `4px solid ${theme.colors.surfaceHover}`,
+            borderTop: `4px solid ${theme.colors.primary}`,
             borderRadius: '50%',
             animation: 'spin 1s linear infinite',
-            margin: '0 auto 16px'
+            margin: '0 auto'
           }}></div>
-          <p>Loading ranks...</p>
+          <p style={{
+            marginTop: theme.spacing[4],
+            color: theme.colors.textSecondary,
+            fontSize: theme.typography.fontSize.sm
+          }}>
+            Loading ranks...
+          </p>
         </div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div style={{
+          overflowX: 'auto',
+          borderRadius: theme.borderRadius.lg,
+          border: `1px solid ${theme.colors.border}`
+        }}>
+          <table style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            backgroundColor: theme.colors.surface,
+            fontSize: theme.typography.fontSize.sm
+          }}>
             <thead>
-              <tr style={{ backgroundColor: '#f7fafc' }}>
-                <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Name</th>
-                <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Access Levels</th>
-                <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Actions</th>
+              <tr style={{
+                backgroundColor: theme.colors.surfaceHover,
+                borderBottom: `2px solid ${theme.colors.border}`
+              }}>
+                <th style={{
+                  padding: theme.spacing[4],
+                  textAlign: 'left',
+                  color: theme.colors.text,
+                  fontWeight: theme.typography.fontWeight.semibold,
+                  fontSize: theme.typography.fontSize.sm
+                }}>
+                  Name
+                </th>
+                <th style={{
+                  padding: theme.spacing[4],
+                  textAlign: 'left',
+                  color: theme.colors.text,
+                  fontWeight: theme.typography.fontWeight.semibold,
+                  fontSize: theme.typography.fontSize.sm
+                }}>
+                  Hierarchy Level
+                </th>
+                <th style={{
+                  padding: theme.spacing[4],
+                  textAlign: 'left',
+                  color: theme.colors.text,
+                  fontWeight: theme.typography.fontWeight.semibold,
+                  fontSize: theme.typography.fontSize.sm
+                }}>
+                  Access Levels
+                </th>
+                <th style={{
+                  padding: theme.spacing[4],
+                  textAlign: 'left',
+                  color: theme.colors.text,
+                  fontWeight: theme.typography.fontWeight.semibold,
+                  fontSize: theme.typography.fontSize.sm
+                }}>
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
               {ranks.map(rank => (
-                <tr key={rank.id}>
-                  <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>{rank.name}</td>
-                  <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>
+                <tr key={rank.id} style={{
+                  borderBottom: `1px solid ${theme.colors.border}`,
+                  transition: 'background-color 0.2s ease-in-out',
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={(e) => {
+                  (e.target as HTMLElement).closest('tr')!.style.backgroundColor = theme.colors.surfaceHover;
+                }}
+                onMouseLeave={(e) => {
+                  (e.target as HTMLElement).closest('tr')!.style.backgroundColor = 'transparent';
+                }}
+                >
+                  <td style={{
+                    padding: theme.spacing[4],
+                    color: theme.colors.text,
+                    fontWeight: theme.typography.fontWeight.medium
+                  }}>
+                    {rank.name}
+                  </td>
+                  <td style={{
+                    padding: theme.spacing[4],
+                    color: theme.colors.textSecondary
+                  }}>
+                    {rank.hierarchy_level}
+                  </td>
+                  <td style={{
+                    padding: theme.spacing[4],
+                    color: theme.colors.textSecondary
+                  }}>
                     {rank.access_levels.map(id => getAccessLevelName(id)).join(', ')}
                   </td>
-                  <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>
-                    <button
-                      onClick={() => handleEdit(rank)}
-                      style={{
-                        marginRight: '8px',
-                        padding: '4px 8px',
-                        backgroundColor: '#3182ce',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(rank.id)}
-                      style={{
-                        padding: '4px 8px',
-                        backgroundColor: '#e53e3e',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Delete
-                    </button>
+                  <td style={{
+                    padding: theme.spacing[4]
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      gap: theme.spacing[2],
+                      flexWrap: 'wrap'
+                    }}>
+                      <button
+                        onClick={() => handleEdit(rank)}
+                        style={{
+                          padding: `${theme.spacing[1]} ${theme.spacing[2]}`,
+                          backgroundColor: theme.colors.primary,
+                          color: theme.colors.background,
+                          border: 'none',
+                          borderRadius: theme.borderRadius.sm,
+                          fontSize: theme.typography.fontSize.xs,
+                          fontWeight: theme.typography.fontWeight.medium,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(rank.id)}
+                        style={{
+                          padding: `${theme.spacing[1]} ${theme.spacing[2]}`,
+                          backgroundColor: theme.colors.error,
+                          color: theme.colors.text,
+                          border: 'none',
+                          borderRadius: theme.borderRadius.sm,
+                          fontSize: theme.typography.fontSize.xs,
+                          fontWeight: theme.typography.fontWeight.medium,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -372,15 +597,19 @@ function RanksManager() {
         </div>
       )}
 
-      {message && (
+      {ranks.length === 0 && !loading && (
         <div style={{
-          marginTop: '16px',
-          padding: '12px',
-          backgroundColor: message.includes('Error') || message.includes('Failed') ? '#fed7d7' : '#c6f6d5',
-          border: `1px solid ${message.includes('Error') || message.includes('Failed') ? '#e53e3e' : '#38a169'}`,
-          borderRadius: '4px',
-          color: message.includes('Error') || message.includes('Failed') ? '#c53030' : '#276749'
+          textAlign: 'center',
+          padding: theme.spacing[8],
+          color: theme.colors.textMuted,
+          fontSize: theme.typography.fontSize.sm
         }}>
+          No ranks found. Create your first rank to get started.
+        </div>
+      )}
+
+      {message && (
+        <div style={getMessageStyle(message)}>
           {message}
         </div>
       )}

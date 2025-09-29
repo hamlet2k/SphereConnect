@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useGuild } from '../contexts/GuildContext';
+import { theme } from '../theme';
+import { adminPageStyles, getMessageStyle } from './AdminPageStyles';
 
 interface User {
   id: string;
@@ -38,6 +40,7 @@ function UsersManager() {
     password: '',
     pin: '',
     rank_id: '',
+    access_levels: [] as string[],
     phonetic: '',
     availability: 'offline'
   });
@@ -150,6 +153,13 @@ function UsersManager() {
 
       if (response.ok) {
         const result = await response.json();
+        const userId = result.user_id || editingUser?.id;
+
+        // Handle access levels assignment/removal
+        if (userId) {
+          await handleAccessLevelsUpdate(userId, formData.access_levels);
+        }
+
         setMessage(result.message || `User ${editingUser ? 'updated' : 'created'} successfully`);
         setShowForm(false);
         setEditingUser(null);
@@ -168,19 +178,34 @@ function UsersManager() {
     }
   };
 
-  const handleEdit = (user: User) => {
-    setEditingUser(user);
-    setFormData({
-      name: user.name,
-      username: user.username,
-      email: user.email || '',
-      password: '', // Don't populate password for security
-      pin: '', // Don't populate PIN for security
-      rank_id: user.rank || '',
-      phonetic: user.phonetic || '',
-      availability: user.availability
-    });
-    setShowForm(true);
+  const handleEdit = async (user: User) => {
+    // Load user's current access levels
+    try {
+      const headers = { 'Authorization': `Bearer ${token}` };
+      const response = await fetch(`http://localhost:8000/api/admin/user_access/${user.id}`, { headers });
+
+      let accessLevels: string[] = [];
+      if (response.ok) {
+        const data = await response.json();
+        accessLevels = data.access_levels.map((al: any) => al.id);
+      }
+
+      setEditingUser(user);
+      setFormData({
+        name: user.name,
+        username: user.username,
+        email: user.email || '',
+        password: '', // Don't populate password for security
+        pin: '', // Don't populate PIN for security
+        rank_id: user.rank || '',
+        access_levels: accessLevels,
+        phonetic: user.phonetic || '',
+        availability: user.availability
+      });
+      setShowForm(true);
+    } catch (error) {
+      setMessage('Error loading user access levels');
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -240,6 +265,50 @@ function UsersManager() {
     }
   };
 
+  const handleAccessLevelsUpdate = async (userId: string, desiredAccessLevels: string[]) => {
+    try {
+      // Get current access levels
+      const headers = { 'Authorization': `Bearer ${token}` };
+      const currentResponse = await fetch(`http://localhost:8000/api/admin/user_access/${userId}`, { headers });
+
+      let currentAccessLevels: string[] = [];
+      if (currentResponse.ok) {
+        const data = await currentResponse.json();
+        currentAccessLevels = data.access_levels.map((al: any) => al.id);
+      }
+
+      // Find access levels to add and remove
+      const toAdd = desiredAccessLevels.filter(id => !currentAccessLevels.includes(id));
+      const toRemove = currentAccessLevels.filter(id => !desiredAccessLevels.includes(id));
+
+      // Add new access levels
+      for (const accessLevelId of toAdd) {
+        await fetch('http://localhost:8000/api/admin/user_access', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            user_id: userId,
+            access_level_id: accessLevelId
+          })
+        });
+      }
+
+      // Remove old access levels
+      for (const accessLevelId of toRemove) {
+        await fetch(`http://localhost:8000/api/admin/user_access/${userId}/${accessLevelId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+      }
+    } catch (error) {
+      console.error('Error updating access levels:', error);
+      // Don't throw error to avoid breaking user creation/update
+    }
+  };
+
   const handleAssignAccess = async (userId: string, accessLevelId: string) => {
     try {
       const headers = {
@@ -284,6 +353,7 @@ function UsersManager() {
       password: '',
       pin: '',
       rank_id: '',
+      access_levels: [],
       phonetic: '',
       availability: 'offline'
     });
@@ -295,18 +365,21 @@ function UsersManager() {
   }
 
   return (
-    <div style={{ padding: '24px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h3 style={{ margin: 0 }}>Users Management</h3>
+    <div style={adminPageStyles.container}>
+      <div style={adminPageStyles.header}>
+        <h3 style={adminPageStyles.title}>
+          Users Management
+        </h3>
         <button
           onClick={() => setShowForm(true)}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: '#3182ce',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
+          style={adminPageStyles.primaryButton}
+          onMouseEnter={(e) => {
+            (e.target as HTMLElement).style.backgroundColor = '#E55A2B';
+            (e.target as HTMLElement).style.transform = 'translateY(-1px)';
+          }}
+          onMouseLeave={(e) => {
+            (e.target as HTMLElement).style.backgroundColor = '#FF6B35';
+            (e.target as HTMLElement).style.transform = 'translateY(0)';
           }}
         >
           Create User
@@ -314,115 +387,83 @@ function UsersManager() {
       </div>
 
       {showForm && (
-        <div style={{
-          backgroundColor: '#f7fafc',
-          padding: '24px',
-          borderRadius: '8px',
-          marginBottom: '24px',
-          border: '1px solid #e2e8f0'
-        }}>
-          <h4 style={{ margin: '0 0 16px 0' }}>
+        <div style={adminPageStyles.formContainer}>
+          <h4 style={adminPageStyles.formTitle}>
             {editingUser ? 'Edit User' : 'Create New User'}
           </h4>
 
           <form onSubmit={handleSubmit}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+              gap: theme.spacing[4]
+            }}>
+              <div style={adminPageStyles.formField}>
+                <label style={adminPageStyles.formLabel}>
                   Name:
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '4px',
-                    fontSize: '14px'
-                  }}
+                  style={adminPageStyles.formInput}
                   placeholder="Enter display name"
                   required
                 />
               </div>
 
-              <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+              <div style={adminPageStyles.formField}>
+                <label style={adminPageStyles.formLabel}>
                   Username:
                 </label>
                 <input
                   type="text"
                   value={formData.username}
                   onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '4px',
-                    fontSize: '14px'
-                  }}
+                  style={adminPageStyles.formInput}
                   placeholder="Enter login username"
                   required
                 />
               </div>
 
-              <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+              <div style={adminPageStyles.formField}>
+                <label style={adminPageStyles.formLabel}>
                   Email:
                 </label>
                 <input
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '4px',
-                    fontSize: '14px'
-                  }}
+                  style={adminPageStyles.formInput}
                   placeholder="Enter email (optional)"
                 />
               </div>
 
               {!editingUser && (
                 <>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                  <div style={adminPageStyles.formField}>
+                    <label style={adminPageStyles.formLabel}>
                       Password:
                     </label>
                     <input
                       type="password"
                       value={formData.password}
                       onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '4px',
-                        fontSize: '14px'
-                      }}
+                      style={adminPageStyles.formInput}
                       placeholder="Enter password"
                       required={!editingUser}
                     />
                   </div>
 
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                  <div style={adminPageStyles.formField}>
+                    <label style={adminPageStyles.formLabel}>
                       PIN:
                     </label>
                     <input
                       type="password"
                       value={formData.pin}
                       onChange={(e) => setFormData(prev => ({ ...prev, pin: e.target.value }))}
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '4px',
-                        fontSize: '14px'
-                      }}
+                      style={adminPageStyles.formInput}
                       placeholder="6-digit PIN"
                       maxLength={6}
                       required={!editingUser}
@@ -431,20 +472,14 @@ function UsersManager() {
                 </>
               )}
 
-              <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+              <div style={adminPageStyles.formField}>
+                <label style={adminPageStyles.formLabel}>
                   Rank:
                 </label>
                 <select
                   value={formData.rank_id}
                   onChange={(e) => setFormData(prev => ({ ...prev, rank_id: e.target.value }))}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '4px',
-                    fontSize: '14px'
-                  }}
+                  style={adminPageStyles.formInput}
                 >
                   <option value="">Select Rank</option>
                   {ranks.map(rank => (
@@ -453,22 +488,47 @@ function UsersManager() {
                     </option>
                   ))}
                 </select>
+                <p style={adminPageStyles.formHelp}>Users can have only one rank</p>
               </div>
 
-              <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+              <div style={adminPageStyles.formField}>
+                <label style={adminPageStyles.formLabel}>
+                  Access Levels:
+                </label>
+                <div style={adminPageStyles.checkboxGrid}>
+                  {accessLevels.map(level => (
+                    <label key={level.id} style={adminPageStyles.checkboxItem}>
+                      <input
+                        type="checkbox"
+                        checked={formData.access_levels.includes(level.id)}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setFormData(prev => ({
+                            ...prev,
+                            access_levels: checked
+                              ? [...prev.access_levels, level.id]
+                              : prev.access_levels.filter(id => id !== level.id)
+                          }));
+                        }}
+                        style={{ marginRight: theme.spacing[2] }}
+                      />
+                      <span style={{ fontSize: theme.typography.fontSize.sm }}>
+                        {level.name}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <p style={adminPageStyles.formHelp}>Users can have multiple access levels</p>
+              </div>
+
+              <div style={adminPageStyles.formField}>
+                <label style={adminPageStyles.formLabel}>
                   Availability:
                 </label>
                 <select
                   value={formData.availability}
                   onChange={(e) => setFormData(prev => ({ ...prev, availability: e.target.value }))}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '4px',
-                    fontSize: '14px'
-                  }}
+                  style={adminPageStyles.formInput}
                 >
                   <option value="offline">Offline</option>
                   <option value="online">Online</option>
@@ -477,36 +537,31 @@ function UsersManager() {
                 </select>
               </div>
 
-              <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+              <div style={adminPageStyles.formField}>
+                <label style={adminPageStyles.formLabel}>
                   Phonetic:
                 </label>
                 <input
                   type="text"
                   value={formData.phonetic}
                   onChange={(e) => setFormData(prev => ({ ...prev, phonetic: e.target.value }))}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '4px',
-                    fontSize: '14px'
-                  }}
+                  style={adminPageStyles.formInput}
                   placeholder="Voice recognition name"
                 />
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+            <div style={adminPageStyles.formButtons}>
               <button
                 type="submit"
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#3182ce',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
+                style={adminPageStyles.formPrimaryButton}
+                onMouseEnter={(e) => {
+                  (e.target as HTMLElement).style.backgroundColor = theme.colors.primaryHover;
+                  (e.target as HTMLElement).style.transform = 'translateY(-1px)';
+                }}
+                onMouseLeave={(e) => {
+                  (e.target as HTMLElement).style.backgroundColor = theme.colors.primary;
+                  (e.target as HTMLElement).style.transform = 'translateY(0)';
                 }}
               >
                 {editingUser ? 'Update' : 'Create'}
@@ -514,13 +569,12 @@ function UsersManager() {
               <button
                 type="button"
                 onClick={resetForm}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#e2e8f0',
-                  color: '#4a5568',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
+                style={adminPageStyles.formSecondaryButton}
+                onMouseEnter={(e) => {
+                  (e.target as HTMLElement).style.backgroundColor = theme.colors.border;
+                }}
+                onMouseLeave={(e) => {
+                  (e.target as HTMLElement).style.backgroundColor = theme.colors.surfaceHover;
                 }}
               >
                 Cancel
@@ -531,117 +585,164 @@ function UsersManager() {
       )}
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px' }}>
+        <div style={{
+          textAlign: 'center',
+          padding: theme.spacing[8]
+        }}>
           <div style={{
             width: '40px',
             height: '40px',
-            border: '4px solid #e2e8f0',
-            borderTop: '4px solid #3182ce',
+            border: `4px solid ${theme.colors.surfaceHover}`,
+            borderTop: `4px solid ${theme.colors.primary}`,
             borderRadius: '50%',
             animation: 'spin 1s linear infinite',
-            margin: '0 auto 16px'
+            margin: '0 auto'
           }}></div>
-          <p>Loading users...</p>
+          <p style={{
+            marginTop: theme.spacing[4],
+            color: theme.colors.textSecondary,
+            fontSize: theme.typography.fontSize.sm
+          }}>
+            Loading users...
+          </p>
         </div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div style={{
+          overflowX: 'auto',
+          borderRadius: theme.borderRadius.lg,
+          border: `1px solid ${theme.colors.border}`
+        }}>
+          <table style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            backgroundColor: theme.colors.surface,
+            fontSize: theme.typography.fontSize.sm
+          }}>
             <thead>
-              <tr style={{ backgroundColor: '#f7fafc' }}>
-                <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Name</th>
-                <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Username</th>
-                <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Email</th>
-                <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Rank</th>
-                <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Actions</th>
+              <tr style={{
+                backgroundColor: theme.colors.surfaceHover,
+                borderBottom: `2px solid ${theme.colors.border}`
+              }}>
+                <th style={{
+                  padding: theme.spacing[4],
+                  textAlign: 'left',
+                  color: theme.colors.text,
+                  fontWeight: theme.typography.fontWeight.semibold,
+                  fontSize: theme.typography.fontSize.sm
+                }}>
+                  Name
+                </th>
+                <th style={{
+                  padding: theme.spacing[4],
+                  textAlign: 'left',
+                  color: theme.colors.text,
+                  fontWeight: theme.typography.fontWeight.semibold,
+                  fontSize: theme.typography.fontSize.sm
+                }}>
+                  Username
+                </th>
+                <th style={{
+                  padding: theme.spacing[4],
+                  textAlign: 'left',
+                  color: theme.colors.text,
+                  fontWeight: theme.typography.fontWeight.semibold,
+                  fontSize: theme.typography.fontSize.sm
+                }}>
+                  Email
+                </th>
+                <th style={{
+                  padding: theme.spacing[4],
+                  textAlign: 'left',
+                  color: theme.colors.text,
+                  fontWeight: theme.typography.fontWeight.semibold,
+                  fontSize: theme.typography.fontSize.sm
+                }}>
+                  Rank
+                </th>
+                <th style={{
+                  padding: theme.spacing[4],
+                  textAlign: 'left',
+                  color: theme.colors.text,
+                  fontWeight: theme.typography.fontWeight.semibold,
+                  fontSize: theme.typography.fontSize.sm
+                }}>
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
               {users.map(user => (
-                <tr key={user.id}>
-                  <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>{user.name}</td>
-                  <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>{user.username}</td>
-                  <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>{user.email || 'N/A'}</td>
-                  <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span>{getRankName(user.rank || '')}</span>
-                      <select
-                        value=""
-                        onChange={(e) => {
-                          if (e.target.value) {
-                            handleAssignRank(user.id, e.target.value);
-                            e.target.value = ''; // Reset select
-                          }
-                        }}
-                        style={{
-                          padding: '2px 4px',
-                          fontSize: '12px',
-                          border: '1px solid #e2e8f0',
-                          borderRadius: '3px'
-                        }}
-                      >
-                        <option value="">Assign Rank</option>
-                        {ranks.map(rank => (
-                          <option key={rank.id} value={rank.id}>
-                            {rank.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                <tr key={user.id} style={{
+                  borderBottom: `1px solid ${theme.colors.border}`,
+                  transition: 'background-color 0.2s ease-in-out',
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={(e) => {
+                  (e.target as HTMLElement).closest('tr')!.style.backgroundColor = theme.colors.surfaceHover;
+                }}
+                onMouseLeave={(e) => {
+                  (e.target as HTMLElement).closest('tr')!.style.backgroundColor = 'transparent';
+                }}
+                >
+                  <td style={{
+                    padding: theme.spacing[4],
+                    color: theme.colors.text,
+                    fontWeight: theme.typography.fontWeight.medium
+                  }}>
+                    {user.name}
                   </td>
-                  <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                        <button
-                          onClick={() => handleEdit(user)}
-                          style={{
-                            padding: '4px 8px',
-                            backgroundColor: '#3182ce',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '12px'
-                          }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(user.id)}
-                          style={{
-                            padding: '4px 8px',
-                            backgroundColor: '#e53e3e',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '12px'
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                      <select
-                        value=""
-                        onChange={(e) => {
-                          if (e.target.value) {
-                            handleAssignAccess(user.id, e.target.value);
-                            e.target.value = ''; // Reset select
-                          }
-                        }}
+                  <td style={{
+                    padding: theme.spacing[4],
+                    color: theme.colors.textSecondary
+                  }}>
+                    {user.username}
+                  </td>
+                  <td style={{
+                    padding: theme.spacing[4],
+                    color: theme.colors.textSecondary
+                  }}>
+                    {user.email || 'N/A'}
+                  </td>
+                  <td style={{
+                    padding: theme.spacing[4],
+                    color: theme.colors.textSecondary
+                  }}>
+                    {getRankName(user.rank || '')}
+                  </td>
+                  <td style={{
+                    padding: theme.spacing[4]
+                  }}>
+                    <div style={{ display: 'flex', gap: theme.spacing[1] }}>
+                      <button
+                        onClick={() => handleEdit(user)}
                         style={{
-                          padding: '2px 4px',
-                          fontSize: '12px',
-                          border: '1px solid #e2e8f0',
-                          borderRadius: '3px'
+                          padding: `${theme.spacing[1]} ${theme.spacing[2]}`,
+                          backgroundColor: theme.colors.primary,
+                          color: theme.colors.background,
+                          border: 'none',
+                          borderRadius: theme.borderRadius.sm,
+                          fontSize: theme.typography.fontSize.xs,
+                          fontWeight: theme.typography.fontWeight.medium,
+                          cursor: 'pointer'
                         }}
                       >
-                        <option value="">Assign Access</option>
-                        {accessLevels.map(level => (
-                          <option key={level.id} value={level.id}>
-                            {level.name}
-                          </option>
-                        ))}
-                      </select>
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(user.id)}
+                        style={{
+                          padding: `${theme.spacing[1]} ${theme.spacing[2]}`,
+                          backgroundColor: theme.colors.error,
+                          color: theme.colors.text,
+                          border: 'none',
+                          borderRadius: theme.borderRadius.sm,
+                          fontSize: theme.typography.fontSize.xs,
+                          fontWeight: theme.typography.fontWeight.medium,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Delete
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -651,15 +752,19 @@ function UsersManager() {
         </div>
       )}
 
-      {message && (
+      {users.length === 0 && !loading && (
         <div style={{
-          marginTop: '16px',
-          padding: '12px',
-          backgroundColor: message.includes('Error') || message.includes('Failed') ? '#fed7d7' : '#c6f6d5',
-          border: `1px solid ${message.includes('Error') || message.includes('Failed') ? '#e53e3e' : '#38a169'}`,
-          borderRadius: '4px',
-          color: message.includes('Error') || message.includes('Failed') ? '#c53030' : '#276749'
+          textAlign: 'center',
+          padding: theme.spacing[8],
+          color: theme.colors.textMuted,
+          fontSize: theme.typography.fontSize.sm
         }}>
+          No users found. Create your first user to get started.
+        </div>
+      )}
+
+      {message && (
+        <div style={getMessageStyle(message)}>
           {message}
         </div>
       )}

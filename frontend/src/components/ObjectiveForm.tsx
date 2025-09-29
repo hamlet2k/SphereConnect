@@ -8,6 +8,7 @@ interface ObjectiveFormProps {
   onSuccess: (objective: Objective) => void;
   onCancel: () => void;
   isOpen: boolean;
+  modal?: boolean; // Default true for backward compatibility
 }
 
 const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
@@ -15,7 +16,8 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
   guildId,
   onSuccess,
   onCancel,
-  isOpen
+  isOpen,
+  modal = true
 }) => {
   const { createObjective, updateObjective } = useObjectivesAPI();
   const [formData, setFormData] = useState<Objective>({
@@ -29,12 +31,13 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
     },
     categories: [],
     priority: 'Medium',
-    applicable_rank: 'Recruit',
+    allowed_ranks: [],
     progress: {},
     guild_id: guildId
   });
 
   const [availableCategories, setAvailableCategories] = useState<{id: string, name: string, description?: string}[]>([]);
+  const [availableRanks, setAvailableRanks] = useState<{id: string, name: string, hierarchy_level: number}[]>([]);
   const [newMetricKey, setNewMetricKey] = useState('');
   const [newMetricValue, setNewMetricValue] = useState('');
   const [loading, setLoading] = useState(false);
@@ -56,12 +59,33 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
     }
   }, [guildId]);
 
+  const loadRanks = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:8000/api/admin/ranks?guild_id=${guildId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAvailableRanks(data.map((rank: any) => ({
+          id: rank.id,
+          name: rank.name,
+          hierarchy_level: rank.hierarchy_level
+        })));
+      }
+    } catch (err: any) {
+      console.error('Error loading ranks:', err);
+    }
+  }, [guildId]);
+
   useEffect(() => {
     if (objective) {
       setFormData(objective);
     }
     loadCategories();
-  }, [objective, loadCategories]);
+    loadRanks();
+  }, [objective, loadCategories, loadRanks]);
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({
@@ -155,42 +179,8 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
     }
   };
 
-  return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-      padding: theme.spacing[4]
-    }}>
-      <div style={{
-        backgroundColor: theme.colors.surface,
-        borderRadius: theme.borderRadius.xl,
-        padding: theme.spacing[6],
-        border: `1px solid ${theme.colors.border}`,
-        boxShadow: theme.shadows.lg,
-        maxWidth: '800px',
-        width: '100%',
-        maxHeight: '90vh',
-        overflowY: 'auto'
-      }}>
-        <h3 style={{
-          marginTop: 0,
-          marginBottom: theme.spacing[6],
-          color: theme.colors.primary,
-          fontSize: theme.typography.fontSize['2xl'],
-          fontWeight: theme.typography.fontWeight.bold,
-          textShadow: theme.shadows.neon
-        }}>
-          {objective ? 'Edit Objective' : 'Create New Objective'}
-        </h3>
-
+  const formContent = (
+    <>
       {error && (
         <div style={{
           padding: theme.spacing[3],
@@ -288,32 +278,72 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
               color: theme.colors.text,
               fontSize: theme.typography.fontSize.sm
             }}>
-              Applicable Rank
+              Allowed Ranks
             </label>
-            <select
-              value={formData.applicable_rank}
-              onChange={(e) => handleInputChange('applicable_rank', e.target.value)}
-              style={{
-                width: '100%',
-                padding: `${theme.spacing[2]} ${theme.spacing[3]}`,
-                border: `2px solid ${theme.colors.border}`,
-                borderRadius: theme.borderRadius.lg,
-                fontSize: theme.typography.fontSize.base,
-                backgroundColor: theme.colors.background,
-                color: theme.colors.text,
-                outline: 'none',
-                cursor: 'pointer'
-              }}
-            >
-              <option value="Recruit">Recruit</option>
-              <option value="Corporal">Corporal</option>
-              <option value="Sergeant">Sergeant</option>
-              <option value="Lieutenant">Lieutenant</option>
-              <option value="Captain">Captain</option>
-              <option value="Major">Major</option>
-              <option value="Colonel">Colonel</option>
-              <option value="Commander">Commander</option>
-            </select>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing[2] }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: theme.spacing[2] }}>
+                {availableRanks
+                  .sort((a, b) => b.hierarchy_level - a.hierarchy_level) // Sort by hierarchy (higher first)
+                  .map(rank => (
+                  <label
+                    key={rank.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: theme.spacing[2],
+                      padding: theme.spacing[2],
+                      backgroundColor: theme.colors.surfaceHover,
+                      borderRadius: theme.borderRadius.lg,
+                      cursor: 'pointer',
+                      border: `1px solid ${theme.colors.border}`
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={formData.allowed_ranks.includes(rank.id)}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        let newAllowedRanks = [...formData.allowed_ranks];
+
+                        if (checked) {
+                          // Add this rank and all ranks with equal or lower seniority (higher hierarchy_level)
+                          newAllowedRanks.push(rank.id);
+                          const selectedLevel = rank.hierarchy_level;
+                          availableRanks.forEach(r => {
+                            if (r.hierarchy_level >= selectedLevel && !newAllowedRanks.includes(r.id)) {
+                              newAllowedRanks.push(r.id);
+                            }
+                          });
+                        } else {
+                          // Remove this rank, but keep ranks that were selected independently
+                          newAllowedRanks = newAllowedRanks.filter(id => id !== rank.id);
+                        }
+
+                        setFormData(prev => ({
+                          ...prev,
+                          allowed_ranks: newAllowedRanks
+                        }));
+                      }}
+                      style={{
+                        width: '16px',
+                        height: '16px',
+                        cursor: 'pointer'
+                      }}
+                    />
+                    <span style={{
+                      color: theme.colors.text,
+                      fontSize: theme.typography.fontSize.sm,
+                      fontWeight: theme.typography.fontWeight.medium
+                    }}>
+                      {rank.name}
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <small style={{ color: theme.colors.textSecondary, fontSize: theme.typography.fontSize.xs }}>
+                Select ranks that can view this objective. Higher ranks are automatically included when a lower rank is selected.
+              </small>
+            </div>
           </div>
         </div>
 
@@ -628,7 +658,72 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
           </button>
         </div>
       </form>
+    </>
+  );
+
+  if (modal) {
+    return (
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        padding: theme.spacing[4]
+      }}>
+        <div style={{
+          backgroundColor: theme.colors.surface,
+          borderRadius: theme.borderRadius.xl,
+          padding: theme.spacing[6],
+          border: `1px solid ${theme.colors.border}`,
+          boxShadow: theme.shadows.lg,
+          maxWidth: '800px',
+          width: '100%',
+          maxHeight: '90vh',
+          overflowY: 'auto'
+        }}>
+          <h3 style={{
+            marginTop: 0,
+            marginBottom: theme.spacing[6],
+            color: theme.colors.primary,
+            fontSize: theme.typography.fontSize['2xl'],
+            fontWeight: theme.typography.fontWeight.bold,
+            textShadow: theme.shadows.neon
+          }}>
+            {objective ? 'Edit Objective' : 'Create New Objective'}
+          </h3>
+
+          {formContent}
+        </div>
       </div>
+    );
+  }
+
+  return (
+    <div style={{
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.borderRadius.xl,
+      padding: theme.spacing[6],
+      border: `1px solid ${theme.colors.border}`,
+      boxShadow: theme.shadows.lg
+    }}>
+      <h4 style={{
+        marginTop: 0,
+        marginBottom: theme.spacing[6],
+        color: theme.colors.primary,
+        fontSize: theme.typography.fontSize.xl,
+        fontWeight: theme.typography.fontWeight.bold,
+        textShadow: theme.shadows.neon
+      }}>
+        {objective ? 'Edit Objective' : 'Create New Objective'}
+      </h4>
+
+      {formContent}
     </div>
   );
 };

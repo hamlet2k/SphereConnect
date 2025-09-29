@@ -46,7 +46,7 @@ class ObjectiveCreate(BaseModel):
     description: Optional[Dict[str, Any]] = {"brief": "", "tactical": "", "classified": "", "metrics": {}}
     categories: Optional[List[str]] = []
     priority: Optional[str] = "Medium"
-    applicable_rank: Optional[str] = "Recruit"
+    allowed_ranks: Optional[List[str]] = []
     guild_id: str
     squad_id: Optional[str] = None
 
@@ -662,6 +662,7 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
             guild_id=personal_guild_id,
             name="CO",
             phonetic="Commander",
+            hierarchy_level=1,  # CO is the highest rank (lowest number)
             access_levels=[access_view.id, access_manage.id, access_objectives.id, access_rbac.id, access_view_ranks.id, access_manage_ranks.id]
         )
 
@@ -1218,7 +1219,7 @@ async def create_objective(
             description=objective.description,
             preferences=[],  # Will be set based on user preferences if needed
             priority=objective.priority,
-            applicable_rank=objective.applicable_rank,
+            allowed_ranks=objective.allowed_ranks,
             squad_id=uuid.UUID(squad_id) if squad_id else None,
             lead_id=current_user.id  # Set creator as lead
         )
@@ -1591,6 +1592,7 @@ async def get_objectives(
     status: str = None,
     category: str = None,
     category_id: str = None,
+    rank_filter: str = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -1640,6 +1642,42 @@ async def get_objectives(
                     filtered_objectives.append(obj)
             objectives = filtered_objectives
 
+        # Filter by rank_filter if provided (admin only)
+        if rank_filter:
+            # Check if user has admin access for rank filtering
+            if not check_admin_access(current_user, db):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access denied: Admin access required for rank filtering"
+                )
+            rank_uuid = uuid.UUID(rank_filter)
+            filtered_objectives = []
+            for obj in objectives:
+                if str(rank_uuid) in obj.allowed_ranks:
+                    filtered_objectives.append(obj)
+            objectives = filtered_objectives
+
+        # Apply rank-based visibility filtering (non-admin users)
+        # Check for super_admin bypass
+        user_access_levels = db.query(UserAccess).filter(UserAccess.user_id == current_user.id).all()
+        has_super_admin = any(
+            db.query(AccessLevel).filter(AccessLevel.id == ua.access_level_id, AccessLevel.name == 'super_admin').first()
+            for ua in user_access_levels
+        )
+
+        if not has_super_admin:
+            # Filter objectives where user's rank is in allowed_ranks
+            user_rank_id = str(current_user.rank) if current_user.rank else None
+            if user_rank_id:
+                filtered_objectives = []
+                for obj in objectives:
+                    if user_rank_id in obj.allowed_ranks:
+                        filtered_objectives.append(obj)
+                objectives = filtered_objectives
+            else:
+                # User has no rank, show only objectives with empty allowed_ranks (shouldn't happen normally)
+                objectives = [obj for obj in objectives if not obj.allowed_ranks]
+
         return [
             {
                 "id": str(obj.id),
@@ -1648,6 +1686,7 @@ async def get_objectives(
                 "categories": [str(cat.id) for cat in obj.categories],
                 "priority": obj.priority,
                 "progress": obj.progress,
+                "allowed_ranks": obj.allowed_ranks,
                 "guild_id": str(obj.guild_id),
                 "lead_id": str(obj.lead_id) if obj.lead_id else None,
                 "squad_id": str(obj.squad_id) if obj.squad_id else None
@@ -1793,10 +1832,15 @@ async def create_invite(invite_data: dict, current_user: User = Depends(get_curr
         db.add(invite)
         db.commit()
 
+        # Get guild name for response
+        guild = db.query(Guild).filter(Guild.id == invite.guild_id).first()
+        guild_name = guild.name if guild else "Unknown Guild"
+
         return {
             "id": str(invite.id),
             "code": invite_code,
             "guild_id": str(invite.guild_id),
+            "guild_name": guild_name,
             "expires_at": invite.expires_at.isoformat() if invite.expires_at else None,
             "uses_left": invite.uses_left
         }

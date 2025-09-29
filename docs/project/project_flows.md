@@ -16,9 +16,10 @@ For detailed data entities referenced here, see [`project_data_structures.md`](.
 4. [Objective & Task Management](#4-objective--task-management)
 5. [Invite Management](#5-invite-management)
 6. [Access Level Management](#6-access-level-management)
-7. [Category Management](#7-category-management)
-8. [Notes](#notes)
-9. [Entities Referenced in These Flows](#entities-referenced-in-these-flows)
+7. [Rank Management](#7-rank-management)
+8. [Category Management](#8-category-management)
+9. [Notes](#notes)
+10. [Entities Referenced in These Flows](#entities-referenced-in-these-flows)
 
 ---
 
@@ -146,6 +147,14 @@ sequenceDiagram
 - Objective CRUD now returns categories as IDs; frontend resolves them to names.
 - Editing objectives pre-checks assigned categories in the form using IDs.
 - Category deletion unlinks categories from objectives without removing objectives.
+- Objectives now use `allowed_ranks[]` (array of rank IDs) for visibility.
+- `applicable_rank` is deprecated; if provided, it is converted into `allowed_ranks` for backward compatibility.
+- UI behavior:
+  - When a rank is selected, all ranks with equal or lower seniority (higher hierarchy_level) are auto-selected by default.
+  - Example: selecting CO (3) auto-selects XO (4), NCO (5), Recruit (6).
+  - Users can override by manually unchecking ranks.
+- Backend stores only the explicit `allowed_ranks[]` list and enforces visibility strictly by membership.
+- Super_admin bypass applies regardless of `allowed_ranks`.
 
 
 ---
@@ -187,7 +196,37 @@ sequenceDiagram
 
 ---
 
-## 7. Category Management
+## 7. Rank Management
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant W as Web PWA (RanksManager.tsx)
+    participant B as Backend (/api/admin/ranks)
+    participant D as Database
+    U->>W: Manage ranks
+    W->>B: GET /api/admin/ranks?guild_id
+    B->>D: Fetch ranks
+    D-->>B: Ranks list
+    B-->>W: 200 {ranks}
+    W->>U: Display ranks table
+    U->>W: Create/Edit/Delete rank
+    W->>B: POST/GET/PUT/DELETE /api/admin/ranks
+    B->>D: Validate & update
+    alt Delete rank
+        B->>D: Unlink rank from all objectives' allowed_ranks
+    end
+    D-->>B: Success
+    B-->>W: Response
+```
+
+
+**Notes:**
+- Rank hierarchy uses `hierarchy_level` (lower number = higher rank).
+- Rank deletion automatically unlinks the rank from all objectives' `allowed_ranks`.
+- If `allowed_ranks` becomes empty after deletion, objectives become visible only to super_admin.
+- Super_admin rank cannot be deleted or modified.
+
+## 8. Category Management
 ```mermaid
 sequenceDiagram
     participant U as User

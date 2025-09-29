@@ -281,7 +281,7 @@ const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
                 Priority: {objective.priority}
               </span>
               <span style={{ color: theme.colors.textSecondary }}>
-                Rank: {objective.applicable_rank}
+                Allowed Ranks: {objective.allowed_ranks?.length ? objective.allowed_ranks.join(', ') : 'None'}
               </span>
             </div>
           </div>

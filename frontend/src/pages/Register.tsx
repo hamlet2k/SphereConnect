@@ -1,5 +1,6 @@
 import React, { useState, FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import { authPageStyles, authPageCSS } from '../components/AuthPageStyles';
 
 function Register() {
   const [username, setUsername] = useState('');
@@ -72,94 +73,63 @@ function Register() {
   };
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-      padding: '20px',
-      fontFamily: 'Arial, sans-serif'
-    }}>
-      <form onSubmit={handleSubmit} style={{
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        padding: '40px',
-        borderRadius: '10px',
-        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
-        border: '1px solid rgba(255, 255, 255, 0.2)',
-        maxWidth: '400px',
-        width: '100%'
-      }}>
-        <h2 style={{
-          textAlign: 'center',
-          marginBottom: '30px',
-          color: '#ffffff',
-          fontSize: '28px',
-          textShadow: '0 0 10px rgba(255, 255, 255, 0.5)'
-        }}>
+    <div style={authPageStyles.pageContainer}>
+      <form onSubmit={handleSubmit} style={authPageStyles.formContainer}>
+        <h2 style={authPageStyles.formTitle}>
           SphereConnect Registration
         </h2>
 
-        <div style={{ marginBottom: '20px' }}>
+        <div style={authPageStyles.inputContainer}>
           <input
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             placeholder="Username"
             required
-            style={{
-              width: '100%',
-              padding: '15px',
-              border: '1px solid rgba(255, 255, 255, 0.3)',
-              borderRadius: '5px',
-              fontSize: '16px',
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              color: '#ffffff',
-              outline: 'none'
+            style={authPageStyles.inputBase}
+            onFocus={(e) => {
+              Object.assign(e.target.style, authPageStyles.getInputFocusStyles());
+            }}
+            onBlur={(e) => {
+              Object.assign(e.target.style, authPageStyles.getInputBlurStyles());
             }}
           />
         </div>
 
-        <div style={{ marginBottom: '20px' }}>
+        <div style={authPageStyles.inputContainer}>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Email (optional)"
-            style={{
-              width: '100%',
-              padding: '15px',
-              border: '1px solid rgba(255, 255, 255, 0.3)',
-              borderRadius: '5px',
-              fontSize: '16px',
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              color: '#ffffff',
-              outline: 'none'
+            style={authPageStyles.inputBase}
+            onFocus={(e) => {
+              Object.assign(e.target.style, authPageStyles.getInputFocusStyles());
+            }}
+            onBlur={(e) => {
+              Object.assign(e.target.style, authPageStyles.getInputBlurStyles());
             }}
           />
         </div>
 
-        <div style={{ marginBottom: '20px' }}>
+        <div style={authPageStyles.inputContainer}>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password (min 8 characters)"
             required
-            style={{
-              width: '100%',
-              padding: '15px',
-              border: '1px solid rgba(255, 255, 255, 0.3)',
-              borderRadius: '5px',
-              fontSize: '16px',
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              color: '#ffffff',
-              outline: 'none'
+            style={authPageStyles.inputBase}
+            onFocus={(e) => {
+              Object.assign(e.target.style, authPageStyles.getInputFocusStyles());
+            }}
+            onBlur={(e) => {
+              Object.assign(e.target.style, authPageStyles.getInputBlurStyles());
             }}
           />
         </div>
 
-        <div style={{ marginBottom: '20px' }}>
+        <div style={authPageStyles.inputContainer}>
           <input
             type="password"
             value={pin}
@@ -168,35 +138,30 @@ function Register() {
             maxLength={6}
             required
             style={{
-              width: '100%',
-              padding: '15px',
-              border: '1px solid rgba(255, 255, 255, 0.3)',
-              borderRadius: '5px',
-              fontSize: '16px',
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              color: '#ffffff',
-              outline: 'none',
-              textAlign: 'center',
-              letterSpacing: '4px'
+              ...authPageStyles.inputBase,
+              ...authPageStyles.pinInput
+            }}
+            onFocus={(e) => {
+              Object.assign(e.target.style, authPageStyles.getInputFocusStyles());
+            }}
+            onBlur={(e) => {
+              Object.assign(e.target.style, authPageStyles.getInputBlurStyles());
             }}
           />
         </div>
 
-        <div style={{ marginBottom: '20px' }}>
+        <div style={{ marginBottom: authPageStyles.inputContainer.marginBottom }}>
           <input
             type="text"
             value={inviteCode}
             onChange={(e) => setInviteCode(e.target.value)}
             placeholder="Invite Code (optional)"
-            style={{
-              width: '100%',
-              padding: '15px',
-              border: '1px solid rgba(255, 255, 255, 0.3)',
-              borderRadius: '5px',
-              fontSize: '16px',
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              color: '#ffffff',
-              outline: 'none'
+            style={authPageStyles.inputBase}
+            onFocus={(e) => {
+              Object.assign(e.target.style, authPageStyles.getInputFocusStyles());
+            }}
+            onBlur={(e) => {
+              Object.assign(e.target.style, authPageStyles.getInputBlurStyles());
             }}
           />
         </div>
@@ -205,40 +170,50 @@ function Register() {
           type="submit"
           disabled={isLoading}
           style={{
-            width: '100%',
-            padding: '15px',
-            backgroundColor: isLoading ? '#666' : '#4a90e2',
-            color: 'white',
-            border: 'none',
-            borderRadius: '5px',
-            fontSize: '16px',
-            cursor: isLoading ? 'not-allowed' : 'pointer',
-            transition: 'background-color 0.3s'
+            ...authPageStyles.buttonBase,
+            ...authPageStyles.getButtonPrimaryStyles(isLoading)
+          }}
+          onMouseEnter={(e) => {
+            if (!isLoading) {
+              Object.assign((e.target as HTMLElement).style, authPageStyles.getButtonHoverStyles());
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!isLoading) {
+              Object.assign((e.target as HTMLElement).style, authPageStyles.getButtonLeaveStyles());
+            }
           }}
         >
           {isLoading ? 'Registering...' : 'Register'}
         </button>
 
+        {/* Login CTA */}
+        <div style={authPageStyles.linkContainer}>
+          <span style={authPageStyles.linkText}>
+            Already have an account?{' '}
+          </span>
+          <Link
+            to="/login"
+            style={authPageStyles.linkBase}
+            onMouseEnter={(e) => {
+              Object.assign((e.target as HTMLElement).style, authPageStyles.getLinkHoverStyles());
+            }}
+            onMouseLeave={(e) => {
+              Object.assign((e.target as HTMLElement).style, authPageStyles.getLinkLeaveStyles());
+            }}
+          >
+            Login here
+          </Link>
+        </div>
+
         {message && (
-          <p style={{
-            marginTop: '20px',
-            color: message.includes('Error') ? '#ff6b6b' : '#51cf66',
-            textAlign: 'center',
-            fontWeight: 'bold'
-          }}>
+          <p style={authPageStyles.getMessageStyles(message.includes('Error'))}>
             {message}
           </p>
         )}
-
-        <p style={{
-          marginTop: '20px',
-          textAlign: 'center',
-          color: '#cccccc',
-          fontSize: '14px'
-        }}>
-          Already have an account? <a href="/login" style={{ color: '#4a90e2', textDecoration: 'none' }}>Login here</a>
-        </p>
       </form>
+
+      <style>{authPageCSS}</style>
     </div>
   );
 }

@@ -125,7 +125,7 @@ class Objective(Base):
     preferences = Column(ARRAY(String), default=[])
     categories = relationship('ObjectiveCategory', secondary=objective_categories_association, backref='objectives')
     priority = Column(String, default='Medium')
-    applicable_rank = Column(String, default='Recruit')
+    allowed_ranks = Column(ARRAY(PG_UUID(as_uuid=True)), default=[])
     progress = Column(JSONB, default={})
     tasks = Column(ARRAY(PG_UUID(as_uuid=True)), default=[])
     lead_id = Column(PG_UUID(as_uuid=True), ForeignKey('users.id'))
@@ -164,6 +164,7 @@ class Rank(Base):
     name = Column(String, nullable=False)
     phonetic = Column(String)
     access_levels = Column(ARRAY(PG_UUID(as_uuid=True)), default=[])
+    hierarchy_level = Column(Integer, nullable=False)
 
 class AccessLevel(Base):
     __tablename__ = 'access_levels'

@@ -13,7 +13,7 @@ export interface Objective {
   description: ObjectiveDescription;
   categories: string[];
   priority: string;
-  applicable_rank: string;
+  allowed_ranks: string[];
   progress: any;
   tasks?: string[];
   lead_id?: string;

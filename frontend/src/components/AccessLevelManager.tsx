@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useGuild } from '../contexts/GuildContext';
+import { theme } from '../theme';
+import { adminPageStyles, getMessageStyle } from './AdminPageStyles';
 
 interface AccessLevel {
   id: string;
@@ -180,18 +182,21 @@ function AccessLevelManager() {
   }
 
   return (
-    <div style={{ padding: '24px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h3 style={{ margin: 0 }}>Access Levels Management</h3>
+    <div style={adminPageStyles.container}>
+      <div style={adminPageStyles.header}>
+        <h3 style={adminPageStyles.title}>
+          Access Levels Management
+        </h3>
         <button
           onClick={() => setShowForm(true)}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: '#3182ce',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
+          style={adminPageStyles.primaryButton}
+          onMouseEnter={(e) => {
+            (e.target as HTMLElement).style.backgroundColor = '#E55A2B';
+            (e.target as HTMLElement).style.transform = 'translateY(-1px)';
+          }}
+          onMouseLeave={(e) => {
+            (e.target as HTMLElement).style.backgroundColor = '#FF6B35';
+            (e.target as HTMLElement).style.transform = 'translateY(0)';
           }}
         >
           Create Access Level
@@ -199,67 +204,61 @@ function AccessLevelManager() {
       </div>
 
       {showForm && (
-        <div style={{
-          backgroundColor: '#f7fafc',
-          padding: '24px',
-          borderRadius: '8px',
-          marginBottom: '24px',
-          border: '1px solid #e2e8f0'
-        }}>
-          <h4 style={{ margin: '0 0 16px 0' }}>
+        <div style={adminPageStyles.formContainer}>
+          <h4 style={adminPageStyles.formTitle}>
             {editingLevel ? 'Edit Access Level' : 'Create New Access Level'}
           </h4>
 
           <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+            <div style={adminPageStyles.formField}>
+              <label style={adminPageStyles.formLabel}>
                 Name:
               </label>
               <input
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '4px',
-                  fontSize: '14px'
-                }}
+                style={adminPageStyles.formInput}
                 placeholder="Enter access level name"
                 required
               />
             </div>
 
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+            <div style={adminPageStyles.formField}>
+              <label style={adminPageStyles.formLabel}>
                 User Actions:
               </label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
+              <div style={adminPageStyles.checkboxGrid}>
                 {USER_ACTIONS.map(action => (
-                  <label key={action} style={{ display: 'flex', alignItems: 'center' }}>
+                  <label key={action} style={adminPageStyles.checkboxItem}>
                     <input
                       type="checkbox"
                       checked={formData.user_actions.includes(action)}
                       onChange={() => handleActionToggle(action)}
-                      style={{ marginRight: '8px' }}
+                      style={{ marginRight: theme.spacing[2] }}
                     />
-                    {action.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    <span style={{
+                      color: theme.colors.text,
+                      fontSize: theme.typography.fontSize.sm
+                    }}>
+                      {action.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    </span>
                   </label>
                 ))}
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={adminPageStyles.formButtons}>
               <button
                 type="submit"
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#3182ce',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
+                style={adminPageStyles.formPrimaryButton}
+                onMouseEnter={(e) => {
+                  (e.target as HTMLElement).style.backgroundColor = theme.colors.primaryHover;
+                  (e.target as HTMLElement).style.transform = 'translateY(-1px)';
+                }}
+                onMouseLeave={(e) => {
+                  (e.target as HTMLElement).style.backgroundColor = theme.colors.primary;
+                  (e.target as HTMLElement).style.transform = 'translateY(0)';
                 }}
               >
                 {editingLevel ? 'Update' : 'Create'}
@@ -267,13 +266,12 @@ function AccessLevelManager() {
               <button
                 type="button"
                 onClick={resetForm}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#e2e8f0',
-                  color: '#4a5568',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
+                style={adminPageStyles.formSecondaryButton}
+                onMouseEnter={(e) => {
+                  (e.target as HTMLElement).style.backgroundColor = theme.colors.border;
+                }}
+                onMouseLeave={(e) => {
+                  (e.target as HTMLElement).style.backgroundColor = theme.colors.surfaceHover;
                 }}
               >
                 Cancel
@@ -284,53 +282,129 @@ function AccessLevelManager() {
       )}
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px' }}>
+        <div style={{
+          textAlign: 'center',
+          padding: theme.spacing[8]
+        }}>
           <div style={{
             width: '40px',
             height: '40px',
-            border: '4px solid #e2e8f0',
-            borderTop: '4px solid #3182ce',
+            border: `4px solid ${theme.colors.surfaceHover}`,
+            borderTop: `4px solid ${theme.colors.primary}`,
             borderRadius: '50%',
             animation: 'spin 1s linear infinite',
-            margin: '0 auto 16px'
+            margin: '0 auto'
           }}></div>
-          <p>Loading access levels...</p>
+          <p style={{
+            marginTop: theme.spacing[4],
+            color: theme.colors.textSecondary,
+            fontSize: theme.typography.fontSize.sm
+          }}>
+            Loading access levels...
+          </p>
         </div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div style={{
+          overflowX: 'auto',
+          borderRadius: theme.borderRadius.lg,
+          border: `1px solid ${theme.colors.border}`
+        }}>
+          <table style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            backgroundColor: theme.colors.surface,
+            fontSize: theme.typography.fontSize.sm
+          }}>
             <thead>
-              <tr style={{ backgroundColor: '#f7fafc' }}>
-                <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Name</th>
-                <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>User Actions</th>
-                <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Actions</th>
+              <tr style={{
+                backgroundColor: theme.colors.surfaceHover,
+                borderBottom: `2px solid ${theme.colors.border}`
+              }}>
+                <th style={{
+                  padding: theme.spacing[4],
+                  textAlign: 'left',
+                  color: theme.colors.text,
+                  fontWeight: theme.typography.fontWeight.semibold,
+                  fontSize: theme.typography.fontSize.sm
+                }}>
+                  Name
+                </th>
+                <th style={{
+                  padding: theme.spacing[4],
+                  textAlign: 'left',
+                  color: theme.colors.text,
+                  fontWeight: theme.typography.fontWeight.semibold,
+                  fontSize: theme.typography.fontSize.sm
+                }}>
+                  User Actions
+                </th>
+                <th style={{
+                  padding: theme.spacing[4],
+                  textAlign: 'left',
+                  color: theme.colors.text,
+                  fontWeight: theme.typography.fontWeight.semibold,
+                  fontSize: theme.typography.fontSize.sm
+                }}>
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
               {accessLevels.map(level => (
-                <tr key={level.id}>
-                  <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>{level.name}</td>
-                  <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>
+                <tr key={level.id} style={{
+                  borderBottom: `1px solid ${theme.colors.border}`,
+                  transition: 'background-color 0.2s ease-in-out',
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={(e) => {
+                  (e.target as HTMLElement).closest('tr')!.style.backgroundColor = theme.colors.surfaceHover;
+                }}
+                onMouseLeave={(e) => {
+                  (e.target as HTMLElement).closest('tr')!.style.backgroundColor = 'transparent';
+                }}
+                >
+                  <td style={{
+                    padding: theme.spacing[4],
+                    color: theme.colors.text,
+                    fontWeight: theme.typography.fontWeight.medium
+                  }}>
+                    {level.name}
+                  </td>
+                  <td style={{
+                    padding: theme.spacing[4],
+                    color: theme.colors.textSecondary
+                  }}>
                     {level.user_actions.map(action =>
                       action.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
                     ).join(', ')}
                   </td>
-                  <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>
+                  <td style={{
+                    padding: theme.spacing[4]
+                  }}>
                     {level.name === 'super_admin' ? (
-                      <span style={{ color: '#718096', fontStyle: 'italic' }}>
+                      <span style={{
+                        color: theme.colors.textMuted,
+                        fontStyle: 'italic',
+                        fontSize: theme.typography.fontSize.sm
+                      }}>
                         Immutable (Full Access)
                       </span>
                     ) : (
-                      <>
+                      <div style={{
+                        display: 'flex',
+                        gap: theme.spacing[2],
+                        flexWrap: 'wrap'
+                      }}>
                         <button
                           onClick={() => handleEdit(level)}
                           style={{
-                            marginRight: '8px',
-                            padding: '4px 8px',
-                            backgroundColor: '#3182ce',
-                            color: 'white',
+                            padding: `${theme.spacing[1]} ${theme.spacing[2]}`,
+                            backgroundColor: theme.colors.primary,
+                            color: theme.colors.background,
                             border: 'none',
-                            borderRadius: '4px',
+                            borderRadius: theme.borderRadius.sm,
+                            fontSize: theme.typography.fontSize.xs,
+                            fontWeight: theme.typography.fontWeight.medium,
                             cursor: 'pointer'
                           }}
                         >
@@ -339,17 +413,19 @@ function AccessLevelManager() {
                         <button
                           onClick={() => handleDelete(level.id)}
                           style={{
-                            padding: '4px 8px',
-                            backgroundColor: '#e53e3e',
-                            color: 'white',
+                            padding: `${theme.spacing[1]} ${theme.spacing[2]}`,
+                            backgroundColor: theme.colors.error,
+                            color: theme.colors.text,
                             border: 'none',
-                            borderRadius: '4px',
+                            borderRadius: theme.borderRadius.sm,
+                            fontSize: theme.typography.fontSize.xs,
+                            fontWeight: theme.typography.fontWeight.medium,
                             cursor: 'pointer'
                           }}
                         >
                           Delete
                         </button>
-                      </>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -359,15 +435,19 @@ function AccessLevelManager() {
         </div>
       )}
 
-      {message && (
+      {accessLevels.length === 0 && !loading && (
         <div style={{
-          marginTop: '16px',
-          padding: '12px',
-          backgroundColor: message.includes('Error') || message.includes('Failed') ? '#fed7d7' : '#c6f6d5',
-          border: `1px solid ${message.includes('Error') || message.includes('Failed') ? '#e53e3e' : '#38a169'}`,
-          borderRadius: '4px',
-          color: message.includes('Error') || message.includes('Failed') ? '#c53030' : '#276749'
+          textAlign: 'center',
+          padding: theme.spacing[8],
+          color: theme.colors.textMuted,
+          fontSize: theme.typography.fontSize.sm
         }}>
+          No access levels found. Create your first access level to get started.
+        </div>
+      )}
+
+      {message && (
+        <div style={getMessageStyle(message)}>
           {message}
         </div>
       )}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, FormEvent } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useGuild } from '../contexts/GuildContext';
-import { theme } from '../theme';
+import { authPageStyles, authPageCSS } from '../components/AuthPageStyles';
 
 type LoginStep = 'credentials' | 'pin' | 'mfa' | 'success';
 
@@ -266,82 +266,41 @@ function Login() {
   };
 
   const renderCredentialsForm = () => (
-    <form onSubmit={handleCredentialsSubmit} style={{
-      maxWidth: '400px',
-      margin: '0 auto',
-      backgroundColor: theme.colors.surface,
-      padding: theme.spacing[8],
-      borderRadius: theme.borderRadius.xl,
-      border: `1px solid ${theme.colors.border}`,
-      boxShadow: theme.shadows.lg
-    }}>
-      <h2 style={{
-        textAlign: 'center',
-        marginBottom: theme.spacing[6],
-        color: theme.colors.primary,
-        fontSize: theme.typography.fontSize['2xl'],
-        fontWeight: theme.typography.fontWeight.bold,
-        textShadow: theme.shadows.neon
-      }}>
+    <form onSubmit={handleCredentialsSubmit} style={authPageStyles.formContainer}>
+      <h2 style={authPageStyles.formTitle}>
         SphereConnect Login
       </h2>
 
-      <div style={{ marginBottom: theme.spacing[4] }}>
+      <div style={authPageStyles.inputContainer}>
         <input
           type="text"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           placeholder="Username or Email"
           required
-          style={{
-            width: '100%',
-            padding: theme.spacing[3],
-            backgroundColor: theme.colors.background,
-            border: `2px solid ${theme.colors.border}`,
-            borderRadius: theme.borderRadius.lg,
-            color: theme.colors.text,
-            fontSize: theme.typography.fontSize.base,
-            fontFamily: theme.typography.fontFamily,
-            transition: 'all 0.2s ease-in-out',
-            outline: 'none'
-          }}
+          style={authPageStyles.inputBase}
           onFocus={(e) => {
-            e.target.style.borderColor = theme.colors.primary;
-            e.target.style.boxShadow = `0 0 0 3px ${theme.colors.primary}20`;
+            Object.assign(e.target.style, authPageStyles.getInputFocusStyles());
           }}
           onBlur={(e) => {
-            e.target.style.borderColor = theme.colors.border;
-            e.target.style.boxShadow = 'none';
+            Object.assign(e.target.style, authPageStyles.getInputBlurStyles());
           }}
         />
       </div>
 
-      <div style={{ marginBottom: theme.spacing[6] }}>
+      <div style={{ marginBottom: authPageStyles.inputContainer.marginBottom }}>
         <input
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Password"
           required
-          style={{
-            width: '100%',
-            padding: theme.spacing[3],
-            backgroundColor: theme.colors.background,
-            border: `2px solid ${theme.colors.border}`,
-            borderRadius: theme.borderRadius.lg,
-            color: theme.colors.text,
-            fontSize: theme.typography.fontSize.base,
-            fontFamily: theme.typography.fontFamily,
-            transition: 'all 0.2s ease-in-out',
-            outline: 'none'
-          }}
+          style={authPageStyles.inputBase}
           onFocus={(e) => {
-            e.target.style.borderColor = theme.colors.primary;
-            e.target.style.boxShadow = `0 0 0 3px ${theme.colors.primary}20`;
+            Object.assign(e.target.style, authPageStyles.getInputFocusStyles());
           }}
           onBlur={(e) => {
-            e.target.style.borderColor = theme.colors.border;
-            e.target.style.boxShadow = 'none';
+            Object.assign(e.target.style, authPageStyles.getInputBlurStyles());
           }}
         />
       </div>
@@ -350,30 +309,17 @@ function Login() {
         type="submit"
         disabled={isLoading}
         style={{
-          width: '100%',
-          padding: theme.spacing[3],
-          backgroundColor: isLoading ? theme.colors.surfaceHover : theme.colors.primary,
-          color: theme.colors.background,
-          border: 'none',
-          borderRadius: theme.borderRadius.lg,
-          fontSize: theme.typography.fontSize.lg,
-          fontWeight: theme.typography.fontWeight.semibold,
-          fontFamily: theme.typography.fontFamily,
-          cursor: isLoading ? 'not-allowed' : 'pointer',
-          transition: 'all 0.2s ease-in-out',
-          boxShadow: isLoading ? 'none' : theme.shadows.neon,
-          marginBottom: theme.spacing[4]
+          ...authPageStyles.buttonBase,
+          ...authPageStyles.getButtonPrimaryStyles(isLoading)
         }}
         onMouseEnter={(e) => {
           if (!isLoading) {
-            (e.target as HTMLElement).style.backgroundColor = theme.colors.primaryHover;
-            (e.target as HTMLElement).style.transform = 'translateY(-1px)';
+            Object.assign((e.target as HTMLElement).style, authPageStyles.getButtonHoverStyles());
           }
         }}
         onMouseLeave={(e) => {
           if (!isLoading) {
-            (e.target as HTMLElement).style.backgroundColor = theme.colors.primary;
-            (e.target as HTMLElement).style.transform = 'translateY(0)';
+            Object.assign((e.target as HTMLElement).style, authPageStyles.getButtonLeaveStyles());
           }
         }}
       >
@@ -381,32 +327,18 @@ function Login() {
       </button>
 
       {/* Registration CTA */}
-      <div style={{
-        textAlign: 'center',
-        marginBottom: theme.spacing[4]
-      }}>
-        <span style={{
-          color: theme.colors.textSecondary,
-          fontSize: theme.typography.fontSize.sm
-        }}>
+      <div style={authPageStyles.linkContainer}>
+        <span style={authPageStyles.linkText}>
           Don't have an account?{' '}
         </span>
         <Link
           to="/register"
-          style={{
-            color: theme.colors.primary,
-            textDecoration: 'none',
-            fontSize: theme.typography.fontSize.sm,
-            fontWeight: theme.typography.fontWeight.semibold,
-            transition: 'all 0.2s ease-in-out'
-          }}
+          style={authPageStyles.linkBase}
           onMouseEnter={(e) => {
-            (e.target as HTMLElement).style.color = theme.colors.primaryHover;
-            (e.target as HTMLElement).style.textShadow = theme.shadows.neon;
+            Object.assign((e.target as HTMLElement).style, authPageStyles.getLinkHoverStyles());
           }}
           onMouseLeave={(e) => {
-            (e.target as HTMLElement).style.color = theme.colors.primary;
-            (e.target as HTMLElement).style.textShadow = 'none';
+            Object.assign((e.target as HTMLElement).style, authPageStyles.getLinkLeaveStyles());
           }}
         >
           Register now
@@ -414,13 +346,7 @@ function Login() {
       </div>
 
       {message && (
-        <p style={{
-          marginTop: theme.spacing[4],
-          color: message.includes('Error') ? theme.colors.error : theme.colors.success,
-          textAlign: 'center',
-          fontSize: theme.typography.fontSize.sm,
-          fontWeight: theme.typography.fontWeight.medium
-        }}>
+        <p style={authPageStyles.getMessageStyles(message.includes('Error'))}>
           {message}
         </p>
       )}
@@ -594,32 +520,13 @@ function Login() {
   );
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: theme.colors.background,
-      backgroundImage: `radial-gradient(circle at 20% 50%, ${theme.colors.primary}10 0%, transparent 50%), radial-gradient(circle at 80% 20%, ${theme.colors.secondary}10 0%, transparent 50%)`,
-      padding: theme.spacing[4],
-      fontFamily: theme.typography.fontFamily
-    }}>
+    <div style={authPageStyles.pageContainer}>
       {step === 'credentials' && renderCredentialsForm()}
       {step === 'pin' && renderPinForm()}
       {step === 'mfa' && renderMfaForm()}
       {step === 'success' && renderSuccess()}
 
-      <style>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-
-        /* Custom placeholder styling */
-        input::placeholder {
-          color: ${theme.colors.textMuted} !important;
-        }
-      `}</style>
+      <style>{authPageCSS}</style>
     </div>
   );
 }

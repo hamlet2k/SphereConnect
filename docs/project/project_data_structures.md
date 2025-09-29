@@ -105,6 +105,15 @@ This file provides the **detailed entity definitions and data model** used in Sp
 - `name`: e.g., Recruit, NCO, Commander.
 - `phonetic`: For voice recognition.
 - `access_levels`: UUID[] (references access_levels.id).
+- `hierarchy_level`: INTEGER, required.
+  - Defines relative seniority of ranks in a guild.
+  - **Convention**: lower number = higher rank (e.g., Commander = 1, Recruit = 6).
+  - Used by the UI for auto-select behavior:
+    - When a rank is chosen, all ranks with the **same or higher number** (i.e., equal or lower in hierarchy) are auto-selected.
+    - Example: selecting CO (3) selects all CO's, XO (4), NCO (5), and Recruit (6).
+  - Users can override by manually unchecking ranks after auto-selection.
+  - Backend stores only the explicit flat list of `allowed_ranks[]`; hierarchy is a UI convenience.
+
 
 ### Access Levels
 - `id`: UUID.
@@ -127,7 +136,6 @@ Note: Guild owners automatically receive the super_admin access level. This leve
 - `description`: JSONB (brief, tactical, classified, metrics).
 - `preferences`: Traits linked to users.
 - `priority`: Urgency level.
-- `applicable_rank`: Restricted visibility.
 - `progress`: JSONB.
 - `tasks`: Array of task UUIDs.
 - `lead_id`: FK to users.
@@ -136,6 +144,11 @@ Note: Guild owners automatically receive the super_admin access level. This leve
 - `categories`: Array of linked category IDs (many-to-many via junction table).
   - Used for filtering objectives by category.
   - Populated when creating or updating objectives.
+- `allowed_ranks`: Array of rank IDs.
+  - Determines which ranks can see the objective.
+  - Backend enforces visibility strictly by membership in this array.
+  - UI auto-selects ranks with equal or lower seniority (higher hierarchy_level) by default when a rank is selected, but users may override.
+
 
 **Notes:**
 - Objectives reference categories by **ID**, not by name.

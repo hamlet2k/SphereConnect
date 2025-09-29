@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useGuild } from '../contexts/GuildContext';
+import { adminPageStyles, getMessageStyle } from './AdminPageStyles';
 
 interface GuildRequest {
   id: string;
@@ -108,56 +109,52 @@ function GuildRequestApproval() {
   };
 
   return (
-    <div>
-      <div style={{ marginBottom: '24px' }}>
-        <h3 style={{ margin: 0 }}>Guild Request Approval</h3>
-        <p style={{ margin: '8px 0', color: '#6b7280' }}>
+    <div style={adminPageStyles.container as any}>
+      <div style={adminPageStyles.header as any}>
+        <h3 style={adminPageStyles.title as any}>Guild Request Approval</h3>
+        <p style={{
+          margin: '8px 0',
+          color: '#6b7280',
+          fontSize: '14px'
+        }}>
           Review and approve/reject guild join requests from users
         </p>
       </div>
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px' }}>
-          <div style={{
-            width: '40px',
-            height: '40px',
-            border: '4px solid #f3f4f6',
-            borderTop: '4px solid #3b82f6',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-            margin: '0 auto 16px'
-          }}></div>
-          <p>Loading requests...</p>
+        <div style={adminPageStyles.loadingContainer as any}>
+          <div style={adminPageStyles.loadingSpinner as any}></div>
+          <p style={adminPageStyles.loadingText as any}>Loading requests...</p>
         </div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div style={adminPageStyles.tableContainer as any}>
+          <table style={adminPageStyles.table as any}>
             <thead>
-              <tr style={{ backgroundColor: '#f9fafb' }}>
-                <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e5e7eb' }}>User</th>
-                <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e5e7eb' }}>Guild</th>
-                <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e5e7eb' }}>Status</th>
-                <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e5e7eb' }}>Requested</th>
-                <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e5e7eb' }}>Actions</th>
+              <tr style={adminPageStyles.tableHeaderRow as any}>
+                <th style={adminPageStyles.tableHeaderCell as any}>User</th>
+                <th style={adminPageStyles.tableHeaderCell as any}>Guild</th>
+                <th style={adminPageStyles.tableHeaderCell as any}>Status</th>
+                <th style={adminPageStyles.tableHeaderCell as any}>Requested</th>
+                <th style={adminPageStyles.tableHeaderCell as any}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {requests.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+                  <td colSpan={5} style={adminPageStyles.emptyState as any}>
                     No guild requests found
                   </td>
                 </tr>
               ) : (
                 requests.map(request => (
-                  <tr key={request.id}>
-                    <td style={{ padding: '12px', border: '1px solid #e5e7eb' }}>
+                  <tr key={request.id} style={adminPageStyles.tableBodyRow as any}>
+                    <td style={adminPageStyles.tableBodyCell as any}>
                       {request.user_name}
                     </td>
-                    <td style={{ padding: '12px', border: '1px solid #e5e7eb' }}>
+                    <td style={adminPageStyles.tableBodyCell as any}>
                       {request.guild_name}
                     </td>
-                    <td style={{ padding: '12px', border: '1px solid #e5e7eb' }}>
+                    <td style={adminPageStyles.tableBodyCell as any}>
                       <span style={{
                         padding: '4px 8px',
                         borderRadius: '4px',
@@ -170,37 +167,21 @@ function GuildRequestApproval() {
                         {request.status}
                       </span>
                     </td>
-                    <td style={{ padding: '12px', border: '1px solid #e5e7eb' }}>
+                    <td style={adminPageStyles.tableBodyCell as any}>
                       {new Date(request.created_at).toLocaleDateString()}
                     </td>
-                    <td style={{ padding: '12px', border: '1px solid #e5e7eb' }}>
+                    <td style={adminPageStyles.tableBodyCell as any}>
                       {request.status === 'pending' ? (
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        <div style={adminPageStyles.actionButtons as any}>
                           <button
                             onClick={() => handleApprove(request.id)}
-                            style={{
-                              padding: '6px 12px',
-                              backgroundColor: '#10b981',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '12px'
-                            }}
+                            style={adminPageStyles.actionButtonPrimary as any}
                           >
                             Approve
                           </button>
                           <button
                             onClick={() => handleReject(request.id)}
-                            style={{
-                              padding: '6px 12px',
-                              backgroundColor: '#ef4444',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '12px'
-                            }}
+                            style={adminPageStyles.actionButtonDanger as any}
                           >
                             Reject
                           </button>
@@ -220,14 +201,7 @@ function GuildRequestApproval() {
       )}
 
       {message && (
-        <div style={{
-          marginTop: '16px',
-          padding: '12px',
-          borderRadius: '4px',
-          backgroundColor: message.includes('Error') || message.includes('Failed') ? '#fef2f2' : '#f0fdf4',
-          border: `1px solid ${message.includes('Error') || message.includes('Failed') ? '#fca5a5' : '#bbf7d0'}`,
-          color: message.includes('Error') || message.includes('Failed') ? '#dc2626' : '#166534'
-        }}>
+        <div style={getMessageStyle(message) as any}>
           {message}
         </div>
       )}

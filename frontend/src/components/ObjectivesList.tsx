@@ -2,25 +2,23 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useObjectivesAPI, Objective } from '../contexts/ObjectivesAPI';
 import { useGuild } from '../contexts/GuildContext';
 import { theme } from '../theme';
+import ObjectiveForm from './ObjectiveForm';
+import { adminPageStyles, getMessageStyle } from './AdminPageStyles';
 
 interface ObjectivesListProps {
   onViewObjective: (objective: Objective) => void;
-  onEditObjective: (objective: Objective) => void;
   onDeleteObjective: (objectiveId: string) => void;
   canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;
-  onCreateObjective: () => void;
 }
 
 const ObjectivesList: React.FC<ObjectivesListProps> = ({
   onViewObjective,
-  onEditObjective,
   onDeleteObjective,
   canCreate,
   canEdit,
-  canDelete,
-  onCreateObjective
+  canDelete
 }) => {
   const { currentGuildId } = useGuild();
   const { getObjectives } = useObjectivesAPI();
@@ -28,12 +26,18 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
   const [objectives, setObjectives] = useState<Objective[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [categories, setCategories] = useState<{[id: string]: string}>({});
   const [categoryOptions, setCategoryOptions] = useState<{id: string, name: string}[]>([]);
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState('');
   const [categoryIdFilter, setCategoryIdFilter] = useState('');
+
+  // Form states
+  const [showForm, setShowForm] = useState(false);
+  const [editingObjective, setEditingObjective] = useState<Objective | null>(null);
+  const [formMessage, setFormMessage] = useState('');
 
   const loadObjectives = useCallback(async () => {
     if (!currentGuildId) return;
@@ -87,12 +91,53 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
   const handleDelete = async (objectiveId: string) => {
     if (window.confirm('Are you sure you want to delete this objective? This action cannot be undone.')) {
       try {
+        setError('');
+        setSuccessMessage('');
         await onDeleteObjective(objectiveId);
         loadObjectives(); // Refresh list
+        setSuccessMessage('Objective deleted successfully');
+        setTimeout(() => setSuccessMessage(''), 5000);
       } catch (err: any) {
         setError(err.message);
+        setSuccessMessage('');
       }
     }
+  };
+
+  const handleCreateObjective = () => {
+    setEditingObjective(null);
+    setShowForm(true);
+    setFormMessage('');
+    setError('');
+    setSuccessMessage('');
+  };
+
+  const handleEditObjective = (objective: Objective) => {
+    setEditingObjective(objective);
+    setShowForm(true);
+    setFormMessage('');
+    setError('');
+    setSuccessMessage('');
+  };
+
+  const handleFormSuccess = (objective: Objective) => {
+    setShowForm(false);
+    setEditingObjective(null);
+    setFormMessage('');
+    loadObjectives(); // Refresh list
+    setSuccessMessage(`Objective ${editingObjective ? 'updated' : 'created'} successfully`);
+    setError(''); // Clear any existing error
+
+    // Auto-clear success message after 5 seconds
+    setTimeout(() => {
+      setSuccessMessage('');
+    }, 5000);
+  };
+
+  const handleFormCancel = () => {
+    setShowForm(false);
+    setEditingObjective(null);
+    setFormMessage('');
   };
 
   const getStatusColor = (progress: any) => {
@@ -143,25 +188,14 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
         </h3>
         {canCreate && (
           <button
-            onClick={onCreateObjective}
-            style={{
-              padding: `${theme.spacing[2]} ${theme.spacing[4]}`,
-              backgroundColor: theme.colors.secondary,
-              color: theme.colors.text,
-              border: 'none',
-              borderRadius: theme.borderRadius.lg,
-              fontSize: theme.typography.fontSize.sm,
-              fontWeight: theme.typography.fontWeight.semibold,
-              cursor: 'pointer',
-              transition: 'all 0.2s ease-in-out',
-              boxShadow: `0 0 10px ${theme.colors.secondary}40`
-            }}
+            onClick={handleCreateObjective}
+            style={adminPageStyles.primaryButton}
             onMouseEnter={(e) => {
-              (e.target as HTMLElement).style.backgroundColor = theme.colors.secondaryHover;
+              (e.target as HTMLElement).style.backgroundColor = '#E55A2B';
               (e.target as HTMLElement).style.transform = 'translateY(-1px)';
             }}
             onMouseLeave={(e) => {
-              (e.target as HTMLElement).style.backgroundColor = theme.colors.secondary;
+              (e.target as HTMLElement).style.backgroundColor = '#FF6B35';
               (e.target as HTMLElement).style.transform = 'translateY(0)';
             }}
           >
@@ -169,6 +203,19 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
           </button>
         )}
       </div>
+
+      {showForm && (
+        <div style={{ marginBottom: theme.spacing[6] }}>
+          <ObjectiveForm
+            objective={editingObjective || undefined}
+            guildId={currentGuildId || ''}
+            onSuccess={handleFormSuccess}
+            onCancel={handleFormCancel}
+            isOpen={showForm}
+            modal={false}
+          />
+        </div>
+      )}
 
       {/* Filters */}
       <div style={{
@@ -240,16 +287,14 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
       </div>
 
       {error && (
-        <div style={{
-          marginBottom: theme.spacing[4],
-          padding: theme.spacing[3],
-          backgroundColor: `${theme.colors.error}20`,
-          border: `1px solid ${theme.colors.error}`,
-          borderRadius: theme.borderRadius.lg,
-          color: theme.colors.error,
-          fontSize: theme.typography.fontSize.sm
-        }}>
+        <div style={getMessageStyle(error)}>
           {error}
+        </div>
+      )}
+
+      {successMessage && (
+        <div style={getMessageStyle(successMessage)}>
+          {successMessage}
         </div>
       )}
 
@@ -391,7 +436,7 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
                       </button>
                       {canEdit && (
                         <button
-                          onClick={() => onEditObjective(objective)}
+                          onClick={() => handleEditObjective(objective)}
                           style={{
                             padding: `${theme.spacing[1]} ${theme.spacing[2]}`,
                             backgroundColor: theme.colors.primary,
@@ -432,7 +477,7 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
         </table>
       </div>
 
-      {objectives.length === 0 && !loading && (
+      {objectives.length === 0 && !loading && !showForm && (
         <div style={{
           textAlign: 'center',
           padding: theme.spacing[8],
@@ -464,6 +509,12 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
           }}>
             Loading objectives...
           </p>
+        </div>
+      )}
+
+      {formMessage && (
+        <div style={getMessageStyle(formMessage)}>
+          {formMessage}
         </div>
       )}
     </div>

@@ -40,11 +40,14 @@ class UserUpdate(BaseModel):
 
 class RankCreate(BaseModel):
     name: str
+    phonetic: Optional[str] = None
     access_levels: List[str]
+    hierarchy_level: int
     guild_id: str
 
 class RankUpdate(BaseModel):
     name: Optional[str] = None
+    phonetic: Optional[str] = None
     access_levels: Optional[List[str]] = None
 
 class AccessLevelCreate(BaseModel):
@@ -61,7 +64,7 @@ class ObjectiveCreate(BaseModel):
     description: Optional[Dict[str, Any]] = {"brief": "", "tactical": "", "classified": "", "metrics": {}}
     categories: Optional[List[str]] = []
     priority: Optional[str] = "Medium"
-    applicable_rank: Optional[str] = "Recruit"
+    allowed_ranks: Optional[List[str]] = []
     squad_id: Optional[str] = None
     guild_id: str
 
@@ -70,7 +73,7 @@ class ObjectiveUpdate(BaseModel):
     description: Optional[Dict[str, Any]] = None
     categories: Optional[List[str]] = None
     priority: Optional[str] = None
-    applicable_rank: Optional[str] = None
+    allowed_ranks: Optional[List[str]] = None
     squad_id: Optional[str] = None
 
 class TaskCreate(BaseModel):
@@ -407,8 +410,9 @@ async def get_ranks(
             {
                 "id": str(rank.id),
                 "name": rank.name,
-                "access_levels": rank.access_levels,
-                "phonetic": rank.phonetic
+                "phonetic": rank.phonetic,
+                "hierarchy_level": rank.hierarchy_level,
+                "access_levels": rank.access_levels
             }
             for rank in ranks
         ]
@@ -438,7 +442,9 @@ async def create_rank(
             id=uuid.uuid4(),
             guild_id=uuid.UUID(rank_data.guild_id),
             name=rank_data.name,
-            access_levels=rank_data.access_levels
+            phonetic=rank_data.phonetic,
+            access_levels=rank_data.access_levels,
+            hierarchy_level=rank_data.hierarchy_level
         )
 
         db.add(new_rank)
@@ -485,8 +491,11 @@ async def update_rank(
         # Update fields
         if rank_data.name is not None:
             rank.name = rank_data.name
+        if rank_data.phonetic is not None:
+            rank.phonetic = rank_data.phonetic
         if rank_data.access_levels is not None:
             rank.access_levels = rank_data.access_levels
+        # Note: hierarchy_level is not updatable for existing ranks to maintain data integrity
 
         db.commit()
 
@@ -535,6 +544,13 @@ async def delete_rank(
                 detail=f"Cannot delete rank: {users_with_rank} user(s) are assigned to this rank"
             )
 
+        # Unlink rank from all objectives' allowed_ranks
+        objectives_with_rank = db.query(Objective).filter(Objective.allowed_ranks.contains([str(rank_uuid)])).all()
+        for objective in objectives_with_rank:
+            objective.allowed_ranks = [r for r in objective.allowed_ranks if r != str(rank_uuid)]
+            # If allowed_ranks becomes empty, make it visible to super_admin only (empty array means super_admin only)
+            # No change needed as empty array already means super_admin only
+
         db.delete(rank)
         db.commit()
 
@@ -575,7 +591,7 @@ async def get_objectives(
                 "categories": obj.categories,
                 "priority": obj.priority,
                 "progress": obj.progress,
-                "applicable_rank": obj.applicable_rank,
+                "allowed_ranks": obj.allowed_ranks,
                 "squad_id": str(obj.squad_id) if obj.squad_id else None,
                 "lead_id": str(obj.lead_id) if obj.lead_id else None
             }
@@ -611,7 +627,7 @@ async def create_objective(
             description=objective_data.description,
             categories=objective_data.categories,
             priority=objective_data.priority,
-            applicable_rank=objective_data.applicable_rank,
+            allowed_ranks=objective_data.allowed_ranks,
             squad_id=uuid.UUID(objective_data.squad_id) if objective_data.squad_id else None
         )
 
@@ -1562,11 +1578,16 @@ async def get_invites(
 
         invites = db.query(Invite).filter(Invite.guild_id == uuid.UUID(guild_id)).all()
 
+        # Get guild name for display
+        guild = db.query(Guild).filter(Guild.id == uuid.UUID(guild_id)).first()
+        guild_name = guild.name if guild else "Unknown Guild"
+
         return [
             {
                 "id": str(invite.id),
                 "code": invite.code,
                 "guild_id": str(invite.guild_id),
+                "guild_name": guild_name,
                 "expires_at": invite.expires_at.isoformat() if invite.expires_at else None,
                 "uses_left": invite.uses_left,
                 "created_at": invite.created_at.isoformat() if invite.created_at else None

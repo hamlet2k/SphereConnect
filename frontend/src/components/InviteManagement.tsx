@@ -1,24 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useGuild } from '../contexts/GuildContext';
 import { theme } from '../theme';
+import { adminPageStyles, getMessageStyle } from './AdminPageStyles';
+import InviteForm from './InviteForm';
 
 interface Invite {
   id: string;
   code: string;
   guild_id: string;
+  guild_name: string;
   expires_at: string;
   uses_left: number;
-  guild_name?: string;
 }
 
 function InviteManagement() {
   const [invites, setInvites] = useState<Invite[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [expiresAt, setExpiresAt] = useState('');
-  const [usesLeft, setUsesLeft] = useState(1);
-  const [creating, setCreating] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(false);
   const { currentGuildId } = useGuild();
   const token = localStorage.getItem('token');
 
@@ -27,16 +26,6 @@ function InviteManagement() {
       loadInvites();
     }
   }, [currentGuildId]);
-
-  // Set default expiration date (+7 days) when modal opens
-  useEffect(() => {
-    if (showCreateModal) {
-      const defaultDate = new Date();
-      defaultDate.setDate(defaultDate.getDate() + 7);
-      setExpiresAt(defaultDate.toISOString().split('T')[0]); // YYYY-MM-DD format
-      setUsesLeft(1);
-    }
-  }, [showCreateModal]);
 
   const loadInvites = async () => {
     setLoading(true);
@@ -57,48 +46,10 @@ function InviteManagement() {
     }
   };
 
-  const handleCreateInvite = async () => {
-    if (!expiresAt || usesLeft < 1) {
-      setMessage('Please fill in all required fields');
-      return;
-    }
-
-    setCreating(true);
-    try {
-      const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      };
-
-      // Convert date to ISO format with time
-      const expiresAtDateTime = new Date(expiresAt + 'T23:59:59Z').toISOString();
-
-      const response = await fetch('http://localhost:8000/api/invites', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          guild_id: currentGuildId,
-          expires_at: expiresAtDateTime,
-          uses_left: usesLeft
-        })
-      });
-
-      if (response.ok) {
-        const newInvite = await response.json();
-        setInvites([...invites, newInvite]);
-        setMessage('Invite created successfully');
-        setShowCreateModal(false);
-      } else if (response.status === 402) {
-        setMessage('Member limit reached. Upgrade to create more invites.');
-      } else {
-        const error = await response.json();
-        setMessage(error.detail || 'Failed to create invite');
-      }
-    } catch (error) {
-      setMessage('Error creating invite');
-    } finally {
-      setCreating(false);
-    }
+  const handleInviteSuccess = async (result: any) => {
+    setInvites([...invites, result]);
+    setMessage('Invite created successfully');
+    setShowCreateForm(false);
   };
 
   const handleDeleteInvite = async (inviteCode: string) => {
@@ -124,81 +75,123 @@ function InviteManagement() {
     return new Date(dateString).toLocaleDateString();
   };
 
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setMessage('Invite code copied to clipboard!');
+      setTimeout(() => setMessage(''), 3000);
+    } catch (error) {
+      setMessage('Failed to copy to clipboard');
+    }
+  };
+
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h3 style={{ margin: 0 }}>Invite Management</h3>
+    <div style={adminPageStyles.container}>
+      <div style={adminPageStyles.header}>
+        <h3 style={adminPageStyles.title}>Invite Management</h3>
         <button
-          onClick={() => setShowCreateModal(true)}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: theme.colors.primary,
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
+          onClick={() => setShowCreateForm(true)}
+          style={adminPageStyles.primaryButton}
         >
           Create Invite
         </button>
       </div>
 
       {message && (
-        <div style={{
-          marginBottom: '16px',
-          padding: '12px',
-          backgroundColor: message.includes('Error') || message.includes('Failed') ?
-            `${theme.colors.error}20` : `${theme.colors.success}20`,
-          border: `1px solid ${message.includes('Error') || message.includes('Failed') ?
-            theme.colors.error : theme.colors.success}`,
-          borderRadius: '4px',
-          color: message.includes('Error') || message.includes('Failed') ?
-            theme.colors.error : theme.colors.success
-        }}>
+        <div style={getMessageStyle(message)}>
           {message}
         </div>
       )}
 
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      {showCreateForm && (
+        <div style={adminPageStyles.formContainer}>
+          <h4 style={adminPageStyles.formTitle}>Create New Invite</h4>
+          <InviteForm
+            guildId={currentGuildId || ''}
+            guildName="Current Guild"
+            isOpen={showCreateForm}
+            onInvite={async (guildId: string, inviteData: any) => {
+              const headers = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              };
+
+              const response = await fetch('http://localhost:8000/api/invites', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(inviteData)
+              });
+
+              if (response.ok) {
+                const result = await response.json();
+                handleInviteSuccess(result);
+                return result;
+              } else if (response.status === 402) {
+                throw new Error('Member limit reached. Upgrade to create more invites.');
+              } else {
+                const error = await response.json();
+                throw new Error(error.detail || 'Failed to create invite');
+              }
+            }}
+            onClose={() => setShowCreateForm(false)}
+            modal={false}
+          />
+        </div>
+      )}
+
+      <div style={adminPageStyles.tableContainer as any}>
+        <table style={adminPageStyles.table as any}>
           <thead>
-            <tr style={{ backgroundColor: '#f7fafc' }}>
-              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Code</th>
-              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Guild</th>
-              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Expires At</th>
-              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Uses Left</th>
-              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>Actions</th>
+            <tr style={adminPageStyles.tableHeaderRow as any}>
+              <th style={adminPageStyles.tableHeaderCell as any}>Code</th>
+              <th style={adminPageStyles.tableHeaderCell as any}>Guild</th>
+              <th style={adminPageStyles.tableHeaderCell as any}>Expires At</th>
+              <th style={adminPageStyles.tableHeaderCell as any}>Uses Left</th>
+              <th style={adminPageStyles.tableHeaderCell as any}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {invites.map(invite => (
-              <tr key={invite.id}>
-                <td style={{ padding: '12px', border: '1px solid #e2e8f0', fontFamily: 'monospace' }}>
-                  {invite.code}
+              <tr key={invite.id} style={adminPageStyles.tableBodyRow as any}>
+                <td style={{...(adminPageStyles.tableBodyCell as any), fontFamily: 'monospace'}}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing[2] }}>
+                    <span>{invite.code}</span>
+                    <button
+                      onClick={() => copyToClipboard(invite.code)}
+                      style={{
+                        padding: '2px 6px',
+                        backgroundColor: theme.colors.primary,
+                        color: theme.colors.background,
+                        border: 'none',
+                        borderRadius: theme.borderRadius.sm,
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        fontWeight: 'bold'
+                      }}
+                      title="Copy to clipboard"
+                    >
+                      📋
+                    </button>
+                  </div>
                 </td>
-                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>
-                  {invite.guild_name || invite.guild_id}
+                <td style={adminPageStyles.tableBodyCell as any}>
+                  {invite.guild_name}
                 </td>
-                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>
+                <td style={adminPageStyles.tableBodyCell as any}>
                   {formatDate(invite.expires_at)}
                 </td>
-                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>
+                <td style={adminPageStyles.tableBodyCell as any}>
                   {invite.uses_left}
                 </td>
-                <td style={{ padding: '12px', border: '1px solid #e2e8f0' }}>
-                  <button
-                    onClick={() => handleDeleteInvite(invite.code)}
-                    style={{
-                      padding: '4px 8px',
-                      backgroundColor: '#e53e3e',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Delete
-                  </button>
+                <td style={adminPageStyles.tableBodyCell as any}>
+                  <div style={adminPageStyles.actionButtons as any}>
+                    <button
+                      onClick={() => handleDeleteInvite(invite.code)}
+                      style={adminPageStyles.actionButtonDanger as any}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -207,119 +200,8 @@ function InviteManagement() {
       </div>
 
       {invites.length === 0 && !loading && (
-        <div style={{ textAlign: 'center', padding: '40px', color: theme.colors.textSecondary }}>
+        <div style={adminPageStyles.emptyState as any}>
           No invites found. Create your first invite to get started.
-        </div>
-      )}
-
-      {/* Create Invite Modal */}
-      {showCreateModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: theme.colors.surface,
-            borderRadius: '8px',
-            padding: '24px',
-            width: '400px',
-            maxWidth: '90vw',
-            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)'
-          }}>
-            <h3 style={{ margin: '0 0 20px 0', color: theme.colors.primary }}>
-              Create Invite
-            </h3>
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{
-                display: 'block',
-                marginBottom: '8px',
-                fontWeight: 'bold',
-                color: theme.colors.text
-              }}>
-                Expires At
-              </label>
-              <input
-                type="date"
-                value={expiresAt}
-                onChange={(e) => setExpiresAt(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: `2px solid ${theme.colors.border}`,
-                  borderRadius: '4px',
-                  backgroundColor: theme.colors.background,
-                  color: theme.colors.text,
-                  fontSize: '14px'
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: '24px' }}>
-              <label style={{
-                display: 'block',
-                marginBottom: '8px',
-                fontWeight: 'bold',
-                color: theme.colors.text
-              }}>
-                Uses Left
-              </label>
-              <input
-                type="number"
-                min="1"
-                value={usesLeft}
-                onChange={(e) => setUsesLeft(parseInt(e.target.value) || 1)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: `2px solid ${theme.colors.border}`,
-                  borderRadius: '4px',
-                  backgroundColor: theme.colors.background,
-                  color: theme.colors.text,
-                  fontSize: '14px'
-                }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: 'transparent',
-                  color: theme.colors.textSecondary,
-                  border: `1px solid ${theme.colors.border}`,
-                  borderRadius: '4px',
-                  cursor: 'pointer'
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateInvite}
-                disabled={creating}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: theme.colors.primary,
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: creating ? 'not-allowed' : 'pointer',
-                  opacity: creating ? 0.6 : 1
-                }}
-              >
-                {creating ? 'Creating...' : 'Create Invite'}
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>

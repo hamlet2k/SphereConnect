@@ -59,4 +59,6 @@ Each row summarizes one historical AI handoff entry in chronological order.
 | 53 | 2025-09-28 – Categories extended | Added filtering and Objective linkage (backend + frontend). |
 | 53 | 2025-09-28 – Categories skeleton | Implemented CRUD endpoints and basic UI components with guild-based access control. |
 | 54 | 2025-09-29 – Categories bug fixes | Updated backend to use category IDs (with fallback to names), ensured consistent API responses, fixed pre-check in Objective forms, and updated frontend to resolve IDs to names for display.|
+| 55 | 2025-09-29 – Ranks & Objectives linkage | Implemented Rank CRUD with hierarchy, allowed_ranks[] integration in objectives, pyramid auto-select UI, and rank deletion unlink logic.|
+| 55 | 2025-09-29 – Ranks & Objectives linkage | Implemented Rank CRUD with hierarchy support, allowed_ranks[] integration in objectives, pyramid auto-select UI, and rank deletion unlink logic.|
 
