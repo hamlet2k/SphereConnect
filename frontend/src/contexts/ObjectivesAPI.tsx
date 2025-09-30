@@ -1,4 +1,5 @@
 import React, { createContext, useContext } from 'react';
+import api from '../api';
 
 export interface ObjectiveDescription {
   brief: string;
@@ -45,27 +46,10 @@ interface ObjectivesAPIProviderProps {
 }
 
 export const ObjectivesAPIProvider: React.FC<ObjectivesAPIProviderProps> = ({ children }) => {
-  const token = localStorage.getItem('token');
-  const baseURL = 'http://localhost:8000';
-
-  const getHeaders = () => ({
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`
-  });
 
   const createObjective = async (objective: Objective): Promise<Objective> => {
-    const response = await fetch(`${baseURL}/api/objectives`, {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify(objective)
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to create objective');
-    }
-
-    return response.json();
+    const response = await api.post('/objectives', objective);
+    return response.data;
   };
 
   const getObjectives = async (guildId: string, filters?: { status?: string; category_id?: string }): Promise<Objective[]> => {
@@ -73,56 +57,22 @@ export const ObjectivesAPIProvider: React.FC<ObjectivesAPIProviderProps> = ({ ch
     if (filters?.status) params.append('status', filters.status);
     if (filters?.category_id) params.append('category_id', filters.category_id);
 
-    const response = await fetch(`${baseURL}/api/objectives?${params}`, {
-      headers: getHeaders()
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to fetch objectives');
-    }
-
-    return response.json();
+    const response = await api.get(`/objectives?${params}`);
+    return response.data;
   };
 
   const getObjective = async (id: string): Promise<Objective> => {
-    const response = await fetch(`${baseURL}/api/objectives/${id}`, {
-      headers: getHeaders()
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to fetch objective');
-    }
-
-    return response.json();
+    const response = await api.get(`/objectives/${id}`);
+    return response.data;
   };
 
   const updateObjective = async (id: string, objective: Partial<Objective>): Promise<Objective> => {
-    const response = await fetch(`${baseURL}/api/objectives/${id}`, {
-      method: 'PUT',
-      headers: getHeaders(),
-      body: JSON.stringify(objective)
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to update objective');
-    }
-
-    return response.json();
+    const response = await api.put(`/objectives/${id}`, objective);
+    return response.data;
   };
 
   const deleteObjective = async (id: string): Promise<void> => {
-    const response = await fetch(`${baseURL}/api/objectives/${id}`, {
-      method: 'DELETE',
-      headers: getHeaders()
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to delete objective');
-    }
+    await api.delete(`/objectives/${id}`);
   };
 
   return (

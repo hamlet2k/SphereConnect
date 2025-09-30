@@ -9,6 +9,7 @@ For detailed data entities referenced here, see [`project_data_structures.md`](.
 ## Table of Contents
 1. [Registration](#1-registration)
 2. [Login](#2-login)
+    - [Session & Token Refresh](#session--token-refresh)
 3. [Guild Management](#3-guild-management)
    - [Switch Guild](#switch-guild)
    - [Invite & Join](#invite--join)
@@ -61,7 +62,7 @@ sequenceDiagram
         B->>D: Assign personal guild
     end
     B->>D: Create UserSession
-    B-->>W: 200 {access_token, guild_id}
+    B-->>W: 200 {access_token, refresh_token?, guild_id}
     opt Voice PIN
         U->>W: Enter PIN
         W->>B: POST /api/auth/verify-pin
@@ -72,6 +73,17 @@ sequenceDiagram
     B-->>W: Success
     W->>U: Redirect to dashboard
 ```
+
+### Session & Token Refresh
+- All frontend requests use a shared Axios client (`frontend/src/api.ts`).
+- If an access token expires, the client:
+  1. Receives `401 Unauthorized`
+  2. Calls `POST /api/auth/refresh` with the stored `refresh_token`
+  3. On success, updates tokens and retries the original request
+  4. On failure, clears session and redirects to `/login`
+- Error semantics:
+  - `401` → expired/invalid token (client should refresh or redirect)
+  - `403` → valid token but insufficient permissions
 
 ---
 

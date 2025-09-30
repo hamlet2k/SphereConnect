@@ -4,6 +4,7 @@ import { adminPageStyles } from './AdminPageStyles';
 import GuildForm from './GuildForm';
 import JoinForm from './JoinForm';
 import InviteForm from './InviteForm';
+import api from '../api';
 
 interface Guild {
   id: string;
@@ -236,8 +237,6 @@ const GuildList: React.FC<GuildListProps> = ({
         <div style={adminPageStyles.formContainer}>
           <JoinForm
             onJoin={async (inviteCode: string) => {
-              // Call the API directly
-              const token = localStorage.getItem('token');
               const user = JSON.parse(localStorage.getItem('user') || '{}');
               const userId = user.id;
 
@@ -245,23 +244,9 @@ const GuildList: React.FC<GuildListProps> = ({
                 throw new Error('User not found');
               }
 
-              const response = await fetch(`http://localhost:8000/api/users/${userId}/join`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ invite_code: inviteCode })
-              });
-
-              if (response.ok) {
-                const result = await response.json();
-                handleJoinFormSuccess(result);
-                return result;
-              } else {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || 'Failed to join guild');
-              }
+              const response = await api.post(`/users/${userId}/join`, { invite_code: inviteCode });
+              handleJoinFormSuccess(response.data);
+              return response.data;
             }}
             onClose={handleJoinFormCancel}
             isOpen={showJoinForm}
@@ -277,25 +262,9 @@ const GuildList: React.FC<GuildListProps> = ({
             guildId={showInviteForm.guildId}
             guildName={showInviteForm.guildName}
             onInvite={async (guildId: string, inviteData: any) => {
-              // Call the API directly
-              const token = localStorage.getItem('token');
-              const response = await fetch('http://localhost:8000/api/invites', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(inviteData)
-              });
-
-              if (response.ok) {
-                const result = await response.json();
-                handleInviteFormSuccess(result);
-                return result;
-              } else {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || 'Failed to create invite');
-              }
+              const response = await api.post('/invites', inviteData);
+              handleInviteFormSuccess(response.data);
+              return response.data;
             }}
             onClose={handleInviteFormCancel}
             isOpen={true}

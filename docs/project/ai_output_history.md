@@ -64,4 +64,5 @@ Each row summarizes one historical AI handoff entry in chronological order.
 | 56 | Major UI overhaul and bugs Fixing | UI styles created for Auth and Admin and apliead globaly to all pages. As result various issues fixed |
 | 57 | 2025-09-30 – Rank deletion cleanup | Strip deleted ranks from objectives.allowed_ranks, sanitize responses, enforce 409 on in-use rank. |
 | 58 | 2025-09-30 – Allowed ranks save fix | Fixed allowed_ranks not saving properly: converted string UUIDs to UUID objects for database storage, fixed PATCH endpoint condition (was `if update.allowed_ranks:` instead of `is not None`), updated all endpoints to return complete objective data including allowed_ranks, and fixed rank filtering logic with proper string/UUID conversion. |
+| 59 | 2025-09-30 – Axios Interceptor Implementation | Implemented Axios interceptor with automatic token refresh: created api.ts with request/response interceptors, updated all frontend components to use api instance instead of fetch, added refresh token storage in login flows, and ensured 401 handling with queueing for parallel requests. |
 

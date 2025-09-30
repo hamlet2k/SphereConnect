@@ -2,6 +2,7 @@ import React, { useState, useEffect, FormEvent } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useGuild } from '../contexts/GuildContext';
 import { authPageStyles, authPageCSS } from '../components/AuthPageStyles';
+import api from '../api';
 
 type LoginStep = 'credentials' | 'pin' | 'mfa' | 'success';
 
@@ -98,17 +99,8 @@ function Login() {
         password: password
       };
 
-      const response = await fetch('http://localhost:8000/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(loginData),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || 'Login failed');
-      }
+      const response = await api.post('/auth/login', loginData);
+      const data = response.data;
 
       setUserId(data.user.id);
 
@@ -118,6 +110,9 @@ function Login() {
       } else {
         // Store token and user
         localStorage.setItem('token', data.access_token);
+        if (data.refresh_token) {
+          localStorage.setItem('refresh_token', data.refresh_token);
+        }
         localStorage.setItem('user', JSON.stringify(data.user));
         localStorage.setItem('lastActivity', Date.now().toString());
 
@@ -125,13 +120,8 @@ function Login() {
         const currentGuildId = data.user.current_guild_id;
         if (currentGuildId) {
           try {
-            const guildResponse = await fetch(`http://localhost:8000/api/guilds/${currentGuildId}`, {
-              headers: { 'Authorization': `Bearer ${data.access_token}` }
-            });
-            const guildData = await guildResponse.json();
-            if (guildResponse.ok) {
-              setCurrentGuild(currentGuildId, guildData.name);
-            }
+            const guildResponse = await api.get(`/guilds/${currentGuildId}`);
+            setCurrentGuild(currentGuildId, guildResponse.data.name);
           } catch (err) {
             console.error('Failed to fetch guild details:', err);
           }
@@ -158,29 +148,15 @@ function Login() {
         pin: pin
       };
 
-      const response = await fetch('http://localhost:8000/api/auth/verify-pin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(pinData),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || 'PIN verification failed');
-      }
+      const response = await api.post('/auth/verify-pin', pinData);
+      const data = response.data;
 
       // Fetch current guild details and set context
       const currentGuildId = data.user.current_guild_id;
       if (currentGuildId) {
         try {
-          const guildResponse = await fetch(`http://localhost:8000/api/guilds/${currentGuildId}`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-          });
-          const guildData = await guildResponse.json();
-          if (guildResponse.ok) {
-            setCurrentGuild(currentGuildId, guildData.name);
-          }
+          const guildResponse = await api.get(`/guilds/${currentGuildId}`);
+          setCurrentGuild(currentGuildId, guildResponse.data.name);
         } catch (err) {
           console.error('Failed to fetch guild details:', err);
         }
@@ -207,17 +183,8 @@ function Login() {
         totp_code: totpCode
       };
 
-      const response = await fetch('http://localhost:8000/api/auth/mfa/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(mfaData),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || 'MFA verification failed');
-      }
+      const response = await api.post('/auth/mfa/verify', mfaData);
+      const data = response.data;
 
       // Store token and proceed
       const loginData: LoginData = {
@@ -225,16 +192,14 @@ function Login() {
         password: password
       };
 
-      const loginResponse = await fetch('http://localhost:8000/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(loginData),
-      });
+      const loginResponse = await api.post('/auth/login', loginData);
+      const loginResult = loginResponse.data;
 
-      const loginResult = await loginResponse.json();
-
-      if (loginResponse.ok) {
+      if (loginResponse.status >= 200 && loginResponse.status < 300) {
         localStorage.setItem('token', loginResult.access_token);
+        if (loginResult.refresh_token) {
+          localStorage.setItem('refresh_token', loginResult.refresh_token);
+        }
         localStorage.setItem('user', JSON.stringify(loginResult.user));
         localStorage.setItem('lastActivity', Date.now().toString());
 
@@ -242,13 +207,8 @@ function Login() {
         const currentGuildId = loginResult.user.current_guild_id;
         if (currentGuildId) {
           try {
-            const guildResponse = await fetch(`http://localhost:8000/api/guilds/${currentGuildId}`, {
-              headers: { 'Authorization': `Bearer ${loginResult.access_token}` }
-            });
-            const guildData = await guildResponse.json();
-            if (guildResponse.ok) {
-              setCurrentGuild(currentGuildId, guildData.name);
-            }
+            const guildResponse = await api.get(`/guilds/${currentGuildId}`);
+            setCurrentGuild(currentGuildId, guildResponse.data.name);
           } catch (err) {
             console.error('Failed to fetch guild details:', err);
           }
