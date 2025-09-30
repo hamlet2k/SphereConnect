@@ -372,8 +372,17 @@ function AdminDashboardContent() {
 
       if (response.ok) {
         setMessage('Guild deleted successfully');
-        // Reload guilds
-        loadData();
+        // Force reload guilds to remove the deleted guild
+        try {
+          const headers = { 'Authorization': `Bearer ${token}` };
+          const guildsResponse = await fetch(`http://localhost:8000/api/users/${user.id}/guilds`, { headers });
+          if (guildsResponse.ok) {
+            const guildsData = await guildsResponse.json();
+            setGuilds(guildsData);
+          }
+        } catch (error) {
+          console.error('Error reloading guilds:', error);
+        }
       } else if (response.status === 403) {
         setMessage('Cannot delete personal guilds or guilds you do not own');
       } else {
@@ -384,12 +393,21 @@ function AdminDashboardContent() {
     }
   };
 
-  const handleGuildCreateSuccess = (guild: any) => {
+  const handleGuildCreateSuccess = async (guild: any) => {
     if (guild) {
       setMessage('Guild created successfully');
     }
-    // Reload guilds to show the new guild
-    loadData();
+    // Force reload guilds to show the new guild
+    try {
+      const headers = { 'Authorization': `Bearer ${token}` };
+      const guildsResponse = await fetch(`http://localhost:8000/api/users/${user.id}/guilds`, { headers });
+      if (guildsResponse.ok) {
+        const guildsData = await guildsResponse.json();
+        setGuilds(guildsData);
+      }
+    } catch (error) {
+      console.error('Error reloading guilds:', error);
+    }
   };
 
   // Objective handlers

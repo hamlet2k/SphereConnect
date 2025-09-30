@@ -13,7 +13,7 @@ import uuid
 from datetime import datetime
 
 from ..core.models import (
-    User, Rank, AccessLevel, UserAccess, Objective, Task, Squad, ObjectiveCategory, Guild, Invite, GuildRequest,
+    User, Rank, AccessLevel, UserAccess, Objective, Task, Squad, ObjectiveCategory, Guild, Invite, GuildRequest, AICommander,
     get_db, create_tables
 )
 from .routes import get_current_user, verify_token
@@ -1077,12 +1077,31 @@ async def create_guild(
                 detail="Guild name is required"
             )
 
-        # Check guild limit
-        user_guilds = db.query(Guild).filter(Guild.creator_id == current_user.id).count()
-        if user_guilds >= current_user.max_guilds:
+        # Check guild limit - count total guilds user belongs to (created + joined)
+        user_uuid = current_user.id
+
+        # Get user's personal guild (created by user)
+        personal_guild = db.query(Guild).filter(Guild.creator_id == user_uuid).first()
+
+        # Get guilds where user has approved guild requests
+        approved_requests = db.query(GuildRequest).filter(
+            GuildRequest.user_id == user_uuid,
+            GuildRequest.status == "approved"
+        ).all()
+
+        guild_ids = set()
+        if personal_guild:
+            guild_ids.add(personal_guild.id)
+
+        for request in approved_requests:
+            guild_ids.add(request.guild_id)
+
+        user_guild_count = len(guild_ids)
+
+        if user_guild_count >= current_user.max_guilds:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail=f"Maximum guild limit of {current_user.max_guilds} reached"
+                detail=f"Maximum guild limit of {current_user.max_guilds} reached. You currently belong to {user_guild_count} guild(s)."
             )
 
         # Create guild
@@ -1268,7 +1287,38 @@ async def delete_guild(
                 detail="This guild cannot be deleted"
             )
 
+        # Clean up related data before deleting the guild
+        # Delete guild requests
+        db.query(GuildRequest).filter(GuildRequest.guild_id == guild.id).delete()
+
+        # Delete invites
+        db.query(Invite).filter(Invite.guild_id == guild.id).delete()
+
+        # Delete objectives and related tasks (cascade through relationships)
+        objectives = db.query(Objective).filter(Objective.guild_id == guild.id).all()
+        for objective in objectives:
+            # Delete tasks for this objective
+            db.query(Task).filter(Task.objective_id == objective.id).delete()
+            # Delete the objective
+            db.delete(objective)
+
+        # Delete squads
+        db.query(Squad).filter(Squad.guild_id == guild.id).delete()
+
+        # Delete ranks
+        db.query(Rank).filter(Rank.guild_id == guild.id).delete()
+
+        # Delete access levels
+        db.query(AccessLevel).filter(AccessLevel.guild_id == guild.id).delete()
+
+        # Delete objective categories
+        db.query(ObjectiveCategory).filter(ObjectiveCategory.guild_id == guild.id).delete()
+
+        # Delete AI commander
+        db.query(AICommander).filter(AICommander.guild_id == guild.id).delete()
+
         # Move any users in this guild to their personal guilds
+        # Handle users who have this guild as their current_guild_id
         users_in_guild = db.query(User).filter(User.current_guild_id == str(guild.id)).all()
         for user in users_in_guild:
             # Find user's personal guild
@@ -1279,6 +1329,21 @@ async def delete_guild(
             if personal_guild:
                 user.current_guild_id = str(personal_guild.id)
 
+        # Handle users who have this guild as their personal guild (guild_id)
+        users_with_personal_guild = db.query(User).filter(User.guild_id == guild.id).all()
+        for user in users_with_personal_guild:
+            # Find user's personal guild (should be the same as guild_id, but handle gracefully)
+            personal_guild = db.query(Guild).filter(
+                Guild.creator_id == user.id,
+                Guild.is_solo == True
+            ).first()
+            if personal_guild:
+                user.guild_id = personal_guild.id
+                # Also update current_guild_id if it's pointing to the deleted guild
+                if str(user.current_guild_id) == str(guild.id):
+                    user.current_guild_id = str(personal_guild.id)
+
+        # Finally delete the guild
         db.delete(guild)
         db.commit()
 
@@ -1288,6 +1353,7 @@ async def delete_guild(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error deleting guild {guild_id}: {str(e)}", exc_info=True)
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
