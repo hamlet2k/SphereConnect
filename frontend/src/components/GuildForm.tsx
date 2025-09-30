@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { theme } from '../theme';
-import { adminPageStyles, getMessageStyle } from './AdminPageStyles';
+import { adminPageStyles } from './AdminPageStyles';
+import AdminMessage from './AdminMessage';
+import { useAdminMessage } from '../hooks/useAdminMessage';
 
 interface GuildFormProps {
   onSuccess: (guild: any) => void;
@@ -20,7 +22,7 @@ const GuildForm: React.FC<GuildFormProps> = ({
   });
 
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const { message, showMessage, clearMessage } = useAdminMessage();
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({
@@ -32,7 +34,7 @@ const GuildForm: React.FC<GuildFormProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    clearMessage();
 
     try {
       // Validate required fields
@@ -58,13 +60,13 @@ const GuildForm: React.FC<GuildFormProps> = ({
         const result = await response.json();
         onSuccess(result);
       } else if (response.status === 402) {
-        setError('Guild limit reached. Upgrade to add more guilds.');
+        showMessage('error', 'Guild limit reached. Upgrade to add more guilds.');
       } else {
         const errorData = await response.json();
-        setError(errorData.detail || 'Failed to create guild');
+        showMessage('error', errorData.detail || 'Failed to create guild');
       }
     } catch (err: any) {
-      setError(err.message);
+      showMessage('error', err.message);
     } finally {
       setLoading(false);
     }
@@ -72,10 +74,12 @@ const GuildForm: React.FC<GuildFormProps> = ({
 
   const formContent = (
     <>
-      {error && (
-        <div style={getMessageStyle(error)}>
-          {error}
-        </div>
+      {message && (
+        <AdminMessage
+          type={message.type}
+          message={message.text}
+          onClose={clearMessage}
+        />
       )}
 
       <form onSubmit={handleSubmit}>

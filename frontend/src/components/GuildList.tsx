@@ -1,6 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { theme } from '../theme';
 import { adminPageStyles } from './AdminPageStyles';
+import AdminMessage, { AdminMessageState } from './AdminMessage';
+import { useAdminMessage } from '../hooks/useAdminMessage';
 import GuildForm from './GuildForm';
 import JoinForm from './JoinForm';
 import InviteForm from './InviteForm';
@@ -30,7 +32,8 @@ interface GuildListProps {
   onGuildCreateSuccess?: (guild: any) => void;
   onInviteSuccess?: () => void;
   loading?: boolean;
-  message?: string;
+  message?: AdminMessageState | null;
+  onMessageDismiss?: () => void;
 }
 
 const GuildList: React.FC<GuildListProps> = ({
@@ -45,21 +48,22 @@ const GuildList: React.FC<GuildListProps> = ({
   onGuildCreateSuccess,
   onInviteSuccess,
   loading = false,
-  message = ''
+  message: externalMessage = null,
+  onMessageDismiss
 }) => {
   // Form states
   const [showForm, setShowForm] = useState(false);
   const [showJoinForm, setShowJoinForm] = useState(false);
   const [showInviteForm, setShowInviteForm] = useState<{guildId: string, guildName: string} | null>(null);
-  const [formMessage, setFormMessage] = useState('');
+  const { message: localMessage, showMessage: showLocalMessage, clearMessage: clearLocalMessage } = useAdminMessage();
 
   const handleInvite = useCallback((guildId: string) => {
     const guild = guilds.find(g => g.id === guildId);
     if (guild) {
       setShowInviteForm({guildId, guildName: guild.name});
-      setFormMessage('');
+      clearLocalMessage();
     }
-  }, [guilds]);
+  }, [guilds, clearLocalMessage]);
 
   const handleLeave = async (guildId: string) => {
     if (window.confirm('Are you sure you want to leave this guild? You will be switched to your personal guild.')) {
@@ -81,12 +85,12 @@ const GuildList: React.FC<GuildListProps> = ({
 
   const handleCreateGuild = () => {
     setShowForm(true);
-    setFormMessage('');
+    clearLocalMessage();
   };
 
   const handleFormSuccess = (guild: any) => {
     setShowForm(false);
-    setFormMessage('');
+    clearLocalMessage();
     if (onGuildCreateSuccess) {
       onGuildCreateSuccess(guild);
     }
@@ -94,17 +98,17 @@ const GuildList: React.FC<GuildListProps> = ({
 
   const handleFormCancel = () => {
     setShowForm(false);
-    setFormMessage('');
+    clearLocalMessage();
   };
 
   const handleJoinClick = () => {
     setShowJoinForm(true);
-    setFormMessage('');
+    clearLocalMessage();
   };
 
   const handleJoinFormSuccess = async (result: any) => {
     setShowJoinForm(false);
-    setFormMessage(`Request to join ${result.guild_name || 'guild'} sent`);
+    showLocalMessage('info', `Request to join ${result.guild_name || 'guild'} sent`);
     // Reload data after a short delay
     setTimeout(() => {
       if (onGuildCreateSuccess) {
@@ -115,12 +119,12 @@ const GuildList: React.FC<GuildListProps> = ({
 
   const handleJoinFormCancel = () => {
     setShowJoinForm(false);
-    setFormMessage('');
+    clearLocalMessage();
   };
 
   const handleInviteFormSuccess = async (result: any) => {
     setShowInviteForm(null);
-    setFormMessage('Invite code generated successfully!');
+    showLocalMessage('success', 'Invite code generated successfully!');
     if (onInviteSuccess) {
       onInviteSuccess();
     }
@@ -128,10 +132,11 @@ const GuildList: React.FC<GuildListProps> = ({
 
   const handleInviteFormCancel = () => {
     setShowInviteForm(null);
-    setFormMessage('');
+    clearLocalMessage();
   };
+  const activeMessage = localMessage ?? externalMessage;
+  const dismissActiveMessage = localMessage ? clearLocalMessage : onMessageDismiss;
 
-  const displayMessage = formMessage || (message && !message.startsWith('Guild') && !message.startsWith('Successfully') ? message : '');
 
   const getMemberStatus = (guild: Guild) => {
     const approvedCount = guild.approved_count || 0;
@@ -251,7 +256,6 @@ const GuildList: React.FC<GuildListProps> = ({
             onClose={handleJoinFormCancel}
             isOpen={showJoinForm}
             modal={false}
-            message={formMessage}
           />
         </div>
       )}
@@ -273,19 +277,13 @@ const GuildList: React.FC<GuildListProps> = ({
         </div>
       )}
 
-      {displayMessage && !showJoinForm && (
-        <div style={{
-          marginBottom: theme.spacing[4],
-          padding: theme.spacing[3],
-          backgroundColor: displayMessage.includes('Error') || displayMessage.includes('Failed') ?
-            `${theme.colors.error}20` : `${theme.colors.success}20`,
-          border: `1px solid ${displayMessage.includes('Error') || displayMessage.includes('Failed') ?
-            theme.colors.error : theme.colors.success}`,
-          borderRadius: theme.borderRadius.lg,
-          color: displayMessage.includes('Error') || displayMessage.includes('Failed') ?
-            theme.colors.error : theme.colors.success
-        }}>
-          {displayMessage}
+      {activeMessage && (
+        <div style={{ marginBottom: theme.spacing[4] }}>
+          <AdminMessage
+            type={activeMessage.type}
+            message={activeMessage.text}
+            onClose={dismissActiveMessage || undefined}
+          />
         </div>
       )}
 

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useGuild } from '../contexts/GuildContext';
-import { adminPageStyles, getMessageStyle } from './AdminPageStyles';
+import { adminPageStyles } from './AdminPageStyles';
+import AdminMessage from './AdminMessage';
+import { useAdminMessage } from '../hooks/useAdminMessage';
 
 interface GuildRequest {
   id: string;
@@ -15,7 +17,7 @@ interface GuildRequest {
 function GuildRequestApproval() {
   const [requests, setRequests] = useState<GuildRequest[]>([]);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
+  const { message, showMessage, clearMessage } = useAdminMessage();
   const { currentGuildId } = useGuild();
   const token = localStorage.getItem('token');
 
@@ -29,6 +31,7 @@ function GuildRequestApproval() {
     if (!token || !currentGuildId) return;
 
     setLoading(true);
+    clearMessage();
     try {
       const response = await fetch(`http://localhost:8000/api/admin/guild_requests?guild_id=${currentGuildId}`, {
         headers: {
@@ -40,10 +43,10 @@ function GuildRequestApproval() {
         const data = await response.json();
         setRequests(data);
       } else {
-        setMessage('Failed to load guild requests');
+        showMessage('error', 'Failed to load guild requests');
       }
     } catch (error) {
-      setMessage('Error loading guild requests');
+      showMessage('error', 'Error loading guild requests');
     } finally {
       setLoading(false);
     }
@@ -63,14 +66,14 @@ function GuildRequestApproval() {
       });
 
       if (response.ok) {
-        setMessage('Request approved successfully');
+        showMessage('success', 'Request approved successfully');
         loadRequests(); // Refresh the list
       } else {
         const error = await response.json();
-        setMessage(error.detail || 'Failed to approve request');
+        showMessage('error', error.detail || 'Failed to approve request');
       }
     } catch (error) {
-      setMessage('Error approving request');
+      showMessage('error', 'Error approving request');
     }
   };
 
@@ -88,14 +91,14 @@ function GuildRequestApproval() {
       });
 
       if (response.ok) {
-        setMessage('Request rejected successfully');
+        showMessage('success', 'Request rejected successfully');
         loadRequests(); // Refresh the list
       } else {
         const error = await response.json();
-        setMessage(error.detail || 'Failed to reject request');
+        showMessage('error', error.detail || 'Failed to reject request');
       }
     } catch (error) {
-      setMessage('Error rejecting request');
+      showMessage('error', 'Error rejecting request');
     }
   };
 
@@ -201,9 +204,11 @@ function GuildRequestApproval() {
       )}
 
       {message && (
-        <div style={getMessageStyle(message) as any}>
-          {message}
-        </div>
+        <AdminMessage
+          type={message.type}
+          message={message.text}
+          onClose={clearMessage}
+        />
       )}
 
       <style>{`

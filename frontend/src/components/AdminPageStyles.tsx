@@ -293,6 +293,14 @@ export const adminPageStyles = {
     color: theme.colors.success
   },
 
+  // Info message
+  messageInfo: {
+    ...messageContainerBase,
+    backgroundColor: `${theme.colors.info}20`,
+    border: `1px solid ${theme.colors.info}`,
+    color: theme.colors.info
+  },
+
   // Error message
   messageError: {
     ...messageContainerBase,
@@ -303,12 +311,39 @@ export const adminPageStyles = {
 };
 
 // Helper functions for dynamic styling
-export const getMessageStyle = (message: string) => {
-  const isError = message.includes('Error') || message.includes('Failed') ||
-                  message.includes('denied') || message.includes('Insufficient') ||
-                  message.includes('Cannot') || message.includes('not found');
+export const getMessageStyleByType = (type: 'success' | 'error' | 'info') => {
+  switch (type) {
+    case 'error':
+      return adminPageStyles.messageError;
+    case 'info':
+      return adminPageStyles.messageInfo;
+    default:
+      return adminPageStyles.messageSuccess;
+  }
+};
 
-  return isError ? adminPageStyles.messageError : adminPageStyles.messageSuccess;
+export const getMessageStyle = (message: string) => {
+  if (!message) {
+    return adminPageStyles.messageContainer;
+  }
+
+  const lower = message.toLowerCase();
+  const isError = lower.includes('error') || lower.includes('failed') ||
+                  lower.includes('denied') || lower.includes('insufficient') ||
+                  lower.includes('cannot') || lower.includes('not found');
+
+  const isInfo = lower.includes('pending') || lower.includes('awaiting') ||
+                 lower.includes('processing') || lower.includes('notice');
+
+  if (isError) {
+    return getMessageStyleByType('error');
+  }
+
+  if (isInfo) {
+    return getMessageStyleByType('info');
+  }
+
+  return getMessageStyleByType('success');
 };
 
 export const getButtonHoverStyle = (buttonType: 'primary' | 'secondary') => {

@@ -1,6 +1,8 @@
 import React, { useState, FormEvent } from 'react';
 import { theme } from '../theme';
-import { adminPageStyles, getMessageStyle } from './AdminPageStyles';
+import { adminPageStyles } from './AdminPageStyles';
+import AdminMessage from './AdminMessage';
+import { useAdminMessage } from '../hooks/useAdminMessage';
 
 interface InviteFormProps {
   guildId: string;
@@ -9,7 +11,6 @@ interface InviteFormProps {
   onClose: () => void;
   onInvite: (guildId: string, inviteData: any) => Promise<any>;
   loading?: boolean;
-  message?: string;
   modal?: boolean; // Default true for backward compatibility
 }
 
@@ -20,16 +21,19 @@ const InviteForm: React.FC<InviteFormProps> = ({
   onClose,
   onInvite,
   loading = false,
-  message = '',
   modal = true
 }) => {
   const [expiresIn, setExpiresIn] = useState<string>('24'); // hours
   const [usesLeft, setUsesLeft] = useState<string>('1');
   const [inviteCode, setInviteCode] = useState<string>('');
   const [copied, setCopied] = useState<boolean>(false);
+  const { message: formMessage, showMessage: showFormMessage, clearMessage: clearFormMessage } = useAdminMessage();
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    clearFormMessage();
+    setCopied(false);
 
     const inviteData = {
       guild_id: guildId,
@@ -39,14 +43,19 @@ const InviteForm: React.FC<InviteFormProps> = ({
 
     try {
       const result = await onInvite(guildId, inviteData);
-      // The result should contain the invite code
       if (result && (result as any).code) {
         setInviteCode((result as any).code);
       }
-    } catch (error) {
+
+      const successMessage = (result as any)?.message || 'Invite code generated successfully';
+      showFormMessage('success', successMessage);
+    } catch (error: any) {
       console.error('Failed to create invite:', error);
+      const errorMessage = error?.response?.data?.detail || error?.message || 'Failed to create invite';
+      showFormMessage('error', String(errorMessage));
     }
   };
+
 
   const copyToClipboard = async () => {
     if (inviteCode) {
@@ -65,6 +74,7 @@ const InviteForm: React.FC<InviteFormProps> = ({
     setUsesLeft('1');
     setInviteCode('');
     setCopied(false);
+    clearFormMessage();
   };
 
   const handleClose = () => {
@@ -134,10 +144,12 @@ const InviteForm: React.FC<InviteFormProps> = ({
       )}
 
       {/* Message */}
-      {message && (
-        <div style={getMessageStyle(message)}>
-          {message}
-        </div>
+      {formMessage && (
+        <AdminMessage
+          type={formMessage.type}
+          message={formMessage.text}
+          onClose={clearFormMessage}
+        />
       )}
 
       {/* Invite Code Display */}
@@ -352,3 +364,5 @@ const InviteForm: React.FC<InviteFormProps> = ({
 };
 
 export default InviteForm;
+
+

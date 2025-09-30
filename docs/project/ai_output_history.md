@@ -1,7 +1,5 @@
 # SphereConnect AI Output History (Condensed)
-
 Each row summarizes one historical AI handoff entry in chronological order.
-
 | # | Entry | Condensed Notes |
 |---|---|---|
 | 1 | Wingman AI Integration Folder | Documented Wingman AI v1.8.1 assets, folder structure, setup steps, usage examples, and troubleshooting for SphereConnect voice control. |
@@ -65,4 +63,4 @@ Each row summarizes one historical AI handoff entry in chronological order.
 | 57 | 2025-09-30 – Rank deletion cleanup | Strip deleted ranks from objectives.allowed_ranks, sanitize responses, enforce 409 on in-use rank. |
 | 58 | 2025-09-30 – Allowed ranks save fix | Fixed allowed_ranks not saving properly: converted string UUIDs to UUID objects for database storage, fixed PATCH endpoint condition (was `if update.allowed_ranks:` instead of `is not None`), updated all endpoints to return complete objective data including allowed_ranks, and fixed rank filtering logic with proper string/UUID conversion. |
 | 59 | 2025-09-30 – Axios Interceptor Implementation | Implemented Axios interceptor with automatic token refresh: created api.ts with request/response interceptors, updated all frontend components to use api instance instead of fetch, added refresh token storage in login flows, and ensured 401 handling with queueing for parallel requests. |
-
+| 60 | 2025-09-30 - Admin Messaging Unification | Extended the reusable AdminMessage + hook work to every admin flow (guild, category, invite, join, objective) so success/error/info feedback renders consistently in shared banners and inline forms. |

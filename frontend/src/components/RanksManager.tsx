@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useGuild } from '../contexts/GuildContext';
 import { theme } from '../theme';
-import { adminPageStyles, getMessageStyle } from './AdminPageStyles';
+import { adminPageStyles } from './AdminPageStyles';
+import AdminMessage from './AdminMessage';
+import { useAdminMessage } from '../hooks/useAdminMessage';
 
 interface Rank {
   id: string;
@@ -29,7 +31,7 @@ function RanksManager() {
     hierarchy_level: 1,
     access_levels: [] as string[]
   });
-  const [message, setMessage] = useState('');
+  const { message, showMessage, clearMessage } = useAdminMessage();
 
   const { currentGuildId } = useGuild();
   const token = localStorage.getItem('token');
@@ -51,13 +53,13 @@ function RanksManager() {
         const data = await response.json();
         setRanks(data);
       } else if (response.status === 403) {
-        setMessage('Insufficient permissions to manage ranks. You need manage_ranks permission.');
+        showMessage('error', 'Insufficient permissions to manage ranks. You need manage_ranks permission.');
         setRanks([]);
       } else {
-        setMessage('Failed to load ranks');
+        showMessage('error', 'Failed to load ranks');
       }
     } catch (error) {
-      setMessage('Error loading ranks');
+      showMessage('error', 'Error loading ranks');
     } finally {
       setLoading(false);
     }
@@ -84,7 +86,7 @@ function RanksManager() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
-      setMessage('Rank name is required');
+      showMessage('error', 'Rank name is required');
       return;
     }
 
@@ -118,19 +120,19 @@ function RanksManager() {
 
       if (response.ok) {
         const result = await response.json();
-        setMessage(result.message || `Rank ${editingRank ? 'updated' : 'created'} successfully`);
+        showMessage('success', result.message || `Rank ${editingRank ? 'updated' : 'created'} successfully`);
         setShowForm(false);
         setEditingRank(null);
         setFormData({ name: '', phonetic: '', hierarchy_level: 1, access_levels: [] });
         loadRanks();
       } else if (response.status === 403) {
-        setMessage('Insufficient permissions to manage ranks. You need manage_ranks permission.');
+        showMessage('error', 'Insufficient permissions to manage ranks. You need manage_ranks permission.');
       } else {
         const error = await response.json();
-        setMessage(error.detail || 'Failed to save rank');
+        showMessage('error', error.detail || 'Failed to save rank');
       }
     } catch (error) {
-      setMessage('Error saving rank');
+      showMessage('error', 'Error saving rank');
     }
   };
 
@@ -163,19 +165,19 @@ function RanksManager() {
 
       if (response.ok) {
         const result = await response.json();
-        setMessage(result.message || 'Rank deleted successfully');
+        showMessage('success', result.message || 'Rank deleted successfully');
         loadRanks();
       } else if (response.status === 403) {
-        setMessage('Insufficient permissions to manage ranks. You need manage_ranks permission.');
+        showMessage('error', 'Insufficient permissions to manage ranks. You need manage_ranks permission.');
       } else if (response.status === 409) {
         const error = await response.json();
-        setMessage(error.detail || 'Cannot delete rank that is assigned to users');
+        showMessage('error', error.detail || 'Cannot delete rank that is assigned to users');
       } else {
         const error = await response.json();
-        setMessage(error.detail || 'Failed to delete rank');
+        showMessage('error', error.detail || 'Failed to delete rank');
       }
     } catch (error) {
-      setMessage('Error deleting rank');
+      showMessage('error', 'Error deleting rank');
     }
   };
 
@@ -197,7 +199,7 @@ function RanksManager() {
     setShowForm(false);
     setEditingRank(null);
     setFormData({ name: '', phonetic: '', hierarchy_level: 1, access_levels: [] });
-    setMessage('');
+    clearMessage();
   };
 
   if (!token) {
@@ -609,9 +611,11 @@ function RanksManager() {
       )}
 
       {message && (
-        <div style={getMessageStyle(message)}>
-          {message}
-        </div>
+        <AdminMessage
+          type={message.type}
+          message={message.text}
+          onClose={clearMessage}
+        />
       )}
 
       <style>{`

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGuild } from '../contexts/GuildContext';
+import { useAdminMessage } from '../hooks/useAdminMessage';
 import { theme } from '../theme';
 import GuildList from '../components/GuildList';
 import GuildForm from '../components/GuildForm';
@@ -16,6 +17,7 @@ import ObjectiveDetail from '../components/ObjectiveDetail';
 import ObjectiveForm from '../components/ObjectiveForm';
 import CategoriesList from '../components/CategoriesList';
 import CategoryForm from '../components/CategoryForm';
+import AdminMessage from '../components/AdminMessage';
 import { ObjectivesAPIProvider, useObjectivesAPI, Objective } from '../contexts/ObjectivesAPI';
 
 type ActiveTab = 'users' | 'ranks' | 'objectives' | 'tasks' | 'squads' | 'access-levels' | 'categories' | 'guilds' | 'invites' | 'guild-requests';
@@ -72,7 +74,7 @@ function AdminDashboardContent() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
+  const { message: globalMessage, showMessage, clearMessage } = useAdminMessage();
   const navigate = useNavigate();
   const { currentGuildId, guildName, setCurrentGuild } = useGuild();
   const { deleteObjective } = useObjectivesAPI();
@@ -83,8 +85,6 @@ function AdminDashboardContent() {
   const [selectedGuildForInvite, setSelectedGuildForInvite] = useState<{id: string, name: string} | null>(null);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [joinLoading, setJoinLoading] = useState(false);
-  const [inviteMessage, setInviteMessage] = useState('');
-  const [joinMessage, setJoinMessage] = useState('');
 
   // Objective states
   const [selectedObjective, setSelectedObjective] = useState<Objective | null>(null);
@@ -123,7 +123,7 @@ function AdminDashboardContent() {
 
   // Clear message when switching tabs or guilds
   useEffect(() => {
-    setMessage('');
+    clearMessage();
   }, [activeTab, currentGuildId]);
 
   const loadData = useCallback(async () => {
@@ -177,7 +177,7 @@ function AdminDashboardContent() {
           break;
       }
     } catch (error) {
-      setMessage('Error loading data');
+      showMessage('error', 'Error loading data');
     } finally {
       setLoading(false);
     }
@@ -214,14 +214,14 @@ function AdminDashboardContent() {
         }
         // Reload data for new guild
         loadData();
-        setMessage('Successfully switched guild');
+        showMessage('success', 'Successfully switched guild');
       } else if (response.status === 402) {
-        setMessage('Guild limit reached. Upgrade to add more guilds.');
+        showMessage('error', 'Guild limit reached. Upgrade to add more guilds.');
       } else {
-        setMessage('Failed to switch guild');
+        showMessage('error', 'Failed to switch guild');
       }
     } catch (error) {
-      setMessage('Error switching guild');
+      showMessage('error', 'Error switching guild');
     }
   };
 
@@ -235,7 +235,6 @@ function AdminDashboardContent() {
 
   const handleInviteSubmit = async (guildId: string, inviteData: any) => {
     setInviteLoading(true);
-    setInviteMessage('');
 
     try {
       const response = await fetch('http://localhost:8000/api/invites', {
@@ -249,16 +248,13 @@ function AdminDashboardContent() {
 
       if (response.ok) {
         const result = await response.json();
-        setInviteMessage('Invite created successfully!');
         // Reload guilds to update member counts
         loadData();
         return result;
       } else if (response.status === 402) {
-        setInviteMessage('Member limit reached. Upgrade to add more members.');
         throw new Error('Member limit reached');
       } else {
         const error = await response.json();
-        setInviteMessage(error.detail || 'Failed to create invite');
         throw new Error(error.detail || 'Failed to create invite');
       }
     } catch (error) {
@@ -274,7 +270,6 @@ function AdminDashboardContent() {
 
   const handleJoinSubmit = async (inviteCode: string) => {
     setJoinLoading(true);
-    setJoinMessage('');
 
     try {
       console.log("AdminDashboard: Starting join request");
@@ -298,7 +293,6 @@ function AdminDashboardContent() {
       if (response.ok) {
         const result = await response.json();
         console.log("AdminDashboard: Join successful, result:", result);
-        setJoinMessage('Successfully joined guild!');
         // Reload guilds and switch to new guild
         loadData();
         if (result.current_guild_id) {
@@ -308,16 +302,13 @@ function AdminDashboardContent() {
       } else if (response.status === 402) {
         const error = await response.json();
         console.log("AdminDashboard: 402 error:", error);
-        setJoinMessage(error.detail || "Guild member limit reached.");
         throw new Error(error.detail || 'Member limit reached');
       } else if (response.status === 422) {
         console.log("AdminDashboard: 422 error - invalid invite code");
-        setJoinMessage('Invalid or expired invite code.');
         throw new Error('Invalid invite code');
       } else {
         const error = await response.json();
         console.log("AdminDashboard: Other error:", error);
-        setJoinMessage(error.detail || 'Failed to join guild');
         throw new Error(error.detail || 'Failed to join guild');
       }
     } catch (error) {
@@ -341,24 +332,24 @@ function AdminDashboardContent() {
 
       if (response.ok) {
         const result = await response.json();
-        setMessage('Successfully left guild and switched to personal guild');
+        showMessage('success', 'Successfully left guild and switched to personal guild');
         // Reload guilds and switch to personal guild
         loadData();
         if (result.current_guild_id) {
           setCurrentGuild(result.current_guild_id, result.guild_name);
         }
       } else {
-        setMessage('Failed to leave guild');
+        showMessage('error', 'Failed to leave guild');
       }
     } catch (error) {
-      setMessage('Error leaving guild');
+      showMessage('error', 'Error leaving guild');
     }
   };
 
   const handleKick = async (userId: string) => {
     // This would require admin permissions and user selection
     // For now, just show a placeholder
-    setMessage('Kick functionality requires user selection - coming soon');
+    showMessage('info', 'Kick functionality requires user selection - coming soon');
   };
 
   const handleDelete = async (guildId: string) => {
@@ -371,7 +362,7 @@ function AdminDashboardContent() {
       });
 
       if (response.ok) {
-        setMessage('Guild deleted successfully');
+        showMessage('success', 'Guild deleted successfully');
         // Force reload guilds to remove the deleted guild
         try {
           const headers = { 'Authorization': `Bearer ${token}` };
@@ -384,18 +375,18 @@ function AdminDashboardContent() {
           console.error('Error reloading guilds:', error);
         }
       } else if (response.status === 403) {
-        setMessage('Cannot delete personal guilds or guilds you do not own');
+        showMessage('error', 'Cannot delete personal guilds or guilds you do not own');
       } else {
-        setMessage('Failed to delete guild');
+        showMessage('error', 'Failed to delete guild');
       }
     } catch (error) {
-      setMessage('Error deleting guild');
+      showMessage('error', 'Error deleting guild');
     }
   };
 
   const handleGuildCreateSuccess = async (guild: any) => {
     if (guild) {
-      setMessage('Guild created successfully');
+      showMessage('success', 'Guild created successfully');
     }
     // Force reload guilds to show the new guild
     try {
@@ -419,11 +410,11 @@ function AdminDashboardContent() {
   const handleDeleteObjective = async (objectiveId: string) => {
     try {
       await deleteObjective(objectiveId);
-      setMessage('Objective deleted successfully');
+      showMessage('success', 'Objective deleted successfully');
       // Reload objectives
       loadData();
     } catch (error: any) {
-      setMessage(error.message || 'Failed to delete objective');
+      showMessage('error', error.message || 'Failed to delete objective');
     }
   };
 
@@ -530,9 +521,12 @@ function AdminDashboardContent() {
       onGuildCreateSuccess={handleGuildCreateSuccess}
       onInviteSuccess={() => setActiveTab('invites')}
       loading={loading}
-      message={message}
+      message={globalMessage}
+      onMessageDismiss={clearMessage}
     />
   );
+
+  const shouldRenderGlobalMessage = Boolean(globalMessage) && activeTab !== 'guilds';
 
   const renderContent = () => {
     switch (activeTab) {
@@ -1050,21 +1044,13 @@ function AdminDashboardContent() {
             renderContent()
           )}
 
-          {message && (
-            <div style={{
-              marginTop: theme.spacing[6],
-              padding: theme.spacing[3],
-              backgroundColor: message.includes('Error') || message.includes('Failed') ?
-                `${theme.colors.error}20` : `${theme.colors.success}20`,
-              border: `1px solid ${message.includes('Error') || message.includes('Failed') ?
-                theme.colors.error : theme.colors.success}`,
-              borderRadius: theme.borderRadius.lg,
-              color: message.includes('Error') || message.includes('Failed') ?
-                theme.colors.error : theme.colors.success,
-              fontSize: theme.typography.fontSize.sm,
-              fontWeight: theme.typography.fontWeight.medium
-            }}>
-              {message}
+          {shouldRenderGlobalMessage && (
+            <div style={{ marginTop: theme.spacing[6] }}>
+              <AdminMessage
+                type={globalMessage!.type}
+                message={globalMessage!.text}
+                onClose={clearMessage}
+              />
             </div>
           )}
         </div>
@@ -1078,22 +1064,18 @@ function AdminDashboardContent() {
         onClose={() => {
           setInviteFormOpen(false);
           setSelectedGuildForInvite(null);
-          setInviteMessage('');
         }}
         onInvite={handleInviteSubmit}
         loading={inviteLoading}
-        message={inviteMessage}
       />
 
       <JoinForm
         isOpen={joinFormOpen}
         onClose={() => {
           setJoinFormOpen(false);
-          setJoinMessage('');
         }}
         onJoin={handleJoinSubmit}
         loading={joinLoading}
-        message={joinMessage}
       />
 
       {/* Objective Modal */}

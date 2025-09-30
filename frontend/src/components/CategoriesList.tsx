@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useGuild } from '../contexts/GuildContext';
 import { theme } from '../theme';
-import { adminPageStyles, getMessageStyle } from './AdminPageStyles';
+import { adminPageStyles } from './AdminPageStyles';
+import AdminMessage from './AdminMessage';
+import { useAdminMessage } from '../hooks/useAdminMessage';
 
 interface Category {
   id: string;
@@ -14,8 +16,16 @@ function CategoriesList() {
   const { currentGuildId } = useGuild();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
+  const {
+    message: listMessage,
+    showMessage: showListMessage,
+    clearMessage: clearListMessage
+  } = useAdminMessage();
+  const {
+    message: formMessage,
+    showMessage: showFormMessage,
+    clearMessage: clearFormMessage
+  } = useAdminMessage();
 
   // Filter states
   const [nameFilter, setNameFilter] = useState('');
@@ -29,11 +39,13 @@ function CategoriesList() {
     description: ''
   });
 
-  const loadCategories = useCallback(async () => {
+  const loadCategories = useCallback(async (options?: { preserveMessage?: boolean }) => {
     if (!currentGuildId) return;
 
     setLoading(true);
-    setError('');
+    if (!options?.preserveMessage) {
+      clearListMessage();
+    }
 
     try {
       const token = localStorage.getItem('token');
@@ -49,14 +61,14 @@ function CategoriesList() {
         const data = await response.json();
         setCategories(data);
       } else {
-        setError('Failed to load categories');
+        showListMessage('error', 'Failed to load categories');
       }
     } catch (err: any) {
-      setError(err.message);
+      showListMessage('error', err.message);
     } finally {
       setLoading(false);
     }
-  }, [currentGuildId, nameFilter, descriptionFilter]);
+  }, [clearListMessage, currentGuildId, descriptionFilter, nameFilter, showListMessage]);
 
   useEffect(() => {
     loadCategories();
@@ -65,7 +77,7 @@ function CategoriesList() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
-      setMessage('Name is required');
+      showFormMessage('error', 'Name is required');
       return;
     }
 
@@ -99,17 +111,18 @@ function CategoriesList() {
       });
 
       if (response.ok) {
-        setMessage(`Category ${editingCategory ? 'updated' : 'created'} successfully`);
+        showListMessage('success', `Category ${editingCategory ? 'updated' : 'created'} successfully`);
+        clearFormMessage();
         setShowForm(false);
         setEditingCategory(null);
         resetForm();
-        loadCategories();
+        loadCategories({ preserveMessage: true });
       } else {
         const error = await response.json();
-        setMessage(error.detail || 'Failed to save category');
+        showListMessage('error', error.detail || 'Failed to save category');
       }
     } catch (error: any) {
-      setMessage(error.message || 'Error saving category');
+      showListMessage('error', error.message || 'Error saving category');
     }
   };
 
@@ -132,14 +145,14 @@ function CategoriesList() {
         });
 
         if (response.ok) {
-          setMessage('Category deleted successfully');
-          loadCategories();
+          showListMessage('success', 'Category deleted successfully');
+          loadCategories({ preserveMessage: true });
         } else {
           const error = await response.json();
-          setMessage(error.detail || 'Failed to delete category');
+          showListMessage('error', error.detail || 'Failed to delete category');
         }
       } catch (error: any) {
-        setMessage(error.message || 'Error deleting category');
+        showListMessage('error', error.message || 'Error deleting category');
       }
     }
   };
@@ -151,7 +164,7 @@ function CategoriesList() {
       name: '',
       description: ''
     });
-    setMessage('');
+    clearFormMessage();
   };
 
   return (
@@ -175,6 +188,15 @@ function CategoriesList() {
           Create Category
         </button>
       </div>
+      {listMessage && (
+        <div style={{ marginBottom: theme.spacing[4] }}>
+          <AdminMessage
+            type={listMessage.type}
+            message={listMessage.text}
+            onClose={clearListMessage}
+          />
+        </div>
+      )}
 
       {showForm && (
         <div style={adminPageStyles.formContainer}>
@@ -182,6 +204,15 @@ function CategoriesList() {
             {editingCategory ? 'Edit Category' : 'Create New Category'}
           </h4>
 
+          {formMessage && (
+            <div style={{ marginBottom: theme.spacing[4] }}>
+              <AdminMessage
+                type={formMessage.type}
+                message={formMessage.text}
+                onClose={clearFormMessage}
+              />
+            </div>
+          )}
           <form onSubmit={handleSubmit}>
             <div style={{
               display: 'grid',
@@ -309,12 +340,6 @@ function CategoriesList() {
           />
         </div>
       </div>
-
-      {error && (
-        <div style={getMessageStyle(error)}>
-          {error}
-        </div>
-      )}
 
       <div style={{
         overflowX: 'auto',
@@ -445,12 +470,6 @@ function CategoriesList() {
         </div>
       )}
 
-      {message && (
-        <div style={getMessageStyle(message)}>
-          {message}
-        </div>
-      )}
-
       {loading && (
         <div style={{
           textAlign: 'center',
@@ -479,3 +498,4 @@ function CategoriesList() {
 };
 
 export default CategoriesList;
+

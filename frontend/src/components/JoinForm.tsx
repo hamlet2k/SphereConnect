@@ -1,6 +1,19 @@
 import React, { useState, FormEvent } from 'react';
 import { theme } from '../theme';
-import { adminPageStyles, getMessageStyle } from './AdminPageStyles';
+import { adminPageStyles } from './AdminPageStyles';
+import AdminMessage, { AdminMessageType } from './AdminMessage';
+import { useAdminMessage } from '../hooks/useAdminMessage';
+
+const inferMessageType = (text: string): AdminMessageType => {
+  const lower = text.toLowerCase();
+  if (lower.includes('error') || lower.includes('failed') || lower.includes('denied') || lower.includes('invalid')) {
+    return 'error';
+  }
+  if (lower.includes('pending') || lower.includes('awaiting') || lower.includes('request') || lower.includes('processing')) {
+    return 'info';
+  }
+  return 'success';
+};
 
 interface JoinFormProps {
   isOpen: boolean;
@@ -22,14 +35,23 @@ const JoinForm: React.FC<JoinFormProps> = ({
   const [inviteCode, setInviteCode] = useState<string>('');
   const [joined, setJoined] = useState<boolean>(false);
   const [guildName, setGuildName] = useState<string>('');
+  const { message: formMessage, showMessage: showFormMessage, clearMessage: clearFormMessage } = useAdminMessage();
+
+  const externalMessage = message
+    ? { type: inferMessageType(message), text: message }
+    : null;
+  const activeMessage = formMessage ?? externalMessage;
+  const dismissActiveMessage = formMessage ? clearFormMessage : undefined;
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!inviteCode.trim()) {
+      showFormMessage('error', 'Invite code is required');
       return;
     }
 
+    clearFormMessage();
     console.log('JoinForm: Starting join request with invite code:', inviteCode.trim());
 
     try {
@@ -38,9 +60,14 @@ const JoinForm: React.FC<JoinFormProps> = ({
       if (result && result.guild_name) {
         setGuildName(result.guild_name);
         setJoined(true);
+        showFormMessage('success', `Request to join ${result.guild_name} sent`);
+      } else {
+        showFormMessage('success', 'Join request sent successfully');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('JoinForm: Failed to join guild:', error);
+      const errorMessage = error?.response?.data?.detail || error?.message || 'Failed to join guild';
+      showFormMessage('error', String(errorMessage));
     }
   };
 
@@ -48,6 +75,7 @@ const JoinForm: React.FC<JoinFormProps> = ({
     setInviteCode('');
     setJoined(false);
     setGuildName('');
+    clearFormMessage();
   };
 
   const handleClose = () => {
@@ -121,10 +149,12 @@ const JoinForm: React.FC<JoinFormProps> = ({
       )}
 
       {/* Message */}
-      {message && (
-        <div style={getMessageStyle(message)}>
-          {message}
-        </div>
+      {activeMessage && (
+        <AdminMessage
+          type={activeMessage.type}
+          message={activeMessage.text}
+          onClose={dismissActiveMessage}
+        />
       )}
 
       {/* Success Message - only show in modal mode */}
@@ -304,3 +334,5 @@ const JoinForm: React.FC<JoinFormProps> = ({
 };
 
 export default JoinForm;
+
+

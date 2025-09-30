@@ -3,7 +3,9 @@ import { useObjectivesAPI, Objective } from '../contexts/ObjectivesAPI';
 import { useGuild } from '../contexts/GuildContext';
 import { theme } from '../theme';
 import ObjectiveForm from './ObjectiveForm';
-import { adminPageStyles, getMessageStyle } from './AdminPageStyles';
+import { adminPageStyles } from './AdminPageStyles';
+import AdminMessage from './AdminMessage';
+import { useAdminMessage } from '../hooks/useAdminMessage';
 
 interface ObjectivesListProps {
   onViewObjective: (objective: Objective) => void;
@@ -25,8 +27,11 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
 
   const [objectives, setObjectives] = useState<Objective[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
+  const {
+    message: bannerMessage,
+    showMessage: showBannerMessage,
+    clearMessage: clearBannerMessage
+  } = useAdminMessage();
   const [categories, setCategories] = useState<{[id: string]: string}>({});
   const [categoryOptions, setCategoryOptions] = useState<{id: string, name: string}[]>([]);
   const [ranks, setRanks] = useState<{[id: string]: string}>({});
@@ -38,13 +43,17 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
   // Form states
   const [showForm, setShowForm] = useState(false);
   const [editingObjective, setEditingObjective] = useState<Objective | null>(null);
-  const [formMessage, setFormMessage] = useState('');
+  const {
+    message: formFeedback,
+    showMessage: showFormFeedback,
+    clearMessage: clearFormFeedback
+  } = useAdminMessage();
 
   const loadObjectives = useCallback(async () => {
     if (!currentGuildId) return;
 
     setLoading(true);
-    setError('');
+    clearBannerMessage();
 
     try {
       const filters: { status?: string; category_id?: string } = {};
@@ -60,7 +69,7 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
       });
       setObjectives(data);
     } catch (err: any) {
-      setError(err.message);
+      showBannerMessage('error', err.message);
     } finally {
       setLoading(false);
     }
@@ -122,15 +131,12 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
   const handleDelete = async (objectiveId: string) => {
     if (window.confirm('Are you sure you want to delete this objective? This action cannot be undone.')) {
       try {
-        setError('');
-        setSuccessMessage('');
+        clearBannerMessage();
         await onDeleteObjective(objectiveId);
         loadObjectives(); // Refresh list
-        setSuccessMessage('Objective deleted successfully');
-        setTimeout(() => setSuccessMessage(''), 5000);
+        showBannerMessage('success', 'Objective deleted successfully');
       } catch (err: any) {
-        setError(err.message);
-        setSuccessMessage('');
+        showBannerMessage('error', err.message);
       }
     }
   };
@@ -138,9 +144,8 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
   const handleCreateObjective = () => {
     setEditingObjective(null);
     setShowForm(true);
-    setFormMessage('');
-    setError('');
-    setSuccessMessage('');
+    clearFormFeedback();
+    clearBannerMessage();
   };
 
   const handleEditObjective = (objective: Objective) => {
@@ -149,29 +154,22 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
     console.log('Objective allowed_rank_ids:', objective.allowed_rank_ids);
     setEditingObjective(objective);
     setShowForm(true);
-    setFormMessage('');
-    setError('');
-    setSuccessMessage('');
+    clearFormFeedback();
+    clearBannerMessage();
   };
 
   const handleFormSuccess = (objective: Objective) => {
     setShowForm(false);
     setEditingObjective(null);
-    setFormMessage('');
+    clearFormFeedback();
     loadObjectives(); // Refresh list
-    setSuccessMessage(`Objective ${editingObjective ? 'updated' : 'created'} successfully`);
-    setError(''); // Clear any existing error
-
-    // Auto-clear success message after 5 seconds
-    setTimeout(() => {
-      setSuccessMessage('');
-    }, 5000);
+    showBannerMessage('success', `Objective ${editingObjective ? 'updated' : 'created'} successfully`);
   };
 
   const handleFormCancel = () => {
     setShowForm(false);
     setEditingObjective(null);
-    setFormMessage('');
+    clearFormFeedback();
   };
 
   const getStatusColor = (progress: any) => {
@@ -323,16 +321,12 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
         </div>
       </div>
 
-      {error && (
-        <div style={getMessageStyle(error)}>
-          {error}
-        </div>
-      )}
-
-      {successMessage && (
-        <div style={getMessageStyle(successMessage)}>
-          {successMessage}
-        </div>
+      {bannerMessage && (
+        <AdminMessage
+          type={bannerMessage.type}
+          message={bannerMessage.text}
+          onClose={clearBannerMessage}
+        />
       )}
 
       <div style={{
@@ -564,10 +558,12 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
         </div>
       )}
 
-      {formMessage && (
-        <div style={getMessageStyle(formMessage)}>
-          {formMessage}
-        </div>
+      {formFeedback && (
+        <AdminMessage
+          type={formFeedback.type}
+          message={formFeedback.text}
+          onClose={clearFormFeedback}
+        />
       )}
     </div>
   );

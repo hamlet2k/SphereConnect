@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useGuild } from '../contexts/GuildContext';
 import { theme } from '../theme';
-import { adminPageStyles, getMessageStyle } from './AdminPageStyles';
+import { adminPageStyles } from './AdminPageStyles';
+import AdminMessage from './AdminMessage';
+import { useAdminMessage } from '../hooks/useAdminMessage';
 
 interface AccessLevel {
   id: string;
@@ -35,7 +37,7 @@ function AccessLevelManager() {
     name: '',
     user_actions: [] as string[]
   });
-  const [message, setMessage] = useState('');
+  const { message, showMessage, clearMessage } = useAdminMessage();
 
   const { currentGuildId } = useGuild();
   const token = localStorage.getItem('token');
@@ -56,13 +58,13 @@ function AccessLevelManager() {
         const data = await response.json();
         setAccessLevels(data);
       } else if (response.status === 403) {
-        setMessage('Insufficient permissions to manage access levels. You need manage_rbac permission.');
+        showMessage('error', 'Insufficient permissions to manage access levels. You need manage_rbac permission.');
         setAccessLevels([]);
       } else {
-        setMessage('Failed to load access levels');
+        showMessage('error', 'Failed to load access levels');
       }
     } catch (error) {
-      setMessage('Error loading access levels');
+      showMessage('error', 'Error loading access levels');
     } finally {
       setLoading(false);
     }
@@ -71,7 +73,7 @@ function AccessLevelManager() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim() || formData.user_actions.length === 0) {
-      setMessage('Name and at least one user action are required');
+      showMessage('error', 'Name and at least one user action are required');
       return;
     }
 
@@ -105,19 +107,19 @@ function AccessLevelManager() {
 
       if (response.ok) {
         const result = await response.json();
-        setMessage(result.message || `Access level ${editingLevel ? 'updated' : 'created'} successfully`);
+        showMessage('success', result.message || `Access level ${editingLevel ? 'updated' : 'created'} successfully`);
         setShowForm(false);
         setEditingLevel(null);
         setFormData({ name: '', user_actions: [] });
         loadAccessLevels();
       } else if (response.status === 403) {
-        setMessage('Insufficient permissions to manage access levels. You need manage_rbac permission.');
+        showMessage('error', 'Insufficient permissions to manage access levels. You need manage_rbac permission.');
       } else {
         const error = await response.json();
-        setMessage(error.detail || 'Failed to save access level');
+        showMessage('error', error.detail || 'Failed to save access level');
       }
     } catch (error) {
-      setMessage('Error saving access level');
+      showMessage('error', 'Error saving access level');
     }
   };
 
@@ -148,16 +150,16 @@ function AccessLevelManager() {
 
       if (response.ok) {
         const result = await response.json();
-        setMessage(result.message || 'Access level deleted successfully');
+        showMessage('success', result.message || 'Access level deleted successfully');
         loadAccessLevels();
       } else if (response.status === 403) {
-        setMessage('Insufficient permissions to manage access levels. You need manage_rbac permission.');
+        showMessage('error', 'Insufficient permissions to manage access levels. You need manage_rbac permission.');
       } else {
         const error = await response.json();
-        setMessage(error.detail || 'Failed to delete access level');
+        showMessage('error', error.detail || 'Failed to delete access level');
       }
     } catch (error) {
-      setMessage('Error deleting access level');
+      showMessage('error', 'Error deleting access level');
     }
   };
 
@@ -174,7 +176,7 @@ function AccessLevelManager() {
     setShowForm(false);
     setEditingLevel(null);
     setFormData({ name: '', user_actions: [] });
-    setMessage('');
+    clearMessage();
   };
 
   if (!token) {
@@ -447,9 +449,11 @@ function AccessLevelManager() {
       )}
 
       {message && (
-        <div style={getMessageStyle(message)}>
-          {message}
-        </div>
+        <AdminMessage
+          type={message.type}
+          message={message.text}
+          onClose={clearMessage}
+        />
       )}
 
       <style>{`

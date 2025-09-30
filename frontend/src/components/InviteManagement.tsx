@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useGuild } from '../contexts/GuildContext';
 import { theme } from '../theme';
-import { adminPageStyles, getMessageStyle } from './AdminPageStyles';
+import { adminPageStyles } from './AdminPageStyles';
+import AdminMessage from './AdminMessage';
+import { useAdminMessage } from '../hooks/useAdminMessage';
 import InviteForm from './InviteForm';
 
 interface Invite {
@@ -16,7 +18,7 @@ interface Invite {
 function InviteManagement() {
   const [invites, setInvites] = useState<Invite[]>([]);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
+  const { message, showMessage, clearMessage } = useAdminMessage();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const { currentGuildId } = useGuild();
   const token = localStorage.getItem('token');
@@ -29,6 +31,7 @@ function InviteManagement() {
 
   const loadInvites = async () => {
     setLoading(true);
+    clearMessage();
     try {
       const headers = { 'Authorization': `Bearer ${token}` };
       const response = await fetch(`http://localhost:8000/api/admin/invites?guild_id=${currentGuildId}`, { headers });
@@ -37,10 +40,10 @@ function InviteManagement() {
         const invitesData = await response.json();
         setInvites(invitesData);
       } else {
-        setMessage('Failed to load invites');
+        showMessage('error', 'Failed to load invites');
       }
     } catch (error) {
-      setMessage('Error loading invites');
+      showMessage('error', 'Error loading invites');
     } finally {
       setLoading(false);
     }
@@ -48,7 +51,7 @@ function InviteManagement() {
 
   const handleInviteSuccess = async (result: any) => {
     setInvites([...invites, result]);
-    setMessage('Invite created successfully');
+    showMessage('success', 'Invite created successfully');
     setShowCreateForm(false);
   };
 
@@ -62,12 +65,12 @@ function InviteManagement() {
 
       if (response.ok) {
         setInvites(invites.filter(invite => invite.code !== inviteCode));
-        setMessage('Invite deleted successfully');
+        showMessage('success', 'Invite deleted successfully');
       } else {
-        setMessage('Failed to delete invite');
+        showMessage('error', 'Failed to delete invite');
       }
     } catch (error) {
-      setMessage('Error deleting invite');
+      showMessage('error', 'Error deleting invite');
     }
   };
 
@@ -78,10 +81,10 @@ function InviteManagement() {
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      setMessage('Invite code copied to clipboard!');
-      setTimeout(() => setMessage(''), 3000);
+      showMessage('success', 'Invite code copied to clipboard!');
+
     } catch (error) {
-      setMessage('Failed to copy to clipboard');
+      showMessage('error', 'Failed to copy to clipboard');
     }
   };
 
@@ -98,9 +101,11 @@ function InviteManagement() {
       </div>
 
       {message && (
-        <div style={getMessageStyle(message)}>
-          {message}
-        </div>
+        <AdminMessage
+          type={message.type}
+          message={message.text}
+          onClose={clearMessage}
+        />
       )}
 
       {showCreateForm && (

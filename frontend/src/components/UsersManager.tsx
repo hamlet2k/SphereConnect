@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useGuild } from '../contexts/GuildContext';
 import { theme } from '../theme';
-import { adminPageStyles, getMessageStyle } from './AdminPageStyles';
+import { adminPageStyles } from './AdminPageStyles';
+import AdminMessage from './AdminMessage';
+import { useAdminMessage } from '../hooks/useAdminMessage';
 
 interface User {
   id: string;
@@ -44,7 +46,7 @@ function UsersManager() {
     phonetic: '',
     availability: 'offline'
   });
-  const [message, setMessage] = useState('');
+  const { message, showMessage, clearMessage } = useAdminMessage();
 
   const { currentGuildId } = useGuild();
   const token = localStorage.getItem('token');
@@ -67,13 +69,13 @@ function UsersManager() {
         const data = await response.json();
         setUsers(data);
       } else if (response.status === 403) {
-        setMessage('Insufficient permissions to manage users. You need manage_users permission.');
+        showMessage('error', 'Insufficient permissions to manage users. You need manage_users permission.');
         setUsers([]);
       } else {
-        setMessage('Failed to load users');
+        showMessage('error', 'Failed to load users');
       }
     } catch (error) {
-      setMessage('Error loading users');
+      showMessage('error', 'Error loading users');
     } finally {
       setLoading(false);
     }
@@ -114,12 +116,12 @@ function UsersManager() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim() || !formData.username.trim()) {
-      setMessage('Name and username are required');
+      showMessage('error', 'Name and username are required');
       return;
     }
 
     if (!editingUser && (!formData.password || !formData.pin)) {
-      setMessage('Password and PIN are required for new users');
+      showMessage('error', 'Password and PIN are required for new users');
       return;
     }
 
@@ -160,21 +162,21 @@ function UsersManager() {
           await handleAccessLevelsUpdate(userId, formData.access_levels);
         }
 
-        setMessage(result.message || `User ${editingUser ? 'updated' : 'created'} successfully`);
+        showMessage('success', result.message || `User ${editingUser ? 'updated' : 'created'} successfully`);
         setShowForm(false);
         setEditingUser(null);
         resetForm();
         loadUsers();
       } else if (response.status === 403) {
-        setMessage('Insufficient permissions to manage users. You need manage_users permission.');
+        showMessage('error', 'Insufficient permissions to manage users. You need manage_users permission.');
       } else if (response.status === 409) {
-        setMessage('Username already exists in this guild');
+        showMessage('error', 'Username already exists in this guild');
       } else {
         const error = await response.json();
-        setMessage(error.detail || 'Failed to save user');
+        showMessage('error', error.detail || 'Failed to save user');
       }
     } catch (error) {
-      setMessage('Error saving user');
+      showMessage('error', 'Error saving user');
     }
   };
 
@@ -204,7 +206,7 @@ function UsersManager() {
       });
       setShowForm(true);
     } catch (error) {
-      setMessage('Error loading user access levels');
+      showMessage('error', 'Error loading user access levels');
     }
   };
 
@@ -226,18 +228,18 @@ function UsersManager() {
 
       if (response.ok) {
         const result = await response.json();
-        setMessage(result.message || 'User deleted successfully');
+        showMessage('success', result.message || 'User deleted successfully');
         loadUsers();
       } else if (response.status === 403) {
-        setMessage('Insufficient permissions to manage users. You need manage_users permission.');
+        showMessage('error', 'Insufficient permissions to manage users. You need manage_users permission.');
       } else if (response.status === 400) {
-        setMessage('Cannot delete your own account');
+        showMessage('error', 'Cannot delete your own account');
       } else {
         const error = await response.json();
-        setMessage(error.detail || 'Failed to delete user');
+        showMessage('error', error.detail || 'Failed to delete user');
       }
     } catch (error) {
-      setMessage('Error deleting user');
+      showMessage('error', 'Error deleting user');
     }
   };
 
@@ -255,13 +257,13 @@ function UsersManager() {
       });
 
       if (response.ok) {
-        setMessage('Rank assigned successfully');
+        showMessage('success', 'Rank assigned successfully');
         loadUsers();
       } else {
-        setMessage('Failed to assign rank');
+        showMessage('error', 'Failed to assign rank');
       }
     } catch (error) {
-      setMessage('Error assigning rank');
+      showMessage('error', 'Error assigning rank');
     }
   };
 
@@ -326,15 +328,15 @@ function UsersManager() {
       });
 
       if (response.ok) {
-        setMessage('Access level assigned successfully');
+        showMessage('success', 'Access level assigned successfully');
         loadUsers();
       } else if (response.status === 409) {
-        setMessage('User already has this access level');
+        showMessage('info', 'User already has this access level');
       } else {
-        setMessage('Failed to assign access level');
+        showMessage('error', 'Failed to assign access level');
       }
     } catch (error) {
-      setMessage('Error assigning access level');
+      showMessage('error', 'Error assigning access level');
     }
   };
 
@@ -357,7 +359,7 @@ function UsersManager() {
       phonetic: '',
       availability: 'offline'
     });
-    setMessage('');
+    clearMessage();
   };
 
   if (!token) {
@@ -764,9 +766,11 @@ function UsersManager() {
       )}
 
       {message && (
-        <div style={getMessageStyle(message)}>
-          {message}
-        </div>
+        <AdminMessage
+          type={message.type}
+          message={message.text}
+          onClose={clearMessage}
+        />
       )}
 
       <style>{`
