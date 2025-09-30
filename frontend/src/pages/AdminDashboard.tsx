@@ -121,10 +121,10 @@ function AdminDashboardContent() {
     loadGuilds();
   }, [activeTab, token, navigate]);
 
-  // Clear message when switching tabs
+  // Clear message when switching tabs or guilds
   useEffect(() => {
     setMessage('');
-  }, [activeTab]);
+  }, [activeTab, currentGuildId]);
 
   const loadData = useCallback(async () => {
     setLoading(true);

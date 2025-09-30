@@ -131,7 +131,7 @@ const GuildList: React.FC<GuildListProps> = ({
     setFormMessage('');
   };
 
-  const displayMessage = formMessage || (message && !message.startsWith('Guild') ? message : '');
+  const displayMessage = formMessage || (message && !message.startsWith('Guild') && !message.startsWith('Successfully') ? message : '');
 
   const getMemberStatus = (guild: Guild) => {
     const approvedCount = guild.approved_count || 0;
