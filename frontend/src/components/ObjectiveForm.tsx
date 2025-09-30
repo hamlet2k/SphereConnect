@@ -61,6 +61,7 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
 
   const loadRanks = useCallback(async () => {
     try {
+      console.log('Loading ranks for guild:', guildId);
       const token = localStorage.getItem('token');
       const response = await fetch(`http://localhost:8000/api/admin/ranks?guild_id=${guildId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -68,11 +69,16 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
 
       if (response.ok) {
         const data = await response.json();
-        setAvailableRanks(data.map((rank: any) => ({
+        console.log('Loaded ranks data:', data);
+        const processedRanks = data.map((rank: any) => ({
           id: rank.id,
           name: rank.name,
           hierarchy_level: rank.hierarchy_level
-        })));
+        }));
+        console.log('Processed ranks:', processedRanks);
+        setAvailableRanks(processedRanks);
+      } else {
+        console.error('Failed to load ranks:', response.status, response.statusText);
       }
     } catch (err: any) {
       console.error('Error loading ranks:', err);
@@ -80,12 +86,93 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
   }, [guildId]);
 
   useEffect(() => {
-    if (objective) {
-      setFormData(objective);
-    }
     loadCategories();
     loadRanks();
-  }, [objective, loadCategories, loadRanks]);
+  }, [loadCategories, loadRanks]);
+
+  useEffect(() => {
+    if (!objective) {
+      setFormData({
+        id: '',
+        name: '',
+        description: {
+          brief: '',
+          tactical: '',
+          classified: '',
+          metrics: {}
+        },
+        categories: [],
+        priority: 'Medium',
+        allowed_ranks: [],
+        progress: {},
+        guild_id: guildId
+      });
+      return;
+    }
+
+    let resolvedRankIds: string[] = [];
+
+    if (objective.allowed_rank_ids?.length) {
+      resolvedRankIds = objective.allowed_rank_ids;
+    } else if (objective.allowed_ranks?.length) {
+      resolvedRankIds = objective.allowed_ranks.filter(
+        (rankValue): rankValue is string => typeof rankValue === 'string'
+      );
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      ...objective,
+      description: objective.description || {
+        brief: '',
+        tactical: '',
+        classified: '',
+        metrics: {}
+      },
+      categories: objective.categories || [],
+      priority: objective.priority || 'Medium',
+      allowed_ranks: resolvedRankIds,
+      progress: objective.progress || {},
+      guild_id: objective.guild_id || guildId
+    }));
+  }, [objective, guildId]);
+
+  useEffect(() => {
+    if (!objective || objective.allowed_rank_ids?.length || !objective.allowed_ranks?.length || !availableRanks.length) {
+      return;
+    }
+
+    setFormData(prev => {
+      const mappedIds = objective.allowed_ranks
+        .map(rankValue => {
+          if (typeof rankValue !== 'string') {
+            return undefined;
+          }
+          const rankById = availableRanks.find(r => r.id === rankValue);
+          if (rankById) {
+            return rankById.id;
+          }
+          const rankByName = availableRanks.find(r => r.name === rankValue);
+          return rankByName ? rankByName.id : undefined;
+        })
+        .filter((id): id is string => Boolean(id));
+
+      if (!mappedIds.length) {
+        return prev;
+      }
+
+      const sameLength = mappedIds.length === prev.allowed_ranks.length;
+      const sameValues = sameLength && mappedIds.every(id => prev.allowed_ranks.includes(id));
+      if (sameValues) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        allowed_ranks: mappedIds
+      };
+    });
+  }, [objective, availableRanks]);
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({
@@ -161,12 +248,28 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
       }
 
       let result: Objective;
+
+      // Convert rank IDs back to UUIDs for API submission
+      const submitData = {
+        ...formData,
+        allowed_ranks: formData.allowed_ranks.map(rankId => {
+          // If it's already a UUID, keep it as is
+          if (typeof rankId === 'string' && rankId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+            return rankId;
+          }
+          // Otherwise, it's already a rank ID from the form, keep it as is
+          return rankId;
+        })
+      };
+
+      console.log('Submitting form data:', submitData);
+
       if (objective?.id) {
         // Update existing objective
-        result = await updateObjective(objective.id, formData);
+        result = await updateObjective(objective.id, submitData);
       } else {
         // Create new objective
-        const createData = { ...formData };
+        const createData = { ...submitData };
         delete (createData as any).id; // Remove id for create
         result = await createObjective(createData as any);
       }
@@ -300,17 +403,27 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
                   >
                     <input
                       type="checkbox"
-                      checked={formData.allowed_ranks.includes(rank.id)}
+                      checked={
+                        (() => {
+                          const isChecked = formData.allowed_ranks.includes(rank.id) ||
+                            (typeof formData.allowed_ranks[0] === 'string' && formData.allowed_ranks.includes(rank.name));
+                          console.log(`Checkbox for ${rank.name} (${rank.id}): ${isChecked ? 'CHECKED' : 'UNCHECKED'}`);
+                          console.log(`formData.allowed_ranks:`, formData.allowed_ranks);
+                          console.log(`Checking if includes rank.id (${rank.id}):`, formData.allowed_ranks.includes(rank.id));
+                          console.log(`Checking if includes rank.name (${rank.name}):`, formData.allowed_ranks.includes(rank.name));
+                          return isChecked;
+                        })()
+                      }
                       onChange={(e) => {
                         const checked = e.target.checked;
                         let newAllowedRanks = [...formData.allowed_ranks];
 
                         if (checked) {
-                          // Add this rank and all ranks with equal or lower seniority (higher hierarchy_level)
+                          // Add this rank and all ranks with equal or higher seniority (lower hierarchy_level)
                           newAllowedRanks.push(rank.id);
                           const selectedLevel = rank.hierarchy_level;
                           availableRanks.forEach(r => {
-                            if (r.hierarchy_level >= selectedLevel && !newAllowedRanks.includes(r.id)) {
+                            if (r.hierarchy_level <= selectedLevel && !newAllowedRanks.includes(r.id)) {
                               newAllowedRanks.push(r.id);
                             }
                           });
@@ -341,7 +454,7 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
                 ))}
               </div>
               <small style={{ color: theme.colors.textSecondary, fontSize: theme.typography.fontSize.xs }}>
-                Select ranks that can view this objective. Higher ranks are automatically included when a lower rank is selected.
+                Select ranks that can view this objective. Lower ranks are automatically included when a higher rank is selected.
               </small>
             </div>
           </div>

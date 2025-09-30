@@ -109,11 +109,15 @@ This file provides the **detailed entity definitions and data model** used in Sp
   - Defines relative seniority of ranks in a guild.
   - **Convention**: lower number = higher rank (e.g., Commander = 1, Recruit = 6).
   - Used by the UI for auto-select behavior:
-    - When a rank is chosen, all ranks with the **same or higher number** (i.e., equal or lower in hierarchy) are auto-selected.
-    - Example: selecting CO (3) selects all CO's, XO (4), NCO (5), and Recruit (6).
-  - Users can override by manually unchecking ranks after auto-selection.
-  - Backend stores only the explicit flat list of `allowed_ranks[]`; hierarchy is a UI convenience.
-
+    - When a rank is chosen, all ranks with the **same or lower number** (i.e., equal or higher in hierarchy) are auto-selected.
+    - Example: selecting CO (3) selects XO (2), Commander (1).
+    - Users can override by manually unchecking ranks after auto-selection.
+    - Backend stores only the explicit flat list of `allowed_ranks[]`; hierarchy is a UI convenience.
+ - **Deletion rules**:
+    - Prevent deletion if any users are currently assigned to the rank.
+    - If no users assigned, allow deletion, and automatically strip the rank ID from all objectives’ `allowed_ranks`.
+    - If an objective ends up with no ranks left, it becomes visible only to `super_admin`.
+    - Deleted rank IDs are filtered out of all API responses.
 
 ### Access Levels
 - `id`: UUID.
@@ -147,7 +151,7 @@ Note: Guild owners automatically receive the super_admin access level. This leve
 - `allowed_ranks`: Array of rank IDs.
   - Determines which ranks can see the objective.
   - Backend enforces visibility strictly by membership in this array.
-  - UI auto-selects ranks with equal or lower seniority (higher hierarchy_level) by default when a rank is selected, but users may override.
+  - UI auto-selects ranks with equal or higher seniority (lower hierarchy_level) by default when a rank is selected, but users may override.
 
 
 **Notes:**

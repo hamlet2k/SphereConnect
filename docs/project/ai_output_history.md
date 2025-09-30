@@ -61,4 +61,7 @@ Each row summarizes one historical AI handoff entry in chronological order.
 | 54 | 2025-09-29 – Categories bug fixes | Updated backend to use category IDs (with fallback to names), ensured consistent API responses, fixed pre-check in Objective forms, and updated frontend to resolve IDs to names for display.|
 | 55 | 2025-09-29 – Ranks & Objectives linkage | Implemented Rank CRUD with hierarchy, allowed_ranks[] integration in objectives, pyramid auto-select UI, and rank deletion unlink logic.|
 | 55 | 2025-09-29 – Ranks & Objectives linkage | Implemented Rank CRUD with hierarchy support, allowed_ranks[] integration in objectives, pyramid auto-select UI, and rank deletion unlink logic.|
+| 56 | Major UI overhaul and bugs Fixing | UI styles created for Auth and Admin and apliead globaly to all pages. As result various issues fixed |
+| 57 | 2025-09-30 – Rank deletion cleanup | Strip deleted ranks from objectives.allowed_ranks, sanitize responses, enforce 409 on in-use rank. |
+| 58 | 2025-09-30 – Allowed ranks save fix | Fixed allowed_ranks not saving properly: converted string UUIDs to UUID objects for database storage, fixed PATCH endpoint condition (was `if update.allowed_ranks:` instead of `is not None`), updated all endpoints to return complete objective data including allowed_ranks, and fixed rank filtering logic with proper string/UUID conversion. |
 

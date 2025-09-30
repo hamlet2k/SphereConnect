@@ -14,6 +14,7 @@ export interface Objective {
   categories: string[];
   priority: string;
   allowed_ranks: string[];
+  allowed_rank_ids?: string[];
   progress: any;
   tasks?: string[];
   lead_id?: string;

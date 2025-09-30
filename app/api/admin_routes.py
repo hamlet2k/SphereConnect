@@ -33,6 +33,8 @@ class UserCreate(BaseModel):
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
+    username: Optional[str] = None
+    email: Optional[str] = None
     rank_id: Optional[str] = None
     squad_id: Optional[str] = None
     availability: Optional[str] = None
@@ -217,6 +219,8 @@ async def get_users(
             {
                 "id": str(user.id),
                 "name": user.name,
+                "username": user.username,
+                "email": user.email,
                 "rank": str(user.rank) if user.rank else None,
                 "squad_id": str(user.squad_id) if user.squad_id else None,
                 "availability": user.availability,
@@ -309,8 +313,8 @@ async def update_user(
                 detail="User not found"
             )
 
-        # Verify admin belongs to the same guild
-        if str(current_user.guild_id) != str(user.guild_id):
+        # Verify admin belongs to the same guild as the target user's current guild
+        if str(current_user.guild_id) != str(user.current_guild_id or user.guild_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied: User does not belong to your guild"
@@ -319,6 +323,10 @@ async def update_user(
         # Update fields
         if user_data.name is not None:
             user.name = user_data.name
+        if user_data.username is not None:
+            user.username = user_data.username
+        if user_data.email is not None:
+            user.email = user_data.email
         if user_data.rank_id is not None:
             user.rank = uuid.UUID(user_data.rank_id) if user_data.rank_id else None
         if user_data.squad_id is not None:
@@ -360,8 +368,8 @@ async def delete_user(
                 detail="User not found"
             )
 
-        # Verify admin belongs to the same guild
-        if str(current_user.guild_id) != str(user.guild_id):
+        # Verify admin belongs to the same guild as the target user's current guild
+        if str(current_user.guild_id) != str(user.current_guild_id or user.guild_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied: User does not belong to your guild"
@@ -544,13 +552,17 @@ async def delete_rank(
                 detail=f"Cannot delete rank: {users_with_rank} user(s) are assigned to this rank"
             )
 
-        # Unlink rank from all objectives' allowed_ranks
-        objectives_with_rank = db.query(Objective).filter(Objective.allowed_ranks.contains([str(rank_uuid)])).all()
-        for objective in objectives_with_rank:
-            objective.allowed_ranks = [r for r in objective.allowed_ranks if r != str(rank_uuid)]
-            # If allowed_ranks becomes empty, make it visible to super_admin only (empty array means super_admin only)
-            # No change needed as empty array already means super_admin only
+        # Use PostgreSQL array_remove() for efficient cleanup of rank_id from objectives.allowed_ranks
+        # This removes all occurrences of the rank_id from the allowed_ranks arrays in the same guild
+        from sqlalchemy import text
+        cleanup_sql = text("""
+            UPDATE objectives
+            SET allowed_ranks = array_remove(allowed_ranks, :rank_id)
+            WHERE guild_id = :guild_id AND :rank_id = ANY(allowed_ranks)
+        """)
+        db.execute(cleanup_sql, {"rank_id": rank_uuid, "guild_id": rank.guild_id})
 
+        # Delete the rank
         db.delete(rank)
         db.commit()
 
@@ -583,6 +595,11 @@ async def get_objectives(
 
         objectives = db.query(Objective).filter(Objective.guild_id == uuid.UUID(guild_id)).all()
 
+        # Get all existing ranks for this guild for name resolution and sanitization
+        existing_ranks = db.query(Rank).filter(Rank.guild_id == uuid.UUID(guild_id)).all()
+        existing_rank_ids = {str(rank.id) for rank in existing_ranks}
+        rank_id_to_name = {str(rank.id): rank.name for rank in existing_ranks}
+
         return [
             {
                 "id": str(obj.id),
@@ -591,7 +608,8 @@ async def get_objectives(
                 "categories": obj.categories,
                 "priority": obj.priority,
                 "progress": obj.progress,
-                "allowed_ranks": obj.allowed_ranks,
+                "allowed_ranks": [rank_id_to_name.get(rank_id, rank_id) for rank_id in obj.allowed_ranks if rank_id in existing_rank_ids],
+                "allowed_rank_ids": [rank_id for rank_id in obj.allowed_ranks if rank_id in existing_rank_ids],
                 "squad_id": str(obj.squad_id) if obj.squad_id else None,
                 "lead_id": str(obj.lead_id) if obj.lead_id else None
             }

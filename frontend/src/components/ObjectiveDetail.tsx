@@ -33,6 +33,7 @@ const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [categoryLookup, setCategoryLookup] = useState<{ [id: string]: string }>({});
+  const [rankLookup, setRankLookup] = useState<{ [id: string]: string }>({});
 
   useEffect(() => {
     loadObjective();
@@ -80,7 +81,33 @@ const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
       }
     };
 
+    const loadRanks = async () => {
+      const guildId = objective?.guild_id || currentGuildId;
+      if (!guildId) {
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`http://localhost:8000/api/admin/ranks?guild_id=${guildId}`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
+        });
+
+        if (response?.ok) {
+          const data = await response.json();
+          const lookup: { [id: string]: string } = {};
+          data.forEach((rank: { id: string; name: string }) => {
+            lookup[rank.id] = rank.name;
+          });
+          setRankLookup(lookup);
+        }
+      } catch (rankError) {
+        console.error('Error loading ranks:', rankError);
+      }
+    };
+
     loadCategories();
+    loadRanks();
   }, [objective?.guild_id, currentGuildId]);
 
   const getStatusColor = (status: string) => {
@@ -102,6 +129,9 @@ const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
       default: return theme.colors.textSecondary;
     }
   };
+
+  const resolveRankNames = (rankIds: string[]) =>
+    rankIds.map(id => rankLookup[id] || id);
 
   const formatProgress = (progress: any) => {
     if (!progress) return 'No progress data';

@@ -55,6 +55,7 @@ class ObjectiveUpdate(BaseModel):
     progress: Optional[Dict[str, Any]] = None
     categories: Optional[List[str]] = None
     priority: Optional[str] = None
+    allowed_ranks: Optional[List[str]] = None
 
 class TaskCreate(BaseModel):
     name: str
@@ -1212,6 +1213,14 @@ async def create_objective(
         if not squad_id:
             squad_id = create_adhoc_squad(db, objective.guild_id, str(current_user.id))
 
+        # Convert allowed_ranks from strings to UUIDs
+        allowed_rank_uuids = []
+        if objective.allowed_ranks:
+            try:
+                allowed_rank_uuids = [uuid.UUID(rank_id) for rank_id in objective.allowed_ranks]
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=f"Invalid rank ID format: {str(e)}")
+
         new_objective = Objective(
             id=obj_id,
             guild_id=guild_uuid,
@@ -1219,7 +1228,7 @@ async def create_objective(
             description=objective.description,
             preferences=[],  # Will be set based on user preferences if needed
             priority=objective.priority,
-            allowed_ranks=objective.allowed_ranks,
+            allowed_ranks=allowed_rank_uuids,
             squad_id=uuid.UUID(squad_id) if squad_id else None,
             lead_id=current_user.id  # Set creator as lead
         )
@@ -1246,11 +1255,23 @@ async def create_objective(
 
         db.add(new_objective)
         db.commit()
+        db.refresh(new_objective)
 
+        # Return the complete objective data
         return {
-            "id": str(obj_id),
-            "message": f"Objective '{objective.name}' created successfully",
-            "tts_response": f"Objective created: {objective.name}"
+            "id": str(new_objective.id),
+            "guild_id": str(new_objective.guild_id),
+            "name": new_objective.name,
+            "description": new_objective.description,
+            "preferences": new_objective.preferences,
+            "categories": [str(cat.id) for cat in new_objective.categories],
+            "priority": new_objective.priority,
+            "allowed_ranks": [str(rank_id) for rank_id in new_objective.allowed_ranks],
+            "progress": new_objective.progress,
+            "tasks": [str(task_id) for task_id in new_objective.tasks],
+            "lead_id": str(new_objective.lead_id) if new_objective.lead_id else None,
+            "squad_id": str(new_objective.squad_id) if new_objective.squad_id else None,
+            "is_deleted": new_objective.is_deleted
         }
     except Exception as e:
         db.rollback()
@@ -1287,17 +1308,28 @@ async def get_objective(
                 detail="Access denied: User does not belong to this guild"
             )
 
-        return {
+        # Get rank name mapping for this guild
+        guild_uuid = objective.guild_id
+        existing_ranks = db.query(Rank).filter(Rank.guild_id == guild_uuid).all()
+        rank_id_to_name = {str(rank.id): rank.name for rank in existing_ranks}
+
+        result = {
             "id": str(objective.id),
             "name": objective.name,
             "description": objective.description,
             "categories": [str(cat.id) for cat in objective.categories],
             "priority": objective.priority,
             "progress": objective.progress,
+            "allowed_ranks": [rank_id_to_name.get(str(rank_id), str(rank_id)) for rank_id in objective.allowed_ranks],
+            "allowed_rank_ids": [str(rank_id) for rank_id in objective.allowed_ranks],
             "tasks": objective.tasks,
             "lead_id": str(objective.lead_id) if objective.lead_id else None,
-            "squad_id": str(objective.squad_id) if objective.squad_id else None
+            "squad_id": str(objective.squad_id) if objective.squad_id else None,
+            "guild_id": str(objective.guild_id)
         }
+
+        logger.info(f"Returning single objective {objective_id}: allowed_ranks={result['allowed_ranks']}, allowed_rank_ids={result['allowed_rank_ids']}")
+        return result
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid objective ID format")
     except Exception as e:
@@ -1319,6 +1351,9 @@ async def update_objective(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied: Insufficient permissions to update objectives"
             )
+
+        # Log the update request for debugging
+        logger.info(f"PUT objective update request for {objective_id}: allowed_ranks={update.allowed_ranks}")
 
         obj_uuid = uuid.UUID(objective_id)
         objective = db.query(Objective).filter(
@@ -1370,11 +1405,32 @@ async def update_objective(
         if update.priority is not None:
             objective.priority = update.priority
 
-        db.commit()
+        if update.allowed_ranks is not None:
+            logger.info(f"Updating allowed_ranks for objective {objective_id}: {update.allowed_ranks}")
+            # Convert string UUIDs to UUID objects for database storage
+            try:
+                objective.allowed_ranks = [uuid.UUID(rank_id) for rank_id in update.allowed_ranks]
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=f"Invalid rank ID format: {str(e)}")
 
+        db.commit()
+        db.refresh(objective)
+
+        # Return the updated objective data
         return {
-            "message": "Objective updated successfully",
-            "tts_response": "Objective updated"
+            "id": str(objective.id),
+            "guild_id": str(objective.guild_id),
+            "name": objective.name,
+            "description": objective.description,
+            "preferences": objective.preferences,
+            "categories": [str(cat.id) for cat in objective.categories],
+            "priority": objective.priority,
+            "allowed_ranks": [str(rank_id) for rank_id in objective.allowed_ranks],
+            "progress": objective.progress,
+            "tasks": [str(task_id) for task_id in objective.tasks],
+            "lead_id": str(objective.lead_id) if objective.lead_id else None,
+            "squad_id": str(objective.squad_id) if objective.squad_id else None,
+            "is_deleted": objective.is_deleted
         }
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid objective ID format")
@@ -1388,6 +1444,9 @@ async def patch_objective(objective_id: str, update: ObjectiveUpdate, db: Sessio
     try:
         obj_uuid = uuid.UUID(objective_id)
         objective = db.query(Objective).filter(Objective.id == obj_uuid).first()
+
+        # Log the patch request for debugging
+        logger.info(f"PATCH objective update request for {objective_id}: allowed_ranks={update.allowed_ranks}")
 
         if not objective:
             raise HTTPException(status_code=404, detail="Objective not found")
@@ -1410,11 +1469,32 @@ async def patch_objective(objective_id: str, update: ObjectiveUpdate, db: Sessio
         if update.priority:
             objective.priority = update.priority
 
-        db.commit()
+        if update.allowed_ranks is not None:
+            logger.info(f"PATCH: Updating allowed_ranks for objective {objective_id}: {update.allowed_ranks}")
+            # Convert string UUIDs to UUID objects for database storage
+            try:
+                objective.allowed_ranks = [uuid.UUID(rank_id) for rank_id in update.allowed_ranks]
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=f"Invalid rank ID format: {str(e)}")
 
+        db.commit()
+        db.refresh(objective)
+
+        # Return the updated objective data
         return {
-            "message": "Objective updated successfully",
-            "tts_response": "Objective updated"
+            "id": str(objective.id),
+            "guild_id": str(objective.guild_id),
+            "name": objective.name,
+            "description": objective.description,
+            "preferences": objective.preferences,
+            "categories": [str(cat.id) for cat in objective.categories],
+            "priority": objective.priority,
+            "allowed_ranks": [str(rank_id) for rank_id in objective.allowed_ranks],
+            "progress": objective.progress,
+            "tasks": [str(task_id) for task_id in objective.tasks],
+            "lead_id": str(objective.lead_id) if objective.lead_id else None,
+            "squad_id": str(objective.squad_id) if objective.squad_id else None,
+            "is_deleted": objective.is_deleted
         }
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid objective ID format")
@@ -1653,7 +1733,9 @@ async def get_objectives(
             rank_uuid = uuid.UUID(rank_filter)
             filtered_objectives = []
             for obj in objectives:
-                if str(rank_uuid) in obj.allowed_ranks:
+                # Convert UUIDs to strings for comparison
+                allowed_ranks_str = [str(rank_id) for rank_id in obj.allowed_ranks]
+                if str(rank_uuid) in allowed_ranks_str:
                     filtered_objectives.append(obj)
             objectives = filtered_objectives
 
@@ -1671,28 +1753,49 @@ async def get_objectives(
             if user_rank_id:
                 filtered_objectives = []
                 for obj in objectives:
-                    if user_rank_id in obj.allowed_ranks:
+                    # Convert UUIDs to strings for comparison
+                    allowed_ranks_str = [str(rank_id) for rank_id in obj.allowed_ranks]
+                    if user_rank_id in allowed_ranks_str:
                         filtered_objectives.append(obj)
                 objectives = filtered_objectives
             else:
                 # User has no rank, show only objectives with empty allowed_ranks (shouldn't happen normally)
                 objectives = [obj for obj in objectives if not obj.allowed_ranks]
 
-        return [
-            {
+        # Get all existing ranks for this guild for name resolution and sanitization
+        existing_ranks = db.query(Rank).filter(Rank.guild_id == guild_uuid).all()
+        existing_rank_ids = {str(rank.id) for rank in existing_ranks}
+        rank_id_to_name = {str(rank.id): rank.name for rank in existing_ranks}
+
+        result = []
+        for obj in objectives:
+            sanitized_rank_ids = []
+            allowed_rank_names = []
+            for rank_id in obj.allowed_ranks:
+                rank_id_str = str(rank_id)
+                if rank_id_str in existing_rank_ids:
+                    sanitized_rank_ids.append(rank_id_str)
+                    allowed_rank_names.append(rank_id_to_name.get(rank_id_str, rank_id_str))
+
+            result.append({
                 "id": str(obj.id),
                 "name": obj.name,
                 "description": obj.description,
                 "categories": [str(cat.id) for cat in obj.categories],
                 "priority": obj.priority,
                 "progress": obj.progress,
-                "allowed_ranks": obj.allowed_ranks,
+                "allowed_ranks": allowed_rank_names,
+                "allowed_rank_ids": sanitized_rank_ids,
                 "guild_id": str(obj.guild_id),
                 "lead_id": str(obj.lead_id) if obj.lead_id else None,
                 "squad_id": str(obj.squad_id) if obj.squad_id else None
-            }
-            for obj in objectives
-        ]
+            })
+
+        logger.info(f"Returning {len(result)} objectives for guild {guild_id}")
+        for obj in result:
+            logger.info(f"Objective {obj['id']}: allowed_ranks={obj['allowed_ranks']}, allowed_rank_ids={obj['allowed_rank_ids']}")
+
+        return result
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid guild ID format")
     except Exception as e:

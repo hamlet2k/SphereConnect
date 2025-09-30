@@ -29,6 +29,7 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
   const [successMessage, setSuccessMessage] = useState('');
   const [categories, setCategories] = useState<{[id: string]: string}>({});
   const [categoryOptions, setCategoryOptions] = useState<{id: string, name: string}[]>([]);
+  const [ranks, setRanks] = useState<{[id: string]: string}>({});
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState('');
@@ -51,6 +52,12 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
       if (categoryIdFilter) filters.category_id = categoryIdFilter;
 
       const data = await getObjectives(currentGuildId, filters);
+      console.log('Loaded objectives:', data);
+      data.forEach((obj, index) => {
+        console.log(`Objective ${index}:`, obj);
+        console.log(`Objective ${index} allowed_ranks:`, obj.allowed_ranks);
+        console.log(`Objective ${index} allowed_rank_ids:`, obj.allowed_rank_ids);
+      });
       setObjectives(data);
     } catch (err: any) {
       setError(err.message);
@@ -83,10 +90,34 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
     }
   }, [currentGuildId]);
 
+  const loadRanks = useCallback(async () => {
+    if (!currentGuildId) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:8000/api/admin/ranks?guild_id=${currentGuildId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Create lookup object for displaying names
+        const lookup: {[id: string]: string} = {};
+        data.forEach((rank: {id: string, name: string}) => {
+          lookup[rank.id] = rank.name;
+        });
+        setRanks(lookup);
+      }
+    } catch (err: any) {
+      console.error('Error loading ranks:', err);
+    }
+  }, [currentGuildId]);
+
   useEffect(() => {
     loadObjectives();
     loadCategories();
-  }, [loadObjectives, loadCategories]);
+    loadRanks();
+  }, [loadObjectives, loadCategories, loadRanks]);
 
   const handleDelete = async (objectiveId: string) => {
     if (window.confirm('Are you sure you want to delete this objective? This action cannot be undone.')) {
@@ -113,6 +144,9 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
   };
 
   const handleEditObjective = (objective: Objective) => {
+    console.log('Editing objective:', objective);
+    console.log('Objective allowed_ranks:', objective.allowed_ranks);
+    console.log('Objective allowed_rank_ids:', objective.allowed_rank_ids);
     setEditingObjective(objective);
     setShowForm(true);
     setFormMessage('');
@@ -162,6 +196,9 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
 
   const resolveCategoryNames = (ids: string[]) =>
     ids.map(id => categories[id] || id);
+
+  const resolveRankNames = (ids: string[]) =>
+    ids.map(id => ranks[id] || id);
 
   return (
     <div style={{
@@ -357,6 +394,15 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
                 fontWeight: theme.typography.fontWeight.semibold,
                 fontSize: theme.typography.fontSize.sm
               }}>
+                Allowed Ranks
+              </th>
+              <th style={{
+                padding: theme.spacing[4],
+                textAlign: 'left',
+                color: theme.colors.text,
+                fontWeight: theme.typography.fontWeight.semibold,
+                fontSize: theme.typography.fontSize.sm
+              }}>
                 Actions
               </th>
             </tr>
@@ -403,6 +449,12 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
                     color: theme.colors.textSecondary
                   }}>
                     {objective.categories.length > 0 ? resolveCategoryNames(objective.categories).join(', ') : 'None'}
+                  </td>
+                  <td style={{
+                    padding: theme.spacing[4],
+                    color: theme.colors.textSecondary
+                  }}>
+                    {objective.allowed_ranks?.length ? objective.allowed_ranks.join(', ') : 'None'}
                   </td>
                   <td style={{
                     padding: theme.spacing[4]

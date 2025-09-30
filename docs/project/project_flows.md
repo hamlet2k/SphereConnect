@@ -150,8 +150,8 @@ sequenceDiagram
 - Objectives now use `allowed_ranks[]` (array of rank IDs) for visibility.
 - `applicable_rank` is deprecated; if provided, it is converted into `allowed_ranks` for backward compatibility.
 - UI behavior:
-  - When a rank is selected, all ranks with equal or lower seniority (higher hierarchy_level) are auto-selected by default.
-  - Example: selecting CO (3) auto-selects XO (4), NCO (5), Recruit (6).
+  - When a rank is selected, all ranks with equal or higher seniority (lower hierarchy_level) are auto-selected by default.
+  - Example: selecting CO (3) auto-selects XO (2), Commander (1).
   - Users can override by manually unchecking ranks.
 - Backend stores only the explicit `allowed_ranks[]` list and enforces visibility strictly by membership.
 - Super_admin bypass applies regardless of `allowed_ranks`.
