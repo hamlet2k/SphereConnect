@@ -3,7 +3,9 @@ import { useGuild } from '../contexts/GuildContext';
 import { theme } from '../theme';
 import { adminPageStyles } from './AdminPageStyles';
 import AdminMessage from './AdminMessage';
+import ConfirmModal from './ConfirmModal';
 import { useAdminMessage } from '../hooks/useAdminMessage';
+import { useConfirmModal } from '../hooks/useConfirmModal';
 
 interface Rank {
   id: string;
@@ -32,6 +34,7 @@ function RanksManager() {
     access_levels: [] as string[]
   });
   const { message, showMessage, clearMessage } = useAdminMessage();
+  const { confirmConfig, requestConfirmation, confirm: confirmModalConfirm, cancel: confirmModalCancel } = useConfirmModal();
 
   const { currentGuildId } = useGuild();
   const token = localStorage.getItem('token');
@@ -83,58 +86,111 @@ function RanksManager() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name.trim()) {
-      showMessage('error', 'Rank name is required');
-      return;
-    }
-
-    // Confirmation dialog for changes
-    const action = editingRank ? 'update' : 'create';
-    const confirmed = window.confirm(
-      `Are you sure you want to ${action} this rank? This will affect user permissions.`
-    );
-
-    if (!confirmed) {
-      return;
-    }
+  const submitRank = async () => {
 
     try {
+
       const headers = {
+
         'Content-Type': 'application/json',
+
         'Authorization': `Bearer ${token}`
+
       };
 
+
+
       const url = editingRank
+
         ? `http://localhost:8000/api/admin/ranks/${editingRank.id}`
+
         : 'http://localhost:8000/api/admin/ranks';
 
+
+
       const method = editingRank ? 'PATCH' : 'POST';
+
       const body = JSON.stringify({
+
         ...formData,
+
         guild_id: currentGuildId
+
       });
+
+
 
       const response = await fetch(url, { method, headers, body });
 
+
+
       if (response.ok) {
+
         const result = await response.json();
+
         showMessage('success', result.message || `Rank ${editingRank ? 'updated' : 'created'} successfully`);
+
         setShowForm(false);
+
         setEditingRank(null);
+
         setFormData({ name: '', phonetic: '', hierarchy_level: 1, access_levels: [] });
+
         loadRanks();
+
       } else if (response.status === 403) {
+
         showMessage('error', 'Insufficient permissions to manage ranks. You need manage_ranks permission.');
+
       } else {
+
         const error = await response.json();
+
         showMessage('error', error.detail || 'Failed to save rank');
+
       }
+
     } catch (error) {
+
       showMessage('error', 'Error saving rank');
+
     }
+
   };
+
+
+
+  const handleSubmit = (e: React.FormEvent) => {
+
+    e.preventDefault();
+
+    if (!formData.name.trim()) {
+
+      showMessage('error', 'Rank name is required');
+
+      return;
+
+    }
+
+
+
+    const action = editingRank ? 'update' : 'create';
+
+    requestConfirmation({
+
+      title: `${editingRank ? 'Update' : 'Create'} Rank`,
+
+      message: `Are you sure you want to ${action} this rank? This will affect user permissions.`,
+
+      confirmLabel: editingRank ? 'Update' : 'Create',
+
+      onConfirm: submitRank
+
+    });
+
+  };
+
+
 
   const handleEdit = (rank: Rank) => {
     setEditingRank(rank);
@@ -147,39 +203,75 @@ function RanksManager() {
     setShowForm(true);
   };
 
-  const handleDelete = async (id: string) => {
-    const confirmed = window.confirm(
-      'Are you sure you want to delete this rank? This will affect users assigned to this rank.'
-    );
-
-    if (!confirmed) {
-      return;
-    }
+  const deleteRank = async (id: string) => {
 
     try {
+
       const headers = { 'Authorization': `Bearer ${token}` };
+
       const response = await fetch(`http://localhost:8000/api/admin/ranks/${id}`, {
+
         method: 'DELETE',
+
         headers
+
       });
 
+
+
       if (response.ok) {
+
         const result = await response.json();
+
         showMessage('success', result.message || 'Rank deleted successfully');
+
         loadRanks();
+
       } else if (response.status === 403) {
+
         showMessage('error', 'Insufficient permissions to manage ranks. You need manage_ranks permission.');
+
       } else if (response.status === 409) {
+
         const error = await response.json();
+
         showMessage('error', error.detail || 'Cannot delete rank that is assigned to users');
+
       } else {
+
         const error = await response.json();
+
         showMessage('error', error.detail || 'Failed to delete rank');
+
       }
+
     } catch (error) {
+
       showMessage('error', 'Error deleting rank');
+
     }
+
   };
+
+
+
+  const handleDelete = (id: string) => {
+
+    requestConfirmation({
+
+      title: 'Delete Rank',
+
+      message: 'Are you sure you want to delete this rank? This action cannot be undone.',
+
+      confirmLabel: 'Delete',
+
+      onConfirm: () => deleteRank(id)
+
+    });
+
+  };
+
+
 
   const handleAccessLevelToggle = (accessLevelId: string) => {
     setFormData(prev => ({
@@ -615,6 +707,18 @@ function RanksManager() {
           type={message.type}
           message={message.text}
           onClose={clearMessage}
+        />
+      )}
+
+      {confirmConfig && (
+        <ConfirmModal
+          isOpen
+          title={confirmConfig.title}
+          message={confirmConfig.message}
+          onConfirm={confirmModalConfirm}
+          onCancel={confirmModalCancel}
+          confirmLabel={confirmConfig.confirmLabel}
+          cancelLabel={confirmConfig.cancelLabel}
         />
       )}
 

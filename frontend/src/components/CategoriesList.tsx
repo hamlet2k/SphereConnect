@@ -3,7 +3,9 @@ import { useGuild } from '../contexts/GuildContext';
 import { theme } from '../theme';
 import { adminPageStyles } from './AdminPageStyles';
 import AdminMessage from './AdminMessage';
+import ConfirmModal from './ConfirmModal';
 import { useAdminMessage } from '../hooks/useAdminMessage';
+import { useConfirmModal } from '../hooks/useConfirmModal';
 
 interface Category {
   id: string;
@@ -26,6 +28,7 @@ function CategoriesList() {
     showMessage: showFormMessage,
     clearMessage: clearFormMessage
   } = useAdminMessage();
+  const { confirmConfig, requestConfirmation, confirm: confirmModalConfirm, cancel: confirmModalCancel } = useConfirmModal();
 
   // Filter states
   const [nameFilter, setNameFilter] = useState('');
@@ -74,57 +77,113 @@ function CategoriesList() {
     loadCategories();
   }, [loadCategories]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name.trim()) {
-      showFormMessage('error', 'Name is required');
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Are you sure you want to ${editingCategory ? 'update' : 'create'} this category?`
-    );
-
-    if (!confirmed) {
-      return;
-    }
+  const submitCategory = async () => {
 
     try {
+
       const token = localStorage.getItem('token');
+
       const url = editingCategory
+
         ? `http://localhost:8000/api/categories/${editingCategory.id}`
+
         : 'http://localhost:8000/api/categories';
 
+
+
       const method = editingCategory ? 'PUT' : 'POST';
+
       const body = JSON.stringify({
+
         ...formData,
+
         guild_id: currentGuildId
+
       });
+
+
 
       const response = await fetch(url, {
+
         method,
+
         headers: {
+
           'Content-Type': 'application/json',
+
           'Authorization': `Bearer ${token}`
+
         },
+
         body
+
       });
 
+
+
       if (response.ok) {
+
         showListMessage('success', `Category ${editingCategory ? 'updated' : 'created'} successfully`);
+
         clearFormMessage();
+
         setShowForm(false);
+
         setEditingCategory(null);
+
         resetForm();
+
         loadCategories({ preserveMessage: true });
+
       } else {
+
         const error = await response.json();
+
         showListMessage('error', error.detail || 'Failed to save category');
+
       }
+
     } catch (error: any) {
+
       showListMessage('error', error.message || 'Error saving category');
+
     }
+
   };
+
+
+
+  const handleSubmit = (e: React.FormEvent) => {
+
+    e.preventDefault();
+
+    if (!formData.name.trim()) {
+
+      showFormMessage('error', 'Name is required');
+
+      return;
+
+    }
+
+
+
+    const action = editingCategory ? 'update' : 'create';
+
+    requestConfirmation({
+
+      title: `${editingCategory ? 'Update' : 'Create'} Category`,
+
+      message: `Are you sure you want to ${action} this category?`,
+
+      confirmLabel: editingCategory ? 'Update' : 'Create',
+
+      onConfirm: submitCategory
+
+    });
+
+  };
+
+
 
   const handleEdit = (category: Category) => {
     setEditingCategory(category);
@@ -135,27 +194,63 @@ function CategoriesList() {
     setShowForm(true);
   };
 
-  const handleDelete = async (categoryId: string) => {
-    if (window.confirm('Are you sure you want to delete this category? This action cannot be undone.')) {
-      try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`http://localhost:8000/api/categories/${categoryId}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+  const deleteCategory = async (categoryId: string) => {
 
-        if (response.ok) {
-          showListMessage('success', 'Category deleted successfully');
-          loadCategories({ preserveMessage: true });
-        } else {
-          const error = await response.json();
-          showListMessage('error', error.detail || 'Failed to delete category');
-        }
-      } catch (error: any) {
-        showListMessage('error', error.message || 'Error deleting category');
+    try {
+
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(`http://localhost:8000/api/categories/${categoryId}`, {
+
+        method: 'DELETE',
+
+        headers: { 'Authorization': `Bearer ${token}` }
+
+      });
+
+
+
+      if (response.ok) {
+
+        showListMessage('success', 'Category deleted successfully');
+
+        loadCategories({ preserveMessage: true });
+
+      } else {
+
+        const error = await response.json();
+
+        showListMessage('error', error.detail || 'Failed to delete category');
+
       }
+
+    } catch (error: any) {
+
+      showListMessage('error', error.message || 'Error deleting category');
+
     }
+
   };
+
+
+
+  const handleDelete = (categoryId: string) => {
+
+    requestConfirmation({
+
+      title: 'Delete Category',
+
+      message: 'Are you sure you want to delete this category? This action cannot be undone.',
+
+      confirmLabel: 'Delete',
+
+      onConfirm: () => deleteCategory(categoryId)
+
+    });
+
+  };
+
+
 
   const resetForm = () => {
     setShowForm(false);
@@ -493,9 +588,22 @@ function CategoriesList() {
           </p>
         </div>
       )}
+      {confirmConfig && (
+        <ConfirmModal
+          isOpen
+          title={confirmConfig.title}
+          message={confirmConfig.message}
+          onConfirm={confirmModalConfirm}
+          onCancel={confirmModalCancel}
+          confirmLabel={confirmConfig.confirmLabel}
+          cancelLabel={confirmConfig.cancelLabel}
+        />
+      )}
+
     </div>
   );
 };
 
 export default CategoriesList;
+
 

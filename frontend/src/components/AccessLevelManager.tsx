@@ -3,7 +3,9 @@ import { useGuild } from '../contexts/GuildContext';
 import { theme } from '../theme';
 import { adminPageStyles } from './AdminPageStyles';
 import AdminMessage from './AdminMessage';
+import ConfirmModal from './ConfirmModal';
 import { useAdminMessage } from '../hooks/useAdminMessage';
+import { useConfirmModal } from '../hooks/useConfirmModal';
 
 interface AccessLevel {
   id: string;
@@ -38,6 +40,7 @@ function AccessLevelManager() {
     user_actions: [] as string[]
   });
   const { message, showMessage, clearMessage } = useAdminMessage();
+  const { confirmConfig, requestConfirmation, confirm: confirmModalConfirm, cancel: confirmModalCancel } = useConfirmModal();
 
   const { currentGuildId } = useGuild();
   const token = localStorage.getItem('token');
@@ -70,57 +73,91 @@ function AccessLevelManager() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name.trim() || formData.user_actions.length === 0) {
-      showMessage('error', 'Name and at least one user action are required');
-      return;
-    }
-
-    // Confirmation dialog for changes
-    const action = editingLevel ? 'update' : 'create';
-    const confirmed = window.confirm(
-      `Are you sure you want to ${action} this access level? This will change user permissions.`
-    );
-
-    if (!confirmed) {
-      return;
-    }
+  const submitAccessLevel = async () => {
 
     try {
+
       const headers = {
+
         'Content-Type': 'application/json',
+
         'Authorization': `Bearer ${token}`
+
       };
 
       const url = editingLevel
+
         ? `http://localhost:8000/api/admin/access-levels/${editingLevel.id}`
+
         : 'http://localhost:8000/api/admin/access-levels';
 
       const method = editingLevel ? 'PATCH' : 'POST';
+
       const body = JSON.stringify({
+
         ...formData,
+
         guild_id: currentGuildId
+
       });
 
       const response = await fetch(url, { method, headers, body });
 
       if (response.ok) {
+
         const result = await response.json();
+
         showMessage('success', result.message || `Access level ${editingLevel ? 'updated' : 'created'} successfully`);
+
         setShowForm(false);
+
         setEditingLevel(null);
+
         setFormData({ name: '', user_actions: [] });
+
         loadAccessLevels();
+
       } else if (response.status === 403) {
+
         showMessage('error', 'Insufficient permissions to manage access levels. You need manage_rbac permission.');
+
       } else {
+
         const error = await response.json();
+
         showMessage('error', error.detail || 'Failed to save access level');
+
       }
+
     } catch (error) {
+
       showMessage('error', 'Error saving access level');
+
     }
+
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+
+    e.preventDefault();
+
+    if (!formData.name.trim() || formData.user_actions.length === 0) {
+
+      showMessage('error', 'Name and at least one user action are required');
+
+      return;
+
+    }
+
+    const action = editingLevel ? 'update' : 'create';
+
+    requestConfirmation({
+      title: `${editingLevel ? 'Update' : 'Create'} Access Level`,
+      message: `Are you sure you want to ${action} this access level? This will change user permissions.`,
+      confirmLabel: editingLevel ? 'Update' : 'Create',
+      onConfirm: submitAccessLevel
+    });
+
   };
 
   const handleEdit = (level: AccessLevel) => {
@@ -132,37 +169,38 @@ function AccessLevelManager() {
     setShowForm(true);
   };
 
-  const handleDelete = async (id: string) => {
-    const confirmed = window.confirm(
-      'Are you sure you want to delete this access level? This will permanently remove it and may affect user permissions.'
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      const headers = { 'Authorization': `Bearer ${token}` };
-      const response = await fetch(`http://localhost:8000/api/admin/access-levels/${id}`, {
-        method: 'DELETE',
-        headers
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        showMessage('success', result.message || 'Access level deleted successfully');
-        loadAccessLevels();
-      } else if (response.status === 403) {
-        showMessage('error', 'Insufficient permissions to manage access levels. You need manage_rbac permission.');
-      } else {
-        const error = await response.json();
-        showMessage('error', error.detail || 'Failed to delete access level');
-      }
-    } catch (error) {
-      showMessage('error', 'Error deleting access level');
-    }
-  };
-
+  const deleteAccessLevel = async (levelId: string) => {
+    try {
+      const headers = { 'Authorization': `Bearer ${token}` };
+      const response = await fetch(`http://localhost:8000/api/admin/access-levels/${levelId}`, {
+        method: 'DELETE',
+        headers
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        showMessage('success', result.message || 'Access level deleted successfully');
+        loadAccessLevels();
+      } else if (response.status === 403) {
+        showMessage('error', 'Insufficient permissions to manage access levels. You need manage_rbac permission.');
+      } else {
+        const error = await response.json();
+        showMessage('error', error.detail || 'Failed to delete access level');
+      }
+    } catch (error) {
+      showMessage('error', 'Error deleting access level');
+    }
+  };
+
+  const handleDelete = (id: string) => {
+    requestConfirmation({
+      title: 'Delete Access Level',
+      message: 'Are you sure you want to delete this access level? This will permanently remove it and may affect user permissions.',
+      confirmLabel: 'Delete',
+      onConfirm: () => deleteAccessLevel(id)
+    });
+  };
+
   const handleActionToggle = (action: string) => {
     setFormData(prev => ({
       ...prev,
@@ -456,6 +494,18 @@ function AccessLevelManager() {
         />
       )}
 
+      {confirmConfig && (
+        <ConfirmModal
+          isOpen
+          title={confirmConfig.title}
+          message={confirmConfig.message}
+          onConfirm={confirmModalConfirm}
+          onCancel={confirmModalCancel}
+          confirmLabel={confirmConfig.confirmLabel}
+          cancelLabel={confirmConfig.cancelLabel}
+        />
+      )}
+
       <style>{`
         @keyframes spin {
           0% { transform: rotate(0deg); }
@@ -467,3 +517,4 @@ function AccessLevelManager() {
 }
 
 export default AccessLevelManager;
+

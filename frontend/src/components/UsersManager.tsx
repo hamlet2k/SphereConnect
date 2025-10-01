@@ -3,7 +3,9 @@ import { useGuild } from '../contexts/GuildContext';
 import { theme } from '../theme';
 import { adminPageStyles } from './AdminPageStyles';
 import AdminMessage from './AdminMessage';
+import ConfirmModal from './ConfirmModal';
 import { useAdminMessage } from '../hooks/useAdminMessage';
+import { useConfirmModal } from '../hooks/useConfirmModal';
 
 interface User {
   id: string;
@@ -47,6 +49,7 @@ function UsersManager() {
     availability: 'offline'
   });
   const { message, showMessage, clearMessage } = useAdminMessage();
+  const { confirmConfig, requestConfirmation, confirm: confirmModalConfirm, cancel: confirmModalCancel } = useConfirmModal();
 
   const { currentGuildId } = useGuild();
   const token = localStorage.getItem('token');
@@ -113,71 +116,168 @@ function UsersManager() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name.trim() || !formData.username.trim()) {
-      showMessage('error', 'Name and username are required');
-      return;
-    }
-
-    if (!editingUser && (!formData.password || !formData.pin)) {
-      showMessage('error', 'Password and PIN are required for new users');
-      return;
-    }
-
-    // Confirmation dialog for changes
-    const action = editingUser ? 'update' : 'create';
-    const confirmed = window.confirm(
-      `Are you sure you want to ${action} this user? ${editingUser ? 'This will update their information.' : 'This will create a new user account.'}`
-    );
-
-    if (!confirmed) {
-      return;
-    }
+  const submitUser = async () => {
 
     try {
+
       const headers = {
+
         'Content-Type': 'application/json',
+
         'Authorization': `Bearer ${token}`
+
       };
 
       const url = editingUser
+
         ? `http://localhost:8000/api/admin/users/${editingUser.id}`
+
         : 'http://localhost:8000/api/admin/users';
 
       const method = editingUser ? 'PUT' : 'POST';
+
       const body = JSON.stringify({
+
         ...formData,
+
         guild_id: currentGuildId
+
       });
 
       const response = await fetch(url, { method, headers, body });
 
       if (response.ok) {
+
         const result = await response.json();
+
         const userId = result.user_id || editingUser?.id;
 
-        // Handle access levels assignment/removal
         if (userId) {
-          await handleAccessLevelsUpdate(userId, formData.access_levels);
+
+          try {
+
+            const responseAccess = await fetch(`http://localhost:8000/api/admin/users/${userId}/access-levels`, {
+
+              method: 'PUT',
+
+              headers,
+
+              body: JSON.stringify({ access_levels: formData.access_levels })
+
+            });
+
+            if (responseAccess.ok) {
+
+              showMessage('success', result.message || `User ${editingUser ? 'updated' : 'created'} successfully`);
+
+            } else {
+
+              const accessError = await responseAccess.json();
+
+              showMessage('error', accessError.detail || 'Failed to update user access levels');
+
+            }
+
+          } catch (error) {
+
+            showMessage('error', 'Error updating user access levels');
+
+          }
+
+        } else {
+
+          showMessage('success', result.message || `User ${editingUser ? 'updated' : 'created'} successfully`);
+
         }
 
-        showMessage('success', result.message || `User ${editingUser ? 'updated' : 'created'} successfully`);
         setShowForm(false);
+
         setEditingUser(null);
-        resetForm();
+
+        setFormData({
+
+          name: '',
+
+          username: '',
+
+          email: '',
+
+          password: '',
+
+          pin: '',
+
+          rank_id: '',
+
+          access_levels: [],
+
+          phonetic: '',
+
+          availability: 'offline'
+
+        });
+
         loadUsers();
+
       } else if (response.status === 403) {
+
         showMessage('error', 'Insufficient permissions to manage users. You need manage_users permission.');
-      } else if (response.status === 409) {
-        showMessage('error', 'Username already exists in this guild');
-      } else {
+
+      } else if (response.status === 400) {
+
         const error = await response.json();
+
         showMessage('error', error.detail || 'Failed to save user');
+
+      } else {
+
+        const error = await response.json();
+
+        showMessage('error', error.detail || 'Failed to save user');
+
       }
+
     } catch (error) {
+
       showMessage('error', 'Error saving user');
+
     }
+
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+
+    e.preventDefault();
+
+    if (!formData.name.trim() || !formData.username.trim()) {
+
+      showMessage('error', 'Name and username are required');
+
+      return;
+
+    }
+
+    if (!editingUser && (!formData.password || !formData.pin)) {
+
+      showMessage('error', 'Password and PIN are required for new users');
+
+      return;
+
+    }
+
+    const action = editingUser ? 'update' : 'create';
+
+    requestConfirmation({
+
+      title: `${editingUser ? 'Update' : 'Create'} User`,
+
+      message: `Are you sure you want to ${action} this user? ${editingUser ? 'This will update their information.' : 'This will create a new user account.'}`,
+
+      confirmLabel: editingUser ? 'Update' : 'Create',
+
+      onConfirm: submitUser
+
+    });
+
   };
 
   const handleEdit = async (user: User) => {
@@ -210,37 +310,66 @@ function UsersManager() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    const confirmed = window.confirm(
-      'Are you sure you want to delete this user? This action cannot be undone.'
-    );
-
-    if (!confirmed) {
-      return;
-    }
+  const deleteUser = async (id: string) => {
 
     try {
+
       const headers = { 'Authorization': `Bearer ${token}` };
+
       const response = await fetch(`http://localhost:8000/api/admin/users/${id}`, {
+
         method: 'DELETE',
+
         headers
+
       });
 
       if (response.ok) {
+
         const result = await response.json();
+
         showMessage('success', result.message || 'User deleted successfully');
+
         loadUsers();
+
       } else if (response.status === 403) {
+
         showMessage('error', 'Insufficient permissions to manage users. You need manage_users permission.');
+
       } else if (response.status === 400) {
+
         showMessage('error', 'Cannot delete your own account');
+
       } else {
+
         const error = await response.json();
+
         showMessage('error', error.detail || 'Failed to delete user');
+
       }
+
     } catch (error) {
+
       showMessage('error', 'Error deleting user');
+
     }
+
+  };
+
+  const handleDelete = (id: string) => {
+
+    requestConfirmation({
+
+      title: 'Delete User',
+
+      message: 'Are you sure you want to delete this user? This action cannot be undone.',
+
+      confirmLabel: 'Delete',
+
+      onConfirm: () => deleteUser(id)
+
+    });
+
   };
 
   const handleAssignRank = async (userId: string, rankId: string) => {
@@ -773,6 +902,18 @@ function UsersManager() {
         />
       )}
 
+      {confirmConfig && (
+        <ConfirmModal
+          isOpen
+          title={confirmConfig.title}
+          message={confirmConfig.message}
+          onConfirm={confirmModalConfirm}
+          onCancel={confirmModalCancel}
+          confirmLabel={confirmConfig.confirmLabel}
+          cancelLabel={confirmConfig.cancelLabel}
+        />
+      )}
+
       <style>{`
         @keyframes spin {
           0% { transform: rotate(0deg); }
@@ -784,3 +925,4 @@ function UsersManager() {
 }
 
 export default UsersManager;
+

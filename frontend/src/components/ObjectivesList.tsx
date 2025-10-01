@@ -5,7 +5,9 @@ import { theme } from '../theme';
 import ObjectiveForm from './ObjectiveForm';
 import { adminPageStyles } from './AdminPageStyles';
 import AdminMessage from './AdminMessage';
+import ConfirmModal from './ConfirmModal';
 import { useAdminMessage } from '../hooks/useAdminMessage';
+import { useConfirmModal } from '../hooks/useConfirmModal';
 
 interface ObjectivesListProps {
   onViewObjective: (objective: Objective) => void;
@@ -32,6 +34,7 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
     showMessage: showBannerMessage,
     clearMessage: clearBannerMessage
   } = useAdminMessage();
+  const { confirmConfig, requestConfirmation, confirm: confirmModalConfirm, cancel: confirmModalCancel } = useConfirmModal();
   const [categories, setCategories] = useState<{[id: string]: string}>({});
   const [categoryOptions, setCategoryOptions] = useState<{id: string, name: string}[]>([]);
   const [ranks, setRanks] = useState<{[id: string]: string}>({});
@@ -128,16 +131,24 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
     loadRanks();
   }, [loadObjectives, loadCategories, loadRanks]);
 
-  const handleDelete = async (objectiveId: string) => {
-    if (window.confirm('Are you sure you want to delete this objective? This action cannot be undone.')) {
-      try {
-        clearBannerMessage();
-        await onDeleteObjective(objectiveId);
-        loadObjectives(); // Refresh list
-        showBannerMessage('success', 'Objective deleted successfully');
-      } catch (err: any) {
-        showBannerMessage('error', err.message);
-      }
+  const handleDelete = async (objectiveId: string, skipConfirm = false) => {
+    if (!skipConfirm) {
+      requestConfirmation({
+        title: 'Delete Objective',
+        message: 'Are you sure you want to delete this objective? This action cannot be undone.',
+        confirmLabel: 'Delete',
+        onConfirm: () => handleDelete(objectiveId, true)
+      });
+      return;
+    }
+
+    try {
+      clearBannerMessage();
+      await onDeleteObjective(objectiveId);
+      loadObjectives(); // Refresh list
+      showBannerMessage('success', 'Objective deleted successfully');
+    } catch (err: any) {
+      showBannerMessage('error', err.message);
     }
   };
 
@@ -565,8 +576,21 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
           onClose={clearFormFeedback}
         />
       )}
+
+      {confirmConfig && (
+        <ConfirmModal
+          isOpen
+          title={confirmConfig.title}
+          message={confirmConfig.message}
+          onConfirm={confirmModalConfirm}
+          onCancel={confirmModalCancel}
+          confirmLabel={confirmConfig.confirmLabel}
+          cancelLabel={confirmConfig.cancelLabel}
+        />
+      )}
     </div>
   );
 };
 
 export default ObjectivesList;
+

@@ -120,3 +120,80 @@ When making structural changes, update:
 1. `docs/project/ai_output_history.md` (append new entry)
 2. Relevant flow diagrams in `docs/project/project_flows.md`
 3. Entity definitions in `docs/project/project_data_structures.md`
+
+# Data Model Consistency
+
+Ensure consistent use of IDs and fields across backend and frontend.
+
+## Guidelines
+
+- Objectives must use `allowed_ranks[]`, not the deprecated `applicable_rank`.
+- Categories must be referenced by ID, not by name.
+- Ensure endpoints return normalized data for consistency across clients.
+
+
+# RBAC Enforcement
+
+All APIs must enforce role-based access control (RBAC) with deny-by-default.
+
+## Guidelines
+
+- Always scope queries by `guild_id`.
+- Respect `super_admin` bypass without loosening other rules.
+- Default state is deny unless explicitly permitted by access level or rank.
+
+
+# Centralized Admin Messages
+
+All admin success, error, and info messages must use a common component for display.
+
+## Guidelines
+
+- Use a shared `AdminMessage.tsx` component for consistency.
+- Avoid inline `div`s with custom colors or styles for messages.
+- Ensure messages are styled via centralized theme logic.
+
+
+# Strict HTTP Method Usage
+
+API endpoints must use correct HTTP methods and return codes.
+
+## Guidelines
+
+- Use `PATCH` for partial updates.
+- Use `PUT` for full replacements.
+- `DELETE` must return a JSON response with a confirmation message.
+- Use `409 Conflict` for business rule violations (e.g., rank in use).
+- Avoid using generic `400` where a more specific code applies.
+
+
+# Unified Auth Styling
+
+Login and Register pages must use `AuthPageStyles` with consistent input behavior.
+
+## Guidelines
+
+- Inputs must use `box-sizing: border-box` to prevent overflow.
+- Apply consistent focus and hover styles across inputs and buttons.
+- Use theme variables for colors and shadows; no hardcoded values.
+
+
+# Unified Admin Styling
+
+Admin dashboard must use `AdminPageStyles` for containers, headers, tables, and buttons.
+
+## Guidelines
+
+- No inline CSS in admin components.
+- Import and apply `adminPageStyles` and `getMessageStyle` for all components.
+- Ensure consistent spacing, shadows, and typography across all admin pages.
+
+
+# Inline Forms
+
+All create/edit forms in the admin dashboard must be inline, not modal-based.
+
+## Guidelines
+
+- Render forms above tables and filters directly in the page.
+- Avoid modal dialogs unless explicitly required by UX (e.g., detail views).

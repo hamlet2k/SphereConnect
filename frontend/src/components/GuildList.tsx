@@ -2,7 +2,9 @@ import React, { useState, useCallback } from 'react';
 import { theme } from '../theme';
 import { adminPageStyles } from './AdminPageStyles';
 import AdminMessage, { AdminMessageState } from './AdminMessage';
+import ConfirmModal from './ConfirmModal';
 import { useAdminMessage } from '../hooks/useAdminMessage';
+import { useConfirmModal } from '../hooks/useConfirmModal';
 import GuildForm from './GuildForm';
 import JoinForm from './JoinForm';
 import InviteForm from './InviteForm';
@@ -56,6 +58,7 @@ const GuildList: React.FC<GuildListProps> = ({
   const [showJoinForm, setShowJoinForm] = useState(false);
   const [showInviteForm, setShowInviteForm] = useState<{guildId: string, guildName: string} | null>(null);
   const { message: localMessage, showMessage: showLocalMessage, clearMessage: clearLocalMessage } = useAdminMessage();
+  const { confirmConfig, requestConfirmation, confirm: confirmModalConfirm, cancel: confirmModalCancel } = useConfirmModal();
 
   const handleInvite = useCallback((guildId: string) => {
     const guild = guilds.find(g => g.id === guildId);
@@ -65,22 +68,38 @@ const GuildList: React.FC<GuildListProps> = ({
     }
   }, [guilds, clearLocalMessage]);
 
-  const handleLeave = async (guildId: string) => {
-    if (window.confirm('Are you sure you want to leave this guild? You will be switched to your personal guild.')) {
-      onLeave(guildId);
-    }
-  };
-
-  const handleDelete = async (guildId: string) => {
-    const guild = guilds.find(g => g.id === guildId);
-    if (guild?.is_solo) {
-      alert('Personal guilds cannot be deleted.');
+  const handleLeave = (guildId: string, skipConfirm = false) => {
+    if (!skipConfirm) {
+      requestConfirmation({
+        title: 'Leave Guild',
+        message: 'Are you sure you want to leave this guild? You will be switched to your personal guild.',
+        confirmLabel: 'Leave',
+        onConfirm: () => handleLeave(guildId, true)
+      });
       return;
     }
 
-    if (window.confirm('Are you sure you want to delete this guild? This action cannot be undone.')) {
-      onDelete(guildId);
+    onLeave(guildId);
+  };
+
+  const handleDelete = (guildId: string, skipConfirm = false) => {
+    const guild = guilds.find(g => g.id === guildId);
+    if (guild?.is_solo) {
+      showLocalMessage('error', 'Personal guilds cannot be deleted.');
+      return;
     }
+
+    if (!skipConfirm) {
+      requestConfirmation({
+        title: 'Delete Guild',
+        message: 'Are you sure you want to delete this guild? This action cannot be undone.',
+        confirmLabel: 'Delete',
+        onConfirm: () => handleDelete(guildId, true)
+      });
+      return;
+    }
+
+    onDelete(guildId);
   };
 
   const handleCreateGuild = () => {
@@ -285,6 +304,18 @@ const GuildList: React.FC<GuildListProps> = ({
             onClose={dismissActiveMessage || undefined}
           />
         </div>
+      )}
+
+      {confirmConfig && (
+        <ConfirmModal
+          isOpen
+          title={confirmConfig.title}
+          message={confirmConfig.message}
+          onConfirm={confirmModalConfirm}
+          onCancel={confirmModalCancel}
+          confirmLabel={confirmConfig.confirmLabel}
+          cancelLabel={confirmConfig.cancelLabel}
+        />
       )}
 
       <div style={{
@@ -572,3 +603,4 @@ const GuildList: React.FC<GuildListProps> = ({
 };
 
 export default GuildList;
+
