@@ -20,10 +20,7 @@ htmlcov/
 .env.development.local
 .env.test.local
 .env.production.local
-.watermark.ps1
-.watermark-duplicate.ps1
-.watermark-remove.ps1
-.watermark-replace.ps1
+tools/
 
 # Python
 __pycache__/
@@ -44,7 +41,7 @@ logs/
 # Editor and IDE files
 .vscode/
 .idea/
-.kilocode/
+#.kilocode/
 *.swp
 *.swo
 *~
