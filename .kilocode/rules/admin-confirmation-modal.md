@@ -1,11 +1,12 @@
-# admin-confirmation-modals.md
+# confirmation-modals.md
 
-Replace all `window.confirm` and `window.alert` calls in the admin dashboard with a shared confirmation modal.
+Rule description:  
+All destructive actions (delete, revoke, reset, etc.) must use the shared `ConfirmModal` component for confirmation, replacing all `window.confirm` or `window.alert` calls.
 
 ## Guidelines
 
-- Use the `ConfirmModal` component for all destructive-action prompts (delete, revoke, remove, etc.)  
-- Use the `useConfirmModal` hook to stage and execute confirm callbacks  
-- Always include descriptive text in the modal (action, entity type, and entity name)  
-- Follow the shared admin styles for modal appearance and buttons  
-- Never rely on browser-native alerts or confirms inside admin components  
+- `ConfirmModal` must be styled with `AdminPageStyles`.
+- Always require explicit confirmation before destructive actions.
+- Support cancel/close buttons that cleanly dismiss the modal.
+- Use clear confirmation text: `"Are you sure you want to delete this <entity>?"`
+- Never bypass confirmation for destructive actions, even in batch operations.
