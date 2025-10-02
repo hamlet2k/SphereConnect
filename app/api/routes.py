@@ -11,9 +11,9 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 # from slowapi.util import get_remote_address
 # from slowapi.errors import RateLimitExceeded
 # from slowapi.middleware import SlowAPIMiddleware
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel, ValidationError
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Set
 import uuid
 from datetime import datetime, timedelta
 import re
@@ -24,8 +24,23 @@ from datetime import datetime, timedelta
 import secrets
 import hashlib
 from ..core.models import (
-    Objective, Task, Guild, Squad, AICommander, User, Rank, AccessLevel, UserAccess, UserSession,
-    Invite, GuildRequest, ObjectiveCategory, get_db, create_tables
+    Objective,
+    Task,
+    Guild,
+    Squad,
+    AICommander,
+    User,
+    Rank,
+    AccessLevel,
+    UserAccess,
+    UserSession,
+    Invite,
+    GuildRequest,
+    ObjectiveCategory,
+    Preference,
+    UserPreference,
+    get_db,
+    create_tables,
 )
 
 router = APIRouter()
@@ -122,6 +137,10 @@ class GuildSwitch(BaseModel):
 class JoinRequest(BaseModel):
     invite_code: str
     # Future fields: expires_at, custom_message, etc.
+
+
+class UserPreferencesUpdate(BaseModel):
+    preference_ids: List[str]
 
 class AICommanderUpdate(BaseModel):
     system_prompt: Optional[str] = None
@@ -351,6 +370,17 @@ def check_category_access(user: User, db: Session, action: str = "view") -> bool
                     return True
 
     return False
+
+
+def has_super_admin_access(user: User, db: Session) -> bool:
+    """Return True if the user holds the global super_admin access level."""
+    user_access_levels = db.query(UserAccess).filter(UserAccess.user_id == user.id).all()
+    for ua in user_access_levels:
+        access_level = db.query(AccessLevel).filter(AccessLevel.id == ua.access_level_id).first()
+        if access_level and access_level.name == 'super_admin':
+            return True
+    return False
+
 
 def create_session_token(user_id: str, token: str, expires_at: datetime) -> str:
     """Create a hash for session token storage"""
@@ -739,6 +769,175 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Registration failed: {str(e)}"
         )
+
+
+@router.get("/preferences")
+async def list_preferences(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Return the global preference catalog."""
+    try:
+        preferences = (
+            db.query(Preference)
+            .filter(Preference.is_active.is_(True))
+            .order_by(Preference.name.asc())
+            .all()
+        )
+
+        return [
+            {
+                "id": str(preference.id),
+                "name": preference.name,
+                "description": preference.description,
+            }
+            for preference in preferences
+        ]
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to load preferences: {exc}"
+        )
+
+
+@router.get("/users/{user_id}/preferences")
+async def get_user_preferences(
+    user_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Return the active preferences for a specific user."""
+    try:
+        try:
+            user_uuid = uuid.UUID(user_id)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user ID format")
+
+        if str(current_user.id) != user_id and not has_super_admin_access(current_user, db):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Cannot view preferences for this user"
+            )
+
+        user = (
+            db.query(User)
+            .options(joinedload(User.preferences))
+            .filter(User.id == user_uuid)
+            .first()
+        )
+
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+        preferences = [
+            {
+                "id": str(preference.id),
+                "name": preference.name,
+                "description": preference.description,
+            }
+            for preference in user.preferences
+            if preference.is_active
+        ]
+        preferences.sort(key=lambda pref: pref["name"])
+
+        return {"user_id": str(user.id), "preferences": preferences}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to load user preferences: {exc}"
+        )
+
+
+@router.put("/users/{user_id}/preferences")
+async def update_user_preferences(
+    user_id: str,
+    update: UserPreferencesUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Allow a user (or super_admin) to update their preference set."""
+    try:
+        try:
+            user_uuid = uuid.UUID(user_id)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user ID format")
+
+        if str(current_user.id) != user_id and not has_super_admin_access(current_user, db):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Cannot update preferences for this user"
+            )
+
+        user = (
+            db.query(User)
+            .options(joinedload(User.preferences))
+            .filter(User.id == user_uuid)
+            .first()
+        )
+
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+        desired_ids: Set[uuid.UUID] = set()
+        for pref_id in update.preference_ids:
+            try:
+                desired_ids.add(uuid.UUID(pref_id))
+            except ValueError:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid preference ID format")
+
+        if desired_ids:
+            existing_preferences = (
+                db.query(Preference)
+                .filter(Preference.id.in_(list(desired_ids)), Preference.is_active.is_(True))
+                .all()
+            )
+            if len(existing_preferences) != len(desired_ids):
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="One or more preferences not found")
+
+        existing_entries = db.query(UserPreference).filter(UserPreference.user_id == user_uuid).all()
+        existing_ids = {entry.preference_id for entry in existing_entries}
+
+        to_add = desired_ids - existing_ids
+        to_remove = existing_ids - desired_ids
+
+        if to_remove:
+            db.query(UserPreference).filter(
+                UserPreference.user_id == user_uuid,
+                UserPreference.preference_id.in_(list(to_remove))
+            ).delete(synchronize_session=False)
+
+        for preference_id in to_add:
+            db.add(UserPreference(user_id=user_uuid, preference_id=preference_id))
+
+        db.commit()
+        db.refresh(user)
+
+        updated_preferences = [
+            {
+                "id": str(preference.id),
+                "name": preference.name,
+                "description": preference.description,
+            }
+            for preference in user.preferences
+            if preference.is_active
+        ]
+        updated_preferences.sort(key=lambda pref: pref["name"])
+
+        return {
+            "message": "Preferences updated successfully",
+            "preferences": updated_preferences,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update preferences: {exc}"
+        )
+
 
 @router.get("/users/{user_id}/guilds")
 async def get_user_guilds(

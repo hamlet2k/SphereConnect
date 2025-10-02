@@ -8,7 +8,9 @@ from datetime import datetime
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from sqlalchemy import create_engine, text, inspect
-from app.core.models import Base
+from sqlalchemy.orm import sessionmaker
+from app.core.models import Base, Preference, UserPreference
+import uuid
 from dotenv import load_dotenv
 load_dotenv('.env.local')
 
@@ -21,6 +23,15 @@ DB_NAME = os.getenv('DB_NAME', 'sphereconnect')
 
 if not DB_PASS:
     raise ValueError("DB_PASS not set in .env.local - check file and password")
+
+DEFAULT_PREFERENCES = [
+    ("combat", "Ship combat, FPS engagements, and security operations."),
+    ("exploration", "Long-range scouting, discovery, and reconnaissance."),
+    ("logistics", "Transport, refueling, and supply chain coordination."),
+    ("trade", "Commerce, market operations, and diplomatic negotiations."),
+    ("industry", "Mining, refining, salvage, and industrial support."),
+]
+
 
 def calculate_schema_hash():
     """Calculate hash of current schema definition for version checking."""
@@ -135,6 +146,10 @@ def main():
         print("Creating/updating database tables...")
         Base.metadata.create_all(engine)
 
+        # Seed default preferences and migrate legacy data
+        seed_default_preferences(engine)
+        migrate_user_preferences(engine)
+
         # Verify schema after creation
         final_check, _ = check_existing_schema(engine)
         if final_check:
@@ -152,3 +167,88 @@ def main():
 if __name__ == "__main__":
     success = main()
     sys.exit(0 if success else 1)
+def seed_default_preferences(engine):
+    """Ensure the global preference catalog is seeded with defaults."""
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
+    try:
+        existing_preferences = session.query(Preference).all()
+        existing_names = {pref.name for pref in existing_preferences}
+
+        created = False
+        for name, description in DEFAULT_PREFERENCES:
+            if name not in existing_names:
+                preference = Preference(
+                    id=uuid.uuid4(),
+                    name=name,
+                    description=description,
+                )
+                session.add(preference)
+                created = True
+
+        if created:
+            session.commit()
+            print("Seeded default preferences")
+    except Exception as exc:
+        session.rollback()
+        print(f"Warning: Failed to seed default preferences: {exc}")
+    finally:
+        session.close()
+
+
+def migrate_user_preferences(engine):
+    """Backfill legacy users.preferences arrays into the normalized tables."""
+    inspector = inspect(engine)
+    columns = [column['name'] for column in inspector.get_columns('users')]
+    if 'preferences' not in columns:
+        return
+
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
+    try:
+        results = session.execute(text(
+            "SELECT id, preferences FROM users WHERE preferences IS NOT NULL AND array_length(preferences, 1) > 0"
+        )).fetchall()
+
+        preference_lookup = {
+            pref.name: pref.id
+            for pref in session.query(Preference).all()
+        }
+
+        for user_id, legacy_preferences in results:
+            for preference_name in legacy_preferences:
+                normalized_name = preference_name.strip().lower()
+                if normalized_name not in preference_lookup:
+                    new_preference = Preference(
+                        id=uuid.uuid4(),
+                        name=normalized_name,
+                        description=None,
+                    )
+                    session.add(new_preference)
+                    session.flush()
+                    preference_lookup[normalized_name] = new_preference.id
+
+                existing = session.query(UserPreference).filter(
+                    UserPreference.user_id == user_id,
+                    UserPreference.preference_id == preference_lookup[normalized_name]
+                ).first()
+                if not existing:
+                    session.add(
+                        UserPreference(
+                            user_id=user_id,
+                            preference_id=preference_lookup[normalized_name]
+                        )
+                    )
+
+        session.commit()
+
+        # Drop legacy column to avoid drift
+        with engine.connect() as connection:
+            connection.execute(text('ALTER TABLE users DROP COLUMN IF EXISTS preferences'))
+            connection.commit()
+    except Exception as exc:
+        session.rollback()
+        print(f"Warning: Failed migrating user preferences: {exc}")
+    finally:
+        session.close()
+
