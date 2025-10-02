@@ -328,6 +328,14 @@ async def update_user_guild_state(
 
         target_guild_id = str(user.current_guild_id or user.guild_id)
 
+        try:
+            target_guild_uuid = uuid.UUID(target_guild_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Invalid guild context for user"
+            )
+
         if str(current_user.guild_id) != target_guild_id and not has_super_admin_access(current_user, db):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -375,7 +383,15 @@ async def update_user_guild_state(
                     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Access level does not belong to this guild")
                 desired_access_ids.append(access_uuid)
 
-            existing_access_entries = db.query(UserAccess).filter(UserAccess.user_id == user_uuid).all()
+            existing_access_entries = (
+                db.query(UserAccess)
+                .join(AccessLevel, AccessLevel.id == UserAccess.access_level_id)
+                .filter(
+                    UserAccess.user_id == user_uuid,
+                    AccessLevel.guild_id == target_guild_uuid,
+                )
+                .all()
+            )
             existing_ids = {entry.access_level_id for entry in existing_access_entries}
             desired_set = set(desired_access_ids)
 
@@ -394,9 +410,15 @@ async def update_user_guild_state(
         db.commit()
         db.refresh(user)
 
-        access_levels = db.query(UserAccess, AccessLevel).join(AccessLevel, AccessLevel.id == UserAccess.access_level_id).filter(
-            UserAccess.user_id == user_uuid
-        ).all()
+        access_levels = (
+            db.query(UserAccess, AccessLevel)
+            .join(AccessLevel, AccessLevel.id == UserAccess.access_level_id)
+            .filter(
+                UserAccess.user_id == user_uuid,
+                AccessLevel.guild_id == target_guild_uuid,
+            )
+            .all()
+        )
 
         preferences = [
             {
