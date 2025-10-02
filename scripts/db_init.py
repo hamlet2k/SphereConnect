@@ -99,74 +99,6 @@ def backup_existing_data(engine):
         print(f"Warning: Could not create data backup: {e}")
         return False
 
-def main():
-    """Main database initialization function with schema validation."""
-    print("=== SphereConnect Database Initialization ===")
-
-    # Create database URL
-    database_url = f'postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}'
-    engine = create_engine(database_url)
-
-    try:
-        # Check existing schema
-        schema_ok, status = check_existing_schema(engine)
-
-        if not schema_ok:
-            if status == "schema_mismatch":
-                print("Schema mismatch detected - recreating tables...")
-                backup_existing_data(engine)
-                # Handle circular dependencies by dropping tables in correct order
-                try:
-                    # Drop tables with circular dependencies first
-                    with engine.connect() as conn:
-                        # Disable foreign key checks temporarily
-                        if engine.dialect.name == 'postgresql':
-                            conn.execute(text("SET CONSTRAINTS ALL DEFERRED"))
-                        # Drop tables in dependency order
-                        tables_to_drop = ['user_sessions', 'objective_categories_junction',
-                                        'guild_requests', 'invites', 'tasks', 'objectives',
-                                        'ai_commanders', 'ranks', 'access_levels',
-                                        'objective_categories', 'squads', 'users', 'guilds']
-                        for table in tables_to_drop:
-                            try:
-                                conn.execute(text(f"DROP TABLE IF EXISTS {table} CASCADE"))
-                                print(f"Dropped table: {table}")
-                            except Exception as e:
-                                print(f"Warning: Could not drop {table}: {e}")
-                        conn.commit()
-                    print("Dropped existing tables")
-                except Exception as e:
-                    print(f"Warning: Error during table dropping: {e}")
-            elif status == "missing_tables":
-                print("Creating missing tables...")
-            else:
-                print(f"Schema check status: {status}")
-
-        # Create all tables
-        print("Creating/updating database tables...")
-        Base.metadata.create_all(engine)
-
-        # Seed default preferences and migrate legacy data
-        seed_default_preferences(engine)
-        migrate_user_preferences(engine)
-
-        # Verify schema after creation
-        final_check, _ = check_existing_schema(engine)
-        if final_check:
-            print("[SUCCESS] Tables created successfully in sphereconnect!")
-            print("[SUCCESS] Schema validation passed")
-            return True
-        else:
-            print("[FAIL] Schema validation failed after table creation")
-            return False
-
-    except Exception as e:
-        print(f"[ERROR] Database initialization failed: {e}")
-        return False
-
-if __name__ == "__main__":
-    success = main()
-    sys.exit(0 if success else 1)
 def seed_default_preferences(engine):
     """Ensure the global preference catalog is seeded with defaults."""
     SessionLocal = sessionmaker(bind=engine)
@@ -252,3 +184,71 @@ def migrate_user_preferences(engine):
     finally:
         session.close()
 
+def main():
+    """Main database initialization function with schema validation."""
+    print("=== SphereConnect Database Initialization ===")
+
+    # Create database URL
+    database_url = f'postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}'
+    engine = create_engine(database_url)
+
+    try:
+        # Check existing schema
+        schema_ok, status = check_existing_schema(engine)
+
+        if not schema_ok:
+            if status == "schema_mismatch":
+                print("Schema mismatch detected - recreating tables...")
+                backup_existing_data(engine)
+                # Handle circular dependencies by dropping tables in correct order
+                try:
+                    # Drop tables with circular dependencies first
+                    with engine.connect() as conn:
+                        # Disable foreign key checks temporarily
+                        if engine.dialect.name == 'postgresql':
+                            conn.execute(text("SET CONSTRAINTS ALL DEFERRED"))
+                        # Drop tables in dependency order
+                        tables_to_drop = ['user_sessions', 'objective_categories_junction',
+                                        'guild_requests', 'invites', 'tasks', 'objectives',
+                                        'ai_commanders', 'ranks', 'access_levels',
+                                        'objective_categories', 'squads', 'users', 'guilds']
+                        for table in tables_to_drop:
+                            try:
+                                conn.execute(text(f"DROP TABLE IF EXISTS {table} CASCADE"))
+                                print(f"Dropped table: {table}")
+                            except Exception as e:
+                                print(f"Warning: Could not drop {table}: {e}")
+                        conn.commit()
+                    print("Dropped existing tables")
+                except Exception as e:
+                    print(f"Warning: Error during table dropping: {e}")
+            elif status == "missing_tables":
+                print("Creating missing tables...")
+            else:
+                print(f"Schema check status: {status}")
+
+        # Create all tables
+        print("Creating/updating database tables...")
+        Base.metadata.create_all(engine)
+
+        # Seed default preferences and migrate legacy data
+        seed_default_preferences(engine)
+        migrate_user_preferences(engine)
+
+        # Verify schema after creation
+        final_check, _ = check_existing_schema(engine)
+        if final_check:
+            print("[SUCCESS] Tables created successfully in sphereconnect!")
+            print("[SUCCESS] Schema validation passed")
+            return True
+        else:
+            print("[FAIL] Schema validation failed after table creation")
+            return False
+
+    except Exception as e:
+        print(f"[ERROR] Database initialization failed: {e}")
+        return False
+
+if __name__ == "__main__":
+    success = main()
+    sys.exit(0 if success else 1)
