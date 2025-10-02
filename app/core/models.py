@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.schema import FetchedValue
 import os
 from datetime import datetime
+import uuid
 
 Base = declarative_base()
 
@@ -76,7 +77,6 @@ class User(Base):
     phonetic = Column(String)
     availability = Column(String, default='offline')
     rank = Column(PG_UUID(as_uuid=True), ForeignKey('ranks.id'))
-    preferences = Column(ARRAY(String), default=[])
     password = Column(String)
     pin = Column(String)
     squad_id = Column(PG_UUID(as_uuid=True), ForeignKey('squads.id'))
@@ -93,6 +93,7 @@ class User(Base):
     current_guild_id = Column(PG_UUID(as_uuid=True), ForeignKey('guilds.id'), nullable=True)
     max_guilds = Column(Integer, default=3)
     is_system_admin = Column(Boolean, default=False)
+    preferences = relationship('Preference', secondary='user_preferences', back_populates='users')
 
 class Guild(Base):
     __tablename__ = 'guilds'
@@ -172,6 +173,24 @@ class AccessLevel(Base):
     guild_id = Column(PG_UUID(as_uuid=True), ForeignKey('guilds.id'), nullable=False, index=True)
     name = Column(String, nullable=False)
     user_actions = Column(ARRAY(String), default=[])
+
+
+class Preference(Base):
+    __tablename__ = 'preferences'
+    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String, nullable=False, unique=True)
+    description = Column(String)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    users = relationship('User', secondary='user_preferences', back_populates='preferences')
+
+
+class UserPreference(Base):
+    __tablename__ = 'user_preferences'
+    user_id = Column(PG_UUID(as_uuid=True), ForeignKey('users.id'), primary_key=True)
+    preference_id = Column(PG_UUID(as_uuid=True), ForeignKey('preferences.id'), primary_key=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class ObjectiveCategory(Base):
     __tablename__ = 'objective_categories'

@@ -50,7 +50,6 @@ CREATE TABLE users (
     phonetic TEXT,
     availability TEXT DEFAULT 'offline',
     rank UUID,
-    preferences TEXT[] DEFAULT '{}',
     password TEXT,
     pin TEXT,
     squad_id UUID,
@@ -67,6 +66,26 @@ CREATE TABLE users (
     FOREIGN KEY (rank) REFERENCES ranks(id),
     FOREIGN KEY (squad_id) REFERENCES squads(id),
     FOREIGN KEY (current_guild_id) REFERENCES guilds(id)
+);
+
+-- Preferences Catalog
+CREATE TABLE preferences (
+    id UUID PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- User Preferences Junction
+CREATE TABLE user_preferences (
+    user_id UUID NOT NULL,
+    preference_id UUID NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (user_id, preference_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (preference_id) REFERENCES preferences(id) ON DELETE CASCADE
 );
 
 -- User Sessions

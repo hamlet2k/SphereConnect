@@ -5,40 +5,42 @@ import logging
 logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from collections import defaultdict
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import uuid
 from datetime import datetime
 
 from ..core.models import (
-    User, Rank, AccessLevel, UserAccess, Objective, Task, Squad, ObjectiveCategory, Guild, Invite, GuildRequest, AICommander,
-    get_db, create_tables
+    User,
+    Rank,
+    AccessLevel,
+    UserAccess,
+    Objective,
+    Task,
+    Squad,
+    ObjectiveCategory,
+    Guild,
+    Invite,
+    GuildRequest,
+    AICommander,
+    Preference,
+    get_db,
+    create_tables,
 )
 from .routes import get_current_user, verify_token
+from .utils import has_super_admin_access
 
 router = APIRouter()
 security = HTTPBearer()
 
 # Pydantic models for admin operations
-class UserCreate(BaseModel):
-    name: str
-    password: str
-    pin: str
+class UserGuildUpdate(BaseModel):
     rank_id: Optional[str] = None
     squad_id: Optional[str] = None
-    phonetic: Optional[str] = None
-    guild_id: str
-
-class UserUpdate(BaseModel):
-    name: Optional[str] = None
-    username: Optional[str] = None
-    email: Optional[str] = None
-    rank_id: Optional[str] = None
-    squad_id: Optional[str] = None
-    availability: Optional[str] = None
-    phonetic: Optional[str] = None
+    access_level_ids: Optional[List[str]] = None
 
 class RankCreate(BaseModel):
     name: str
@@ -167,6 +169,7 @@ def check_access_level(user: User, required_actions: List[str], db: Session) -> 
     # User has access if either rank OR user_access grants the required actions
     return rank_has_access or user_has_access
 
+
 def require_admin_access(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Dependency to require admin access"""
     if not check_admin_access(user, db):
@@ -191,118 +194,120 @@ def require_access_level(required_actions: List[str]):
 @router.get("/users")
 async def get_users(
     guild_id: str = Query(..., description="Guild ID for filtering"),
+    preference_ids: Optional[List[str]] = Query(None, description="Filter by preference IDs"),
     current_user: User = Depends(require_access_level(["view_users"])),
     db: Session = Depends(get_db)
 ):
-    """Get all users for a guild (admin only)"""
+    """Get all users for a guild (admin only)."""
     try:
-        # Verify user belongs to the guild
-        if str(current_user.guild_id) != guild_id:
+        # Verify user belongs to the guild unless super_admin
+        if str(current_user.guild_id) != guild_id and not has_super_admin_access(current_user, db):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied: User does not belong to this guild"
             )
 
-        # Get all users with approved guild requests for this guild
+        guild_uuid = uuid.UUID(guild_id)
+
         approved_requests = db.query(GuildRequest).filter(
-            GuildRequest.guild_id == uuid.UUID(guild_id),
+            GuildRequest.guild_id == guild_uuid,
             GuildRequest.status == "approved"
         ).all()
 
-        user_ids = [str(req.user_id) for req in approved_requests]
+        user_ids = [req.user_id for req in approved_requests]
         if not user_ids:
-            users = []
-        else:
-            users = db.query(User).filter(User.id.in_([uuid.UUID(uid) for uid in user_ids])).all()
+            return []
 
-        return [
-            {
-                "id": str(user.id),
-                "name": user.name,
-                "username": user.username,
-                "email": user.email,
-                "rank": str(user.rank) if user.rank else None,
-                "squad_id": str(user.squad_id) if user.squad_id else None,
-                "availability": user.availability,
-                "phonetic": user.phonetic,
-                "created_at": user.created_at.isoformat() if user.created_at else None
-            }
-            for user in users
-        ]
+        try:
+            preference_uuid_filter = {uuid.UUID(pref_id) for pref_id in preference_ids} if preference_ids else set()
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid preference ID format")
+
+        users = (
+            db.query(User)
+            .options(joinedload(User.preferences))
+            .filter(User.id.in_(user_ids))
+            .all()
+        )
+
+        if preference_uuid_filter:
+            users = [
+                user for user in users
+                if preference_uuid_filter.issubset({pref.id for pref in user.preferences})
+            ]
+
+        if not users:
+            return []
+
+        user_uuid_list = [user.id for user in users]
+
+        access_rows = (
+            db.query(UserAccess, AccessLevel)
+            .join(AccessLevel, AccessLevel.id == UserAccess.access_level_id)
+            .filter(UserAccess.user_id.in_(user_uuid_list))
+            .all()
+        )
+
+        access_map: Dict[str, List[Dict[str, str]]] = defaultdict(list)
+        for user_access, access_level in access_rows:
+            access_map[str(user_access.user_id)].append(
+                {
+                    "id": str(access_level.id),
+                    "name": access_level.name,
+                }
+            )
+
+        response_payload = []
+        for user in users:
+            active_preferences = [
+                {
+                    "id": str(preference.id),
+                    "name": preference.name,
+                    "description": preference.description,
+                }
+                for preference in user.preferences
+                if preference.is_active
+            ]
+
+            active_preferences.sort(key=lambda pref: pref["name"])
+
+            response_payload.append(
+                {
+                    "id": str(user.id),
+                    "identity": {
+                        "name": user.name,
+                        "username": user.username,
+                        "email": user.email,
+                    },
+                    "guild_state": {
+                        "rank_id": str(user.rank) if user.rank else None,
+                        "squad_id": str(user.squad_id) if user.squad_id else None,
+                        "access_levels": access_map.get(str(user.id), []),
+                    },
+                    "availability": user.availability,
+                    "phonetic": user.phonetic,
+                    "preferences": active_preferences,
+                    "created_at": user.created_at.isoformat() if user.created_at else None,
+                }
+            )
+
+        return response_payload
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve users: {str(e)}"
+            detail=f"Unable to retrieve users: {str(e)}"
         )
 
-@router.post("/users")
-async def create_user(
-    user_data: UserCreate,
-    current_user: User = Depends(require_access_level(["manage_users"])),
-    db: Session = Depends(get_db)
-):
-    """Create a new user (admin only)"""
-    try:
-        # Verify admin belongs to the guild
-        if str(current_user.guild_id) != user_data.guild_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied: Admin does not belong to this guild"
-            )
-
-        # Check if user already exists
-        existing_user = db.query(User).filter(
-            User.name == user_data.name,
-            User.guild_id == uuid.UUID(user_data.guild_id)
-        ).first()
-
-        if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="User already exists in this guild"
-            )
-
-        # Create new user
-        from .routes import hash_password, hash_pin
-
-        new_user = User(
-            id=uuid.uuid4(),
-            guild_id=uuid.UUID(user_data.guild_id),
-            name=user_data.name,
-            password=hash_password(user_data.password),
-            pin=hash_pin(user_data.pin),
-            rank=uuid.UUID(user_data.rank_id) if user_data.rank_id else None,
-            squad_id=uuid.UUID(user_data.squad_id) if user_data.squad_id else None,
-            phonetic=user_data.phonetic,
-            availability="offline"
-        )
-
-        db.add(new_user)
-        db.commit()
-
-        return {
-            "message": f"User '{user_data.name}' created successfully",
-            "user_id": str(new_user.id)
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create user: {str(e)}"
-        )
-
-@router.put("/users/{user_id}")
-async def update_user(
+@router.patch("/users/{user_id}")
+async def update_user_guild_state(
     user_id: str,
-    user_data: UserUpdate,
+    user_data: UserGuildUpdate,
     current_user: User = Depends(require_access_level(["manage_users"])),
     db: Session = Depends(get_db)
 ):
-    """Update a user (admin only)"""
+    """Update guild-scoped attributes for a user (admin only)."""
     try:
         user_uuid = uuid.UUID(user_id)
         user = db.query(User).filter(User.id == user_uuid).first()
@@ -313,80 +318,133 @@ async def update_user(
                 detail="User not found"
             )
 
-        # Verify admin belongs to the same guild as the target user's current guild
-        if str(current_user.guild_id) != str(user.current_guild_id or user.guild_id):
+        target_guild_id = str(user.current_guild_id or user.guild_id)
+
+        try:
+            target_guild_uuid = uuid.UUID(target_guild_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Invalid guild context for user"
+            )
+
+        if str(current_user.guild_id) != target_guild_id and not has_super_admin_access(current_user, db):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied: User does not belong to your guild"
             )
 
-        # Update fields
-        if user_data.name is not None:
-            user.name = user_data.name
-        if user_data.username is not None:
-            user.username = user_data.username
-        if user_data.email is not None:
-            user.email = user_data.email
         if user_data.rank_id is not None:
-            user.rank = uuid.UUID(user_data.rank_id) if user_data.rank_id else None
+            if user_data.rank_id == "":
+                user.rank = None
+            else:
+                try:
+                    rank_uuid = uuid.UUID(user_data.rank_id)
+                except ValueError:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid rank ID format")
+
+                rank = db.query(Rank).filter(Rank.id == rank_uuid).first()
+                if not rank or str(rank.guild_id) != target_guild_id:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Rank does not belong to this guild")
+                user.rank = rank_uuid
+
         if user_data.squad_id is not None:
-            user.squad_id = uuid.UUID(user_data.squad_id) if user_data.squad_id else None
-        if user_data.availability is not None:
-            user.availability = user_data.availability
-        if user_data.phonetic is not None:
-            user.phonetic = user_data.phonetic
+            if user_data.squad_id == "":
+                user.squad_id = None
+            else:
+                try:
+                    squad_uuid = uuid.UUID(user_data.squad_id)
+                except ValueError:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid squad ID format")
+
+                squad = db.query(Squad).filter(Squad.id == squad_uuid).first()
+                if not squad or str(squad.guild_id) != target_guild_id:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Squad does not belong to this guild")
+                user.squad_id = squad_uuid
+
+        if user_data.access_level_ids is not None:
+            desired_access_ids: List[uuid.UUID] = []
+            for access_id in user_data.access_level_ids:
+                try:
+                    access_uuid = uuid.UUID(access_id)
+                except ValueError:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid access level ID format")
+
+                access_level = db.query(AccessLevel).filter(AccessLevel.id == access_uuid).first()
+                if not access_level or str(access_level.guild_id) != target_guild_id:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Access level does not belong to this guild")
+                desired_access_ids.append(access_uuid)
+
+            existing_access_entries = (
+                db.query(UserAccess)
+                .join(AccessLevel, AccessLevel.id == UserAccess.access_level_id)
+                .filter(
+                    UserAccess.user_id == user_uuid,
+                    AccessLevel.guild_id == target_guild_uuid,
+                )
+                .all()
+            )
+            existing_ids = {entry.access_level_id for entry in existing_access_entries}
+            desired_set = set(desired_access_ids)
+
+            to_add = desired_set - existing_ids
+            to_remove = existing_ids - desired_set
+
+            for access_uuid in to_add:
+                db.add(UserAccess(id=uuid.uuid4(), user_id=user_uuid, access_level_id=access_uuid))
+
+            if to_remove:
+                db.query(UserAccess).filter(
+                    UserAccess.user_id == user_uuid,
+                    UserAccess.access_level_id.in_(list(to_remove))
+                ).delete(synchronize_session=False)
 
         db.commit()
+        db.refresh(user)
 
-        return {
-            "message": "User updated successfully",
-            "user_id": str(user.id)
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update user: {str(e)}"
+        access_levels = (
+            db.query(UserAccess, AccessLevel)
+            .join(AccessLevel, AccessLevel.id == UserAccess.access_level_id)
+            .filter(
+                UserAccess.user_id == user_uuid,
+                AccessLevel.guild_id == target_guild_uuid,
+            )
+            .all()
         )
 
-@router.delete("/users/{user_id}")
-async def delete_user(
-    user_id: str,
-    current_user: User = Depends(require_access_level(["manage_users"])),
-    db: Session = Depends(get_db)
-):
-    """Delete a user (admin only)"""
-    try:
-        user_uuid = uuid.UUID(user_id)
-        user = db.query(User).filter(User.id == user_uuid).first()
-
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
-
-        # Verify admin belongs to the same guild as the target user's current guild
-        if str(current_user.guild_id) != str(user.current_guild_id or user.guild_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied: User does not belong to your guild"
-            )
-
-        # Prevent deleting self
-        if str(user.id) == str(current_user.id):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot delete your own account"
-            )
-
-        db.delete(user)
-        db.commit()
+        preferences = [
+            {
+                "id": str(pref.id),
+                "name": pref.name,
+                "description": pref.description,
+            }
+            for pref in user.preferences
+            if pref.is_active
+        ]
+        preferences.sort(key=lambda pref: pref["name"])
 
         return {
-            "message": "User deleted successfully"
+            "message": "User guild attributes updated successfully",
+            "user": {
+                "id": str(user.id),
+                "identity": {
+                    "name": user.name,
+                    "username": user.username,
+                    "email": user.email,
+                },
+                "guild_state": {
+                    "rank_id": str(user.rank) if user.rank else None,
+                    "squad_id": str(user.squad_id) if user.squad_id else None,
+                    "access_levels": [
+                        {
+                            "id": str(access_level.id),
+                            "name": access_level.name,
+                        }
+                        for _, access_level in access_levels
+                    ],
+                },
+                "preferences": preferences,
+            }
         }
     except HTTPException:
         raise
@@ -394,7 +452,7 @@ async def delete_user(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete user: {str(e)}"
+            detail=f"Unable to update user: {str(e)}"
         )
 
 # Rank Management Endpoints
@@ -429,7 +487,7 @@ async def get_ranks(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve ranks: {str(e)}"
+            detail=f"Unable to retrieve ranks: {str(e)}"
         )
 
 @router.post("/ranks")
@@ -468,7 +526,7 @@ async def create_rank(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create rank: {str(e)}"
+            detail=f"Unable to create rank: {str(e)}"
         )
 
 @router.patch("/ranks/{rank_id}")
@@ -517,7 +575,7 @@ async def update_rank(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update rank: {str(e)}"
+            detail=f"Unable to update rank: {str(e)}"
         )
 
 @router.delete("/ranks/{rank_id}")
@@ -575,7 +633,7 @@ async def delete_rank(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete rank: {str(e)}"
+            detail=f"Unable to delete rank: {str(e)}"
         )
 
 # Objective Management Endpoints
@@ -620,7 +678,7 @@ async def get_objectives(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve objectives: {str(e)}"
+            detail=f"Unable to retrieve objectives: {str(e)}"
         )
 
 @router.post("/objectives")
@@ -662,7 +720,7 @@ async def create_objective(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create objective: {str(e)}"
+            detail=f"Unable to create objective: {str(e)}"
         )
 
 # Task Management Endpoints
@@ -704,7 +762,7 @@ async def get_tasks(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve tasks: {str(e)}"
+            detail=f"Unable to retrieve tasks: {str(e)}"
         )
 
 @router.post("/tasks")
@@ -747,7 +805,7 @@ async def create_task(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create task: {str(e)}"
+            detail=f"Unable to create task: {str(e)}"
         )
 
 # Squad Management Endpoints
@@ -780,7 +838,7 @@ async def get_squads(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve squads: {str(e)}"
+            detail=f"Unable to retrieve squads: {str(e)}"
         )
 
 @router.post("/squads")
@@ -818,7 +876,7 @@ async def create_squad(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create squad: {str(e)}"
+            detail=f"Unable to create squad: {str(e)}"
         )
 
 # Access Level Management Endpoints
@@ -851,7 +909,7 @@ async def get_access_levels(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve access levels: {str(e)}"
+            detail=f"Unable to retrieve access levels: {str(e)}"
         )
 
 @router.post("/access-levels")
@@ -888,7 +946,7 @@ async def create_access_level(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create access level: {str(e)}"
+            detail=f"Unable to create access level: {str(e)}"
         )
 
 @router.patch("/access-levels/{access_level_id}")
@@ -948,7 +1006,7 @@ async def update_access_level(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update access level: {str(e)}"
+            detail=f"Unable to update access level: {str(e)}"
         )
 
 @router.delete("/access-levels/{access_level_id}")
@@ -987,7 +1045,7 @@ async def delete_access_level(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete access level: {str(e)}"
+            detail=f"Unable to delete access level: {str(e)}"
         )
 
 # Objective Category Management Endpoints
@@ -1020,7 +1078,7 @@ async def get_objective_categories(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve objective categories: {str(e)}"
+            detail=f"Unable to retrieve objective categories: {str(e)}"
         )
 
 @router.post("/objective-categories")
@@ -1058,7 +1116,7 @@ async def create_objective_category(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create objective category: {str(e)}"
+            detail=f"Unable to create objective category: {str(e)}"
         )
 
 # Guild Management Endpoints
@@ -1141,7 +1199,7 @@ async def create_guild(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create guild: {str(e)}"
+            detail=f"Unable to create guild: {str(e)}"
         )
 
 @router.get("/guilds")
@@ -1188,7 +1246,7 @@ async def get_guilds(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve guilds: {str(e)}"
+            detail=f"Unable to retrieve guilds: {str(e)}"
         )
 
 @router.post("/users/{user_id}/kick")
@@ -1246,7 +1304,7 @@ async def kick_user(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to kick user: {str(e)}"
+            detail=f"Unable to kick user: {str(e)}"
         )
 
 @router.delete("/guilds/{guild_id}")
@@ -1357,7 +1415,7 @@ async def delete_guild(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete guild: {str(e)}"
+            detail=f"Unable to delete guild: {str(e)}"
         )
 
 # User Access Management Endpoints
@@ -1425,7 +1483,7 @@ async def assign_user_access(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to assign user access: {str(e)}"
+            detail=f"Unable to assign user access: {str(e)}"
         )
 
 @router.get("/user_access/{user_id}")
@@ -1470,7 +1528,7 @@ async def get_user_access_levels(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve user access levels: {str(e)}"
+            detail=f"Unable to retrieve user access levels: {str(e)}"
         )
 
 @router.delete("/user_access/{user_id}/{access_id}")
@@ -1525,7 +1583,7 @@ async def remove_user_access(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to remove user access: {str(e)}"
+            detail=f"Unable to remove user access: {str(e)}"
         )
 
 # Guild Request Management Endpoints
@@ -1574,7 +1632,7 @@ async def get_guild_requests(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve guild requests: {str(e)}"
+            detail=f"Unable to retrieve guild requests: {str(e)}"
         )
 
 @router.patch("/guild_requests/{request_id}")
@@ -1641,7 +1699,7 @@ async def update_guild_request(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update guild request: {str(e)}"
+            detail=f"Unable to update guild request: {str(e)}"
         )
 
 # Invite Management Endpoints
@@ -1683,7 +1741,7 @@ async def get_invites(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve invites: {str(e)}"
+            detail=f"Unable to retrieve invites: {str(e)}"
         )
 
 @router.delete("/invites/{invite_code}")
@@ -1722,5 +1780,5 @@ async def delete_invite(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete invite: {str(e)}"
+            detail=f"Unable to delete invite: {str(e)}"
         )
