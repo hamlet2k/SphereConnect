@@ -44,8 +44,18 @@ api.interceptors.response.use(
   (response: AxiosResponse) => response,
   async (error) => {
     const originalRequest = error.config;
+// Don't intercept 401 errors for login requests - let them propagate normally
+if (error.response?.status === 401 && !originalRequest._retry) {
+  const requestUrl = originalRequest.url || '';
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+  // Check if this is a login request by seeing if there's no token in localStorage
+  // (login requests won't have added an auth header via the request interceptor)
+  const hasTokenInStorage = !!localStorage.getItem('token');
+
+  // If it's a login request (no token in storage) or specifically the login endpoint, let it propagate
+  if (!hasTokenInStorage || requestUrl.includes('/auth/login')) {
+    return Promise.reject(error);
+  }
       if (isRefreshing) {
         // If refresh is in progress, queue the request
         return new Promise((resolve, reject) => {
