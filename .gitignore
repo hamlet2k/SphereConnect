@@ -46,6 +46,7 @@ logs/
 *.swo
 *~
 .kilocodemodes
+.kilocode/mcp.json
 
 # Skill Dependencies
 wingman-ai/skills/api_request/dependencies/*
