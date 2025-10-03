@@ -1540,9 +1540,6 @@ async def update_objective(
                 detail="Access denied: Insufficient permissions to update objectives"
             )
 
-        # Log the update request for debugging
-        logger.info(f"PUT objective update request for {objective_id}: allowed_ranks={objective_data.get('allowed_ranks')}")
-
         obj_uuid = uuid.UUID(objective_id)
         objective = db.query(Objective).filter(
             Objective.id == obj_uuid,
@@ -1560,6 +1557,9 @@ async def update_objective(
             )
 
         # Update fields from the objective_data dict
+        if 'name' in objective_data:
+            objective.name = objective_data['name']
+
         if 'description' in objective_data:
             objective.description = objective_data['description']
 
@@ -1594,22 +1594,14 @@ async def update_objective(
             objective.priority = objective_data['priority']
 
         if 'allowed_ranks' in objective_data:
-            logger.info(f"Updating allowed_ranks for objective {objective_id}: {objective_data['allowed_ranks']}")
             # Convert string UUIDs to UUID objects for database storage
             try:
                 objective.allowed_ranks = [uuid.UUID(rank_id) for rank_id in objective_data['allowed_ranks']]
             except ValueError as e:
                 raise HTTPException(status_code=400, detail=f"Invalid rank ID format: {str(e)}")
 
-        try:
-            db.commit()
-            logger.info(f"Database commit successful for objective {objective_id}")
-            db.refresh(objective)
-            logger.info(f"Objective {objective_id} updated successfully. New allowed_ranks: {objective.allowed_ranks}")
-        except Exception as commit_error:
-            logger.error(f"Database commit failed for objective {objective_id}: {str(commit_error)}")
-            db.rollback()
-            raise HTTPException(status_code=500, detail=f"Failed to save objective changes: {str(commit_error)}")
+        db.commit()
+        db.refresh(objective)
 
         # Return the updated objective data
         return {
@@ -1985,10 +1977,6 @@ async def get_objectives(
                 "lead_id": str(obj.lead_id) if obj.lead_id else None,
                 "squad_id": str(obj.squad_id) if obj.squad_id else None
             })
-
-        logger.info(f"Returning {len(result)} objectives for guild {guild_id}")
-        for obj in result:
-            logger.info(f"Objective {obj['id']}: allowed_ranks={obj['allowed_ranks']}, allowed_rank_ids={obj['allowed_rank_ids']}")
 
         return result
     except ValueError:
