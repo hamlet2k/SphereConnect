@@ -1,22 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useGuild } from '../contexts/GuildContext';
 import { theme } from '../theme';
 import { adminPageStyles } from './AdminPageStyles';
 import AdminMessage from './AdminMessage';
-import ConfirmModal from './ConfirmModal';
 import { useAdminMessage } from '../hooks/useAdminMessage';
-import { useConfirmModal } from '../hooks/useConfirmModal';
-
-interface User {
-  id: string;
-  name: string;
-  username: string;
-  email?: string;
-  rank?: string;
-  availability: string;
-  phonetic?: string;
-  created_at?: string;
-}
 
 interface Rank {
   id: string;
@@ -30,54 +17,126 @@ interface AccessLevel {
   user_actions: string[];
 }
 
-function UsersManager() {
-  const [users, setUsers] = useState<User[]>([]);
+interface Squad {
+  id: string;
+  name: string;
+}
+
+interface PreferenceOption {
+  id: string;
+  name: string;
+  description?: string | null;
+}
+
+interface UserAccessLevelSummary {
+  id: string;
+  name: string;
+}
+
+interface UserPreferenceSummary {
+  id: string;
+  name: string;
+  description?: string | null;
+}
+
+interface UserIdentitySummary {
+  name: string;
+  username: string;
+  email?: string | null;
+}
+
+interface UserGuildState {
+  rank_id?: string | null;
+  squad_id?: string | null;
+  access_levels: UserAccessLevelSummary[];
+}
+
+interface ManagedUser {
+  id: string;
+  identity: UserIdentitySummary;
+  guild_state: UserGuildState;
+  availability?: string;
+  phonetic?: string;
+  preferences: UserPreferenceSummary[];
+  created_at?: string;
+}
+
+interface GuildStatePayload {
+  rank_id?: string;
+  squad_id?: string;
+  access_level_ids?: string[];
+}
+
+const UsersManager: React.FC = () => {
+  const { currentGuildId } = useGuild();
+  const [users, setUsers] = useState<ManagedUser[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [accessLevels, setAccessLevels] = useState<AccessLevel[]>([]);
+  const [squads, setSquads] = useState<Squad[]>([]);
+  const [preferencesCatalog, setPreferencesCatalog] = useState<PreferenceOption[]>([]);
+  const [selectedPreferences, setSelectedPreferences] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    username: '',
-    email: '',
-    password: '',
-    pin: '',
-    rank_id: '',
-    access_levels: [] as string[],
-    phonetic: '',
-    availability: 'offline'
-  });
   const { message, showMessage, clearMessage } = useAdminMessage();
-  const { confirmConfig, requestConfirmation, confirm: confirmModalConfirm, cancel: confirmModalCancel } = useConfirmModal();
-
-  const { currentGuildId } = useGuild();
-  const token = localStorage.getItem('token');
+  const token = useMemo(() => localStorage.getItem('token'), []);
 
   useEffect(() => {
-    if (currentGuildId) {
-      loadUsers();
-      loadRanks();
-      loadAccessLevels();
+    if (!currentGuildId || !token) {
+      return;
     }
-  }, [currentGuildId]);
+
+    loadRanks();
+    loadAccessLevels();
+    loadSquads();
+    loadPreferencesCatalog();
+  }, [currentGuildId, token]);
+
+  useEffect(() => {
+    if (!currentGuildId || !token) {
+      return;
+    }
+
+    loadUsers();
+  }, [currentGuildId, token, selectedPreferences.join(',')]);
+
+  const requestHeaders = useMemo(() => {
+    if (!token) {
+      return undefined;
+    }
+
+    return {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+  }, [token]);
 
   const loadUsers = async () => {
+    if (!requestHeaders || !currentGuildId) {
+      return;
+    }
+
     setLoading(true);
     try {
-      const headers = { 'Authorization': `Bearer ${token}` };
-      const response = await fetch(`http://localhost:8000/api/admin/users?guild_id=${currentGuildId}`, { headers });
-
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data);
-      } else if (response.status === 403) {
-        showMessage('error', 'Insufficient permissions to manage users. You need manage_users permission.');
-        setUsers([]);
-      } else {
-        showMessage('error', 'Failed to load users');
+      let url = `http://localhost:8000/api/admin/users?guild_id=${currentGuildId}`;
+      if (selectedPreferences.length > 0) {
+        const preferenceParams = selectedPreferences.map((id) => `preference_ids=${encodeURIComponent(id)}`).join('&');
+        url = `${url}&${preferenceParams}`;
       }
+
+      const response = await fetch(url, { headers: requestHeaders });
+      if (!response.ok) {
+        if (response.status === 403) {
+          showMessage('error', 'Insufficient permissions to manage users. You need manage_users permission.');
+          setUsers([]);
+          return;
+        }
+
+        throw new Error('Failed to load users');
+      }
+
+      const data: ManagedUser[] = await response.json();
+      setUsers(data);
     } catch (error) {
+      console.error('Error loading users', error);
       showMessage('error', 'Error loading users');
     } finally {
       setLoading(false);
@@ -85,10 +144,12 @@ function UsersManager() {
   };
 
   const loadRanks = async () => {
-    try {
-      const headers = { 'Authorization': `Bearer ${token}` };
-      const response = await fetch(`http://localhost:8000/api/admin/ranks?guild_id=${currentGuildId}`, { headers });
+    if (!requestHeaders || !currentGuildId) {
+      return;
+    }
 
+    try {
+      const response = await fetch(`http://localhost:8000/api/admin/ranks?guild_id=${currentGuildId}`, { headers: requestHeaders });
       if (response.ok) {
         const data = await response.json();
         setRanks(data);
@@ -96,15 +157,18 @@ function UsersManager() {
         setRanks([]);
       }
     } catch (error) {
+      console.error('Error loading ranks', error);
       setRanks([]);
     }
   };
 
   const loadAccessLevels = async () => {
-    try {
-      const headers = { 'Authorization': `Bearer ${token}` };
-      const response = await fetch(`http://localhost:8000/api/admin/access-levels?guild_id=${currentGuildId}`, { headers });
+    if (!requestHeaders || !currentGuildId) {
+      return;
+    }
 
+    try {
+      const response = await fetch(`http://localhost:8000/api/admin/access-levels?guild_id=${currentGuildId}`, { headers: requestHeaders });
       if (response.ok) {
         const data = await response.json();
         setAccessLevels(data);
@@ -112,384 +176,110 @@ function UsersManager() {
         setAccessLevels([]);
       }
     } catch (error) {
+      console.error('Error loading access levels', error);
       setAccessLevels([]);
     }
   };
 
-  const submitUser = async () => {
+  const loadSquads = async () => {
+    if (!requestHeaders || !currentGuildId) {
+      return;
+    }
 
     try {
-
-      const headers = {
-
-        'Content-Type': 'application/json',
-
-        'Authorization': `Bearer ${token}`
-
-      };
-
-      const url = editingUser
-
-        ? `http://localhost:8000/api/admin/users/${editingUser.id}`
-
-        : 'http://localhost:8000/api/admin/users';
-
-      const method = editingUser ? 'PUT' : 'POST';
-
-      const body = JSON.stringify({
-
-        ...formData,
-
-        guild_id: currentGuildId
-
-      });
-
-      const response = await fetch(url, { method, headers, body });
-
-      if (response.ok) {
-
-        const result = await response.json();
-
-        const userId = result.user_id || editingUser?.id;
-
-        if (userId) {
-
-          try {
-
-            const responseAccess = await fetch(`http://localhost:8000/api/admin/users/${userId}/access-levels`, {
-
-              method: 'PUT',
-
-              headers,
-
-              body: JSON.stringify({ access_levels: formData.access_levels })
-
-            });
-
-            if (responseAccess.ok) {
-
-              showMessage('success', result.message || `User ${editingUser ? 'updated' : 'created'} successfully`);
-
-            } else {
-
-              const accessError = await responseAccess.json();
-
-              showMessage('error', accessError.detail || 'Failed to update user access levels');
-
-            }
-
-          } catch (error) {
-
-            showMessage('error', 'Error updating user access levels');
-
-          }
-
-        } else {
-
-          showMessage('success', result.message || `User ${editingUser ? 'updated' : 'created'} successfully`);
-
-        }
-
-        setShowForm(false);
-
-        setEditingUser(null);
-
-        setFormData({
-
-          name: '',
-
-          username: '',
-
-          email: '',
-
-          password: '',
-
-          pin: '',
-
-          rank_id: '',
-
-          access_levels: [],
-
-          phonetic: '',
-
-          availability: 'offline'
-
-        });
-
-        loadUsers();
-
-      } else if (response.status === 403) {
-
-        showMessage('error', 'Insufficient permissions to manage users. You need manage_users permission.');
-
-      } else if (response.status === 400) {
-
-        const error = await response.json();
-
-        showMessage('error', error.detail || 'Failed to save user');
-
-      } else {
-
-        const error = await response.json();
-
-        showMessage('error', error.detail || 'Failed to save user');
-
-      }
-
-    } catch (error) {
-
-      showMessage('error', 'Error saving user');
-
-    }
-
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-
-    e.preventDefault();
-
-    if (!formData.name.trim() || !formData.username.trim()) {
-
-      showMessage('error', 'Name and username are required');
-
-      return;
-
-    }
-
-    if (!editingUser && (!formData.password || !formData.pin)) {
-
-      showMessage('error', 'Password and PIN are required for new users');
-
-      return;
-
-    }
-
-    const action = editingUser ? 'update' : 'create';
-
-    requestConfirmation({
-
-      title: `${editingUser ? 'Update' : 'Create'} User`,
-
-      message: `Are you sure you want to ${action} this user? ${editingUser ? 'This will update their information.' : 'This will create a new user account.'}`,
-
-      confirmLabel: editingUser ? 'Update' : 'Create',
-
-      onConfirm: submitUser
-
-    });
-
-  };
-
-  const handleEdit = async (user: User) => {
-    // Load user's current access levels
-    try {
-      const headers = { 'Authorization': `Bearer ${token}` };
-      const response = await fetch(`http://localhost:8000/api/admin/user_access/${user.id}`, { headers });
-
-      let accessLevels: string[] = [];
+      const response = await fetch(`http://localhost:8000/api/admin/squads?guild_id=${currentGuildId}`, { headers: requestHeaders });
       if (response.ok) {
         const data = await response.json();
-        accessLevels = data.access_levels.map((al: any) => al.id);
-      }
-
-      setEditingUser(user);
-      setFormData({
-        name: user.name,
-        username: user.username,
-        email: user.email || '',
-        password: '', // Don't populate password for security
-        pin: '', // Don't populate PIN for security
-        rank_id: user.rank || '',
-        access_levels: accessLevels,
-        phonetic: user.phonetic || '',
-        availability: user.availability
-      });
-      setShowForm(true);
-    } catch (error) {
-      showMessage('error', 'Error loading user access levels');
-    }
-  };
-
-  const deleteUser = async (id: string) => {
-
-    try {
-
-      const headers = { 'Authorization': `Bearer ${token}` };
-
-      const response = await fetch(`http://localhost:8000/api/admin/users/${id}`, {
-
-        method: 'DELETE',
-
-        headers
-
-      });
-
-      if (response.ok) {
-
-        const result = await response.json();
-
-        showMessage('success', result.message || 'User deleted successfully');
-
-        loadUsers();
-
-      } else if (response.status === 403) {
-
-        showMessage('error', 'Insufficient permissions to manage users. You need manage_users permission.');
-
-      } else if (response.status === 400) {
-
-        showMessage('error', 'Cannot delete your own account');
-
+        setSquads(data);
       } else {
-
-        const error = await response.json();
-
-        showMessage('error', error.detail || 'Failed to delete user');
-
+        setSquads([]);
       }
-
     } catch (error) {
+      console.error('Error loading squads', error);
+      setSquads([]);
+    }
+  };
 
-      showMessage('error', 'Error deleting user');
-
+  const loadPreferencesCatalog = async () => {
+    if (!requestHeaders) {
+      return;
     }
 
-  };
-
-  const handleDelete = (id: string) => {
-
-    requestConfirmation({
-
-      title: 'Delete User',
-
-      message: 'Are you sure you want to delete this user? This action cannot be undone.',
-
-      confirmLabel: 'Delete',
-
-      onConfirm: () => deleteUser(id)
-
-    });
-
-  };
-
-  const handleAssignRank = async (userId: string, rankId: string) => {
     try {
-      const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      };
+      const response = await fetch('http://localhost:8000/api/preferences', { headers: requestHeaders });
+      if (response.ok) {
+        const data = await response.json();
+        setPreferencesCatalog(data);
+      } else {
+        setPreferencesCatalog([]);
+      }
+    } catch (error) {
+      console.error('Error loading preferences catalog', error);
+      setPreferencesCatalog([]);
+    }
+  };
 
+  const updateGuildState = async (userId: string, payload: GuildStatePayload, successMessage: string) => {
+    if (!requestHeaders) {
+      return;
+    }
+
+    try {
       const response = await fetch(`http://localhost:8000/api/admin/users/${userId}`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({ rank_id: rankId })
+        method: 'PATCH',
+        headers: requestHeaders,
+        body: JSON.stringify(payload)
       });
 
-      if (response.ok) {
-        showMessage('success', 'Rank assigned successfully');
-        loadUsers();
-      } else {
-        showMessage('error', 'Failed to assign rank');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const detail = errorData.detail || 'Update failed';
+        showMessage('error', detail);
+        return;
       }
+
+      const result = await response.json();
+      const updatedUser: ManagedUser | undefined = result.user;
+      if (updatedUser) {
+        setUsers((prev) => prev.map((user) => (user.id === updatedUser.id ? updatedUser : user)));
+      }
+      showMessage('success', successMessage);
     } catch (error) {
-      showMessage('error', 'Error assigning rank');
+      console.error('Error updating user', error);
+      showMessage('error', 'Error updating user');
     }
   };
 
-  const handleAccessLevelsUpdate = async (userId: string, desiredAccessLevels: string[]) => {
-    try {
-      // Get current access levels
-      const headers = { 'Authorization': `Bearer ${token}` };
-      const currentResponse = await fetch(`http://localhost:8000/api/admin/user_access/${userId}`, { headers });
-
-      let currentAccessLevels: string[] = [];
-      if (currentResponse.ok) {
-        const data = await currentResponse.json();
-        currentAccessLevels = data.access_levels.map((al: any) => al.id);
-      }
-
-      // Find access levels to add and remove
-      const toAdd = desiredAccessLevels.filter(id => !currentAccessLevels.includes(id));
-      const toRemove = currentAccessLevels.filter(id => !desiredAccessLevels.includes(id));
-
-      // Add new access levels
-      for (const accessLevelId of toAdd) {
-        await fetch('http://localhost:8000/api/admin/user_access', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            user_id: userId,
-            access_level_id: accessLevelId
-          })
-        });
-      }
-
-      // Remove old access levels
-      for (const accessLevelId of toRemove) {
-        await fetch(`http://localhost:8000/api/admin/user_access/${userId}/${accessLevelId}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-      }
-    } catch (error) {
-      console.error('Error updating access levels:', error);
-      // Don't throw error to avoid breaking user creation/update
-    }
+  const handleRankChange = (userId: string, rankId: string) => {
+    updateGuildState(userId, { rank_id: rankId }, 'Rank updated successfully');
   };
 
-  const handleAssignAccess = async (userId: string, accessLevelId: string) => {
-    try {
-      const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      };
+  const handleSquadChange = (userId: string, squadId: string) => {
+    updateGuildState(userId, { squad_id: squadId }, 'Squad updated successfully');
+  };
 
-      const response = await fetch('http://localhost:8000/api/admin/user_access', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          user_id: userId,
-          access_level_id: accessLevelId
-        })
-      });
+  const handleAccessLevelToggle = (user: ManagedUser, accessLevelId: string, checked: boolean) => {
+    const currentAccess = user.guild_state.access_levels.map((level) => level.id);
+    const nextAccess = checked
+      ? [...new Set([...currentAccess, accessLevelId])]
+      : currentAccess.filter((id) => id !== accessLevelId);
 
-      if (response.ok) {
-        showMessage('success', 'Access level assigned successfully');
-        loadUsers();
-      } else if (response.status === 409) {
-        showMessage('info', 'User already has this access level');
-      } else {
-        showMessage('error', 'Failed to assign access level');
+    updateGuildState(user.id, { access_level_ids: nextAccess }, 'Access levels updated');
+  };
+
+  const togglePreferenceFilter = (preferenceId: string) => {
+    setSelectedPreferences((prev) => {
+      if (prev.includes(preferenceId)) {
+        return prev.filter((id) => id !== preferenceId);
       }
-    } catch (error) {
-      showMessage('error', 'Error assigning access level');
-    }
-  };
-
-  const getRankName = (rankId: string) => {
-    const rank = ranks.find(r => r.id === rankId);
-    return rank ? rank.name : 'N/A';
-  };
-
-  const resetForm = () => {
-    setShowForm(false);
-    setEditingUser(null);
-    setFormData({
-      name: '',
-      username: '',
-      email: '',
-      password: '',
-      pin: '',
-      rank_id: '',
-      access_levels: [],
-      phonetic: '',
-      availability: 'offline'
+      return [...prev, preferenceId];
     });
-    clearMessage();
   };
+
+  const selectedPreferenceNames = useMemo(() => {
+    const lookup = new Map(preferencesCatalog.map((pref) => [pref.id, pref.name]));
+    return selectedPreferences.map((id) => lookup.get(id) || id);
+  }, [preferencesCatalog, selectedPreferences]);
 
   if (!token) {
     return <div>Access denied. Please login first.</div>;
@@ -498,221 +288,66 @@ function UsersManager() {
   return (
     <div style={adminPageStyles.container}>
       <div style={adminPageStyles.header}>
-        <h3 style={adminPageStyles.title}>
-          Users Management
-        </h3>
-        <button
-          onClick={() => setShowForm(true)}
-          style={adminPageStyles.primaryButton}
-          onMouseEnter={(e) => {
-            (e.target as HTMLElement).style.backgroundColor = '#E55A2B';
-            (e.target as HTMLElement).style.transform = 'translateY(-1px)';
-          }}
-          onMouseLeave={(e) => {
-            (e.target as HTMLElement).style.backgroundColor = '#FF6B35';
-            (e.target as HTMLElement).style.transform = 'translateY(0)';
-          }}
-        >
-          Create User
-        </button>
+        <h3 style={adminPageStyles.title}>Users Management</h3>
+        <p style={{
+          margin: 0,
+          color: theme.colors.textSecondary,
+          fontSize: theme.typography.fontSize.sm
+        }}>
+          Identities are self-managed. Assign ranks, squads, and access levels, and filter by global preferences.
+        </p>
       </div>
 
-      {showForm && (
-        <div style={adminPageStyles.formContainer}>
-          <h4 style={adminPageStyles.formTitle}>
-            {editingUser ? 'Edit User' : 'Create New User'}
-          </h4>
-
-          <form onSubmit={handleSubmit}>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-              gap: theme.spacing[4]
+      {preferencesCatalog.length > 0 && (
+        <div style={{
+          ...adminPageStyles.formContainer,
+          marginBottom: theme.spacing[4]
+        }}>
+          <h4 style={adminPageStyles.formTitle}>Preference Filters</h4>
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: theme.spacing[2]
+          }}>
+            {preferencesCatalog.map((preference) => {
+              const isSelected = selectedPreferences.includes(preference.id);
+              return (
+                <button
+                  key={preference.id}
+                  onClick={() => togglePreferenceFilter(preference.id)}
+                  style={{
+                    padding: `${theme.spacing[1]} ${theme.spacing[3]}`,
+                    borderRadius: theme.borderRadius.full,
+                    border: `1px solid ${isSelected ? theme.colors.primary : theme.colors.border}`,
+                    backgroundColor: isSelected ? theme.colors.primary : theme.colors.surface,
+                    color: isSelected ? theme.colors.background : theme.colors.text,
+                    cursor: 'pointer',
+                    fontSize: theme.typography.fontSize.sm
+                  }}
+                >
+                  {preference.name}
+                </button>
+              );
+            })}
+          </div>
+          {selectedPreferences.length > 0 && (
+            <p style={{
+              marginTop: theme.spacing[3],
+              color: theme.colors.textSecondary,
+              fontSize: theme.typography.fontSize.xs
             }}>
-              <div style={adminPageStyles.formField}>
-                <label style={adminPageStyles.formLabel}>
-                  Name:
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  style={adminPageStyles.formInput}
-                  placeholder="Enter display name"
-                  required
-                />
-              </div>
-
-              <div style={adminPageStyles.formField}>
-                <label style={adminPageStyles.formLabel}>
-                  Username:
-                </label>
-                <input
-                  type="text"
-                  value={formData.username}
-                  onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
-                  style={adminPageStyles.formInput}
-                  placeholder="Enter login username"
-                  required
-                />
-              </div>
-
-              <div style={adminPageStyles.formField}>
-                <label style={adminPageStyles.formLabel}>
-                  Email:
-                </label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                  style={adminPageStyles.formInput}
-                  placeholder="Enter email (optional)"
-                />
-              </div>
-
-              {!editingUser && (
-                <>
-                  <div style={adminPageStyles.formField}>
-                    <label style={adminPageStyles.formLabel}>
-                      Password:
-                    </label>
-                    <input
-                      type="password"
-                      value={formData.password}
-                      onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                      style={adminPageStyles.formInput}
-                      placeholder="Enter password"
-                      required={!editingUser}
-                    />
-                  </div>
-
-                  <div style={adminPageStyles.formField}>
-                    <label style={adminPageStyles.formLabel}>
-                      PIN:
-                    </label>
-                    <input
-                      type="password"
-                      value={formData.pin}
-                      onChange={(e) => setFormData(prev => ({ ...prev, pin: e.target.value }))}
-                      style={adminPageStyles.formInput}
-                      placeholder="6-digit PIN"
-                      maxLength={6}
-                      required={!editingUser}
-                    />
-                  </div>
-                </>
-              )}
-
-              <div style={adminPageStyles.formField}>
-                <label style={adminPageStyles.formLabel}>
-                  Rank:
-                </label>
-                <select
-                  value={formData.rank_id}
-                  onChange={(e) => setFormData(prev => ({ ...prev, rank_id: e.target.value }))}
-                  style={adminPageStyles.formInput}
-                >
-                  <option value="">Select Rank</option>
-                  {ranks.map(rank => (
-                    <option key={rank.id} value={rank.id}>
-                      {rank.name}
-                    </option>
-                  ))}
-                </select>
-                <p style={adminPageStyles.formHelp}>Users can have only one rank</p>
-              </div>
-
-              <div style={adminPageStyles.formField}>
-                <label style={adminPageStyles.formLabel}>
-                  Access Levels:
-                </label>
-                <div style={adminPageStyles.checkboxGrid}>
-                  {accessLevels.map(level => (
-                    <label key={level.id} style={adminPageStyles.checkboxItem}>
-                      <input
-                        type="checkbox"
-                        checked={formData.access_levels.includes(level.id)}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          setFormData(prev => ({
-                            ...prev,
-                            access_levels: checked
-                              ? [...prev.access_levels, level.id]
-                              : prev.access_levels.filter(id => id !== level.id)
-                          }));
-                        }}
-                        style={{ marginRight: theme.spacing[2] }}
-                      />
-                      <span style={{ fontSize: theme.typography.fontSize.sm }}>
-                        {level.name}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-                <p style={adminPageStyles.formHelp}>Users can have multiple access levels</p>
-              </div>
-
-              <div style={adminPageStyles.formField}>
-                <label style={adminPageStyles.formLabel}>
-                  Availability:
-                </label>
-                <select
-                  value={formData.availability}
-                  onChange={(e) => setFormData(prev => ({ ...prev, availability: e.target.value }))}
-                  style={adminPageStyles.formInput}
-                >
-                  <option value="offline">Offline</option>
-                  <option value="online">Online</option>
-                  <option value="busy">Busy</option>
-                  <option value="away">Away</option>
-                </select>
-              </div>
-
-              <div style={adminPageStyles.formField}>
-                <label style={adminPageStyles.formLabel}>
-                  Phonetic:
-                </label>
-                <input
-                  type="text"
-                  value={formData.phonetic}
-                  onChange={(e) => setFormData(prev => ({ ...prev, phonetic: e.target.value }))}
-                  style={adminPageStyles.formInput}
-                  placeholder="Voice recognition name"
-                />
-              </div>
-            </div>
-
-            <div style={adminPageStyles.formButtons}>
-              <button
-                type="submit"
-                style={adminPageStyles.formPrimaryButton}
-                onMouseEnter={(e) => {
-                  (e.target as HTMLElement).style.backgroundColor = theme.colors.primaryHover;
-                  (e.target as HTMLElement).style.transform = 'translateY(-1px)';
-                }}
-                onMouseLeave={(e) => {
-                  (e.target as HTMLElement).style.backgroundColor = theme.colors.primary;
-                  (e.target as HTMLElement).style.transform = 'translateY(0)';
-                }}
-              >
-                {editingUser ? 'Update' : 'Create'}
-              </button>
-              <button
-                type="button"
-                onClick={resetForm}
-                style={adminPageStyles.formSecondaryButton}
-                onMouseEnter={(e) => {
-                  (e.target as HTMLElement).style.backgroundColor = theme.colors.border;
-                }}
-                onMouseLeave={(e) => {
-                  (e.target as HTMLElement).style.backgroundColor = theme.colors.surfaceHover;
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
+              Active filters: {selectedPreferenceNames.join(', ')}
+            </p>
+          )}
         </div>
+      )}
+
+      {message && (
+        <AdminMessage
+          type={message.type}
+          message={message.text}
+          onClose={clearMessage}
+        />
       )}
 
       {loading ? (
@@ -738,180 +373,170 @@ function UsersManager() {
           </p>
         </div>
       ) : (
-        <div style={{
-          overflowX: 'auto',
-          borderRadius: theme.borderRadius.lg,
-          border: `1px solid ${theme.colors.border}`
-        }}>
-          <table style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            backgroundColor: theme.colors.surface,
-            fontSize: theme.typography.fontSize.sm
-          }}>
-            <thead>
-              <tr style={{
-                backgroundColor: theme.colors.surfaceHover,
-                borderBottom: `2px solid ${theme.colors.border}`
-              }}>
-                <th style={{
+        <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing[4] }}>
+          {users.map((user) => {
+            const currentRankId = user.guild_state.rank_id || '';
+            const currentSquadId = user.guild_state.squad_id || '';
+            const assignedAccess = user.guild_state.access_levels.map((level) => level.id);
+
+            return (
+              <div
+                key={user.id}
+                style={{
                   padding: theme.spacing[4],
-                  textAlign: 'left',
-                  color: theme.colors.text,
-                  fontWeight: theme.typography.fontWeight.semibold,
-                  fontSize: theme.typography.fontSize.sm
-                }}>
-                  Name
-                </th>
-                <th style={{
-                  padding: theme.spacing[4],
-                  textAlign: 'left',
-                  color: theme.colors.text,
-                  fontWeight: theme.typography.fontWeight.semibold,
-                  fontSize: theme.typography.fontSize.sm
-                }}>
-                  Username
-                </th>
-                <th style={{
-                  padding: theme.spacing[4],
-                  textAlign: 'left',
-                  color: theme.colors.text,
-                  fontWeight: theme.typography.fontWeight.semibold,
-                  fontSize: theme.typography.fontSize.sm
-                }}>
-                  Email
-                </th>
-                <th style={{
-                  padding: theme.spacing[4],
-                  textAlign: 'left',
-                  color: theme.colors.text,
-                  fontWeight: theme.typography.fontWeight.semibold,
-                  fontSize: theme.typography.fontSize.sm
-                }}>
-                  Rank
-                </th>
-                <th style={{
-                  padding: theme.spacing[4],
-                  textAlign: 'left',
-                  color: theme.colors.text,
-                  fontWeight: theme.typography.fontWeight.semibold,
-                  fontSize: theme.typography.fontSize.sm
-                }}>
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map(user => (
-                <tr key={user.id} style={{
-                  borderBottom: `1px solid ${theme.colors.border}`,
-                  transition: 'background-color 0.2s ease-in-out',
-                  cursor: 'pointer'
+                  borderRadius: theme.borderRadius.lg,
+                  border: `1px solid ${theme.colors.border}`,
+                  backgroundColor: theme.colors.surface,
+                  boxShadow: theme.shadows.sm
                 }}
-                onMouseEnter={(e) => {
-                  (e.target as HTMLElement).closest('tr')!.style.backgroundColor = theme.colors.surfaceHover;
-                }}
-                onMouseLeave={(e) => {
-                  (e.target as HTMLElement).closest('tr')!.style.backgroundColor = 'transparent';
-                }}
-                >
-                  <td style={{
-                    padding: theme.spacing[4],
-                    color: theme.colors.text,
-                    fontWeight: theme.typography.fontWeight.medium
-                  }}>
-                    {user.name}
-                  </td>
-                  <td style={{
-                    padding: theme.spacing[4],
-                    color: theme.colors.textSecondary
-                  }}>
-                    {user.username}
-                  </td>
-                  <td style={{
-                    padding: theme.spacing[4],
-                    color: theme.colors.textSecondary
-                  }}>
-                    {user.email || 'N/A'}
-                  </td>
-                  <td style={{
-                    padding: theme.spacing[4],
-                    color: theme.colors.textSecondary
-                  }}>
-                    {getRankName(user.rank || '')}
-                  </td>
-                  <td style={{
-                    padding: theme.spacing[4]
-                  }}>
-                    <div style={{ display: 'flex', gap: theme.spacing[1] }}>
-                      <button
-                        onClick={() => handleEdit(user)}
-                        style={{
-                          padding: `${theme.spacing[1]} ${theme.spacing[2]}`,
-                          backgroundColor: theme.colors.primary,
-                          color: theme.colors.background,
-                          border: 'none',
-                          borderRadius: theme.borderRadius.sm,
-                          fontSize: theme.typography.fontSize.xs,
-                          fontWeight: theme.typography.fontWeight.medium,
-                          cursor: 'pointer'
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(user.id)}
-                        style={{
-                          padding: `${theme.spacing[1]} ${theme.spacing[2]}`,
-                          backgroundColor: theme.colors.error,
-                          color: theme.colors.text,
-                          border: 'none',
-                          borderRadius: theme.borderRadius.sm,
-                          fontSize: theme.typography.fontSize.xs,
-                          fontWeight: theme.typography.fontWeight.medium,
-                          cursor: 'pointer'
-                        }}
-                      >
-                        Delete
-                      </button>
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: theme.spacing[4], flexWrap: 'wrap' }}>
+                  <div>
+                    <h4 style={{
+                      margin: 0,
+                      color: theme.colors.text,
+                      fontSize: theme.typography.fontSize.lg
+                    }}>
+                      {user.identity.name}
+                    </h4>
+                    <p style={{
+                      margin: 0,
+                      color: theme.colors.textSecondary,
+                      fontSize: theme.typography.fontSize.sm
+                    }}>
+                      Username: {user.identity.username}
+                    </p>
+                    <p style={{
+                      margin: 0,
+                      color: theme.colors.textSecondary,
+                      fontSize: theme.typography.fontSize.sm
+                    }}>
+                      Email: {user.identity.email || 'Not provided'}
+                    </p>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    {user.preferences.length > 0 ? (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: theme.spacing[1], justifyContent: 'flex-end' }}>
+                        {user.preferences.map((preference) => (
+                          <span
+                            key={preference.id}
+                            style={{
+                              padding: `${theme.spacing[1]} ${theme.spacing[2]}`,
+                              borderRadius: theme.borderRadius.full,
+                              backgroundColor: theme.colors.surfaceHover,
+                              color: theme.colors.textSecondary,
+                              fontSize: theme.typography.fontSize.xs
+                            }}
+                          >
+                            {preference.name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p style={{
+                        margin: 0,
+                        color: theme.colors.textMuted,
+                        fontSize: theme.typography.fontSize.xs
+                      }}>
+                        No preferences selected
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{
+                  marginTop: theme.spacing[4],
+                  display: 'grid',
+                  gap: theme.spacing[4],
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))'
+                }}>
+                  <div>
+                    <label style={adminPageStyles.formLabel}>Rank</label>
+                    <select
+                      value={currentRankId}
+                      onChange={(event) => handleRankChange(user.id, event.target.value)}
+                      style={adminPageStyles.formInput}
+                    >
+                      <option value="">Unassigned</option>
+                      {ranks.map((rank) => (
+                        <option key={rank.id} value={rank.id}>{rank.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={adminPageStyles.formLabel}>Squad</label>
+                    <select
+                      value={currentSquadId}
+                      onChange={(event) => handleSquadChange(user.id, event.target.value)}
+                      style={adminPageStyles.formInput}
+                    >
+                      <option value="">No squad</option>
+                      {squads.map((squad) => (
+                        <option key={squad.id} value={squad.id}>{squad.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={adminPageStyles.formLabel}>Access Levels</label>
+                    <div style={{
+                      border: `1px solid ${theme.colors.border}`,
+                      borderRadius: theme.borderRadius.md,
+                      padding: theme.spacing[2],
+                      maxHeight: '160px',
+                      overflowY: 'auto'
+                    }}>
+                      {accessLevels.length === 0 && (
+                        <p style={{
+                          margin: 0,
+                          color: theme.colors.textMuted,
+                          fontSize: theme.typography.fontSize.xs
+                        }}>
+                          No access levels configured.
+                        </p>
+                      )}
+                      {accessLevels.map((accessLevel) => {
+                        const isChecked = assignedAccess.includes(accessLevel.id);
+                        return (
+                          <label
+                            key={accessLevel.id}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: theme.spacing[2],
+                              fontSize: theme.typography.fontSize.sm,
+                              color: theme.colors.text,
+                              padding: `${theme.spacing[1]} 0`
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(event) => handleAccessLevelToggle(user, accessLevel.id, event.target.checked)}
+                            />
+                            <span>{accessLevel.name}</span>
+                          </label>
+                        );
+                      })}
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {users.length === 0 && !loading && (
+            <div style={{
+              textAlign: 'center',
+              padding: theme.spacing[8],
+              color: theme.colors.textMuted,
+              fontSize: theme.typography.fontSize.sm
+            }}>
+              No members found for this guild.
+            </div>
+          )}
         </div>
-      )}
-
-      {users.length === 0 && !loading && (
-        <div style={{
-          textAlign: 'center',
-          padding: theme.spacing[8],
-          color: theme.colors.textMuted,
-          fontSize: theme.typography.fontSize.sm
-        }}>
-          No users found. Create your first user to get started.
-        </div>
-      )}
-
-      {message && (
-        <AdminMessage
-          type={message.type}
-          message={message.text}
-          onClose={clearMessage}
-        />
-      )}
-
-      {confirmConfig && (
-        <ConfirmModal
-          isOpen
-          title={confirmConfig.title}
-          message={confirmConfig.message}
-          onConfirm={confirmModalConfirm}
-          onCancel={confirmModalCancel}
-          confirmLabel={confirmConfig.confirmLabel}
-          cancelLabel={confirmConfig.cancelLabel}
-        />
       )}
 
       <style>{`
@@ -922,7 +547,6 @@ function UsersManager() {
       `}</style>
     </div>
   );
-}
+};
 
 export default UsersManager;
-

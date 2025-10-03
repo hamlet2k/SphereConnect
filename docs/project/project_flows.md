@@ -17,10 +17,11 @@ For detailed data entities referenced here, see [`project_data_structures.md`](.
 4. [Objective & Task Management](#4-objective--task-management)
 5. [Invite Management](#5-invite-management)
 6. [Access Level Management](#6-access-level-management)
-7. [Rank Management](#7-rank-management)
-8. [Category Management](#8-category-management)
-9. [Notes](#notes)
-10. [Entities Referenced in These Flows](#entities-referenced-in-these-flows)
+7. [User Management](#7-user-management)
+8. [Rank Management](#8-rank-management)
+9. [Category Management](#9-category-management)
+10. [Notes](#notes)
+11. [Entities Referenced in These Flows](#entities-referenced-in-these-flows)
 
 ---
 
@@ -208,7 +209,17 @@ sequenceDiagram
 
 ---
 
-## 7. Rank Management
+## 7. User Management
+- **Identity self-service**: `/api/auth/register` handles creation, and `/api/users/{id}` (future profile page) will let members update username/email/password/PIN. Admin APIs never mutate these fields.
+- **Admin overview**: `/api/admin/users?guild_id=` returns approved members with read-only identity details plus guild-state attributes (rank, squad, access levels) and the member’s selected preferences.
+- **Filtering**: `preference_ids[]` query params allow guild staff to narrow the list by global preferences (combat, exploration, logistics, trade, industry, etc.) without editing selections.
+- **Guild-state updates**: `PATCH /api/admin/users/{id}` accepts `rank_id`, `squad_id`, and `access_level_ids`. Empty strings remove assignments. Super admins retain bypass rights.
+- **Preferences**: `/api/preferences` exposes the catalog. Users manage their selections via `/api/users/{id}/preferences` (GET/PUT). Admin tooling displays preferences read-only but uses the catalog for filtering.
+- **Frontend UX** (`UsersManager.tsx`): shows identity read-only, inline selects for rank/squad, checkbox list for access levels, and chip-based preference filters. Messages use `AdminMessage`.
+
+---
+
+## 8. Rank Management
 ```mermaid
 sequenceDiagram
     participant U as User
@@ -238,7 +249,7 @@ sequenceDiagram
 - If `allowed_ranks` becomes empty after deletion, objectives become visible only to super_admin.
 - Super_admin rank cannot be deleted or modified.
 
-## 8. Category Management
+## 9. Category Management
 ```mermaid
 sequenceDiagram
     participant U as User
@@ -289,13 +300,13 @@ sequenceDiagram
 
 ---
 
-## Notes
+## 10. Notes
 - Voice subset (MVP): guild switching, objective creation, progress reporting.
 - Other flows (invite/join/leave/kick) remain web-only until later phases.
 
 ---
 
-## Entities Referenced in These Flows
+## 11. Entities Referenced in These Flows
 - [Users](./project_data_structures.md#2-users)
 - [Guilds](./project_data_structures.md#1-guilds)
 - [Invites & Requests](./project_data_structures.md#3-invites--requests)

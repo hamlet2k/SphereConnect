@@ -10,7 +10,6 @@ CREATE TABLE users (
     phonetic TEXT,
     availability TEXT DEFAULT 'offline',
     rank UUID,
-    preferences TEXT[] DEFAULT '{}',
     password TEXT,
     pin TEXT,
     squad_id UUID,
