@@ -4,6 +4,8 @@ import { theme } from '../theme';
 import { adminPageStyles } from './AdminPageStyles';
 import AdminMessage from './AdminMessage';
 import { useAdminMessage } from '../hooks/useAdminMessage';
+import api from '../api';
+import { parseApiError } from '../utils/errorUtils';
 
 interface Rank {
   id: string;
@@ -77,10 +79,10 @@ const UsersManager: React.FC = () => {
   const [selectedPreferences, setSelectedPreferences] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const { message, showMessage, clearMessage } = useAdminMessage();
-  const token = useMemo(() => localStorage.getItem('token'), []);
+  const hasToken = useMemo(() => Boolean(localStorage.getItem('token')), []);
 
   useEffect(() => {
-    if (!currentGuildId || !token) {
+    if (!currentGuildId || !hasToken) {
       return;
     }
 
@@ -88,55 +90,39 @@ const UsersManager: React.FC = () => {
     loadAccessLevels();
     loadSquads();
     loadPreferencesCatalog();
-  }, [currentGuildId, token]);
+  }, [currentGuildId, hasToken]);
 
   useEffect(() => {
-    if (!currentGuildId || !token) {
+    if (!currentGuildId || !hasToken) {
       return;
     }
 
     loadUsers();
-  }, [currentGuildId, token, selectedPreferences.join(',')]);
-
-  const requestHeaders = useMemo(() => {
-    if (!token) {
-      return undefined;
-    }
-
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    };
-  }, [token]);
+  }, [currentGuildId, hasToken, selectedPreferences.join(',')]);
 
   const loadUsers = async () => {
-    if (!requestHeaders || !currentGuildId) {
+    if (!currentGuildId) {
       return;
     }
 
     setLoading(true);
     try {
-      let url = `http://localhost:8000/api/admin/users?guild_id=${currentGuildId}`;
+      let url = `/admin/users?guild_id=${currentGuildId}`;
       if (selectedPreferences.length > 0) {
         const preferenceParams = selectedPreferences.map((id) => `preference_ids=${encodeURIComponent(id)}`).join('&');
         url = `${url}&${preferenceParams}`;
       }
 
-      const response = await fetch(url, { headers: requestHeaders });
-      if (!response.ok) {
-        if (response.status === 403) {
-          showMessage('error', 'Insufficient permissions to manage users. You need manage_users permission.');
-          setUsers([]);
-          return;
-        }
-
-        throw new Error('Failed to load users');
-      }
-
-      const data: ManagedUser[] = await response.json();
-      setUsers(data);
+      const response = await api.get<ManagedUser[]>(url);
+      setUsers(response.data);
     } catch (error) {
       console.error('Error loading users', error);
+      const { status, detail } = parseApiError(error);
+      if (status === 403) {
+        showMessage('error', 'Insufficient permissions to manage users. You need manage_users permission.');
+        setUsers([]);
+        return;
+      }
       showMessage('error', 'Error loading users');
     } finally {
       setLoading(false);
@@ -144,18 +130,13 @@ const UsersManager: React.FC = () => {
   };
 
   const loadRanks = async () => {
-    if (!requestHeaders || !currentGuildId) {
+    if (!currentGuildId) {
       return;
     }
 
     try {
-      const response = await fetch(`http://localhost:8000/api/admin/ranks?guild_id=${currentGuildId}`, { headers: requestHeaders });
-      if (response.ok) {
-        const data = await response.json();
-        setRanks(data);
-      } else {
-        setRanks([]);
-      }
+      const response = await api.get<Rank[]>(`/admin/ranks?guild_id=${currentGuildId}`);
+      setRanks(response.data);
     } catch (error) {
       console.error('Error loading ranks', error);
       setRanks([]);
@@ -163,18 +144,13 @@ const UsersManager: React.FC = () => {
   };
 
   const loadAccessLevels = async () => {
-    if (!requestHeaders || !currentGuildId) {
+    if (!currentGuildId) {
       return;
     }
 
     try {
-      const response = await fetch(`http://localhost:8000/api/admin/access-levels?guild_id=${currentGuildId}`, { headers: requestHeaders });
-      if (response.ok) {
-        const data = await response.json();
-        setAccessLevels(data);
-      } else {
-        setAccessLevels([]);
-      }
+      const response = await api.get<AccessLevel[]>(`/admin/access-levels?guild_id=${currentGuildId}`);
+      setAccessLevels(response.data);
     } catch (error) {
       console.error('Error loading access levels', error);
       setAccessLevels([]);
@@ -182,18 +158,13 @@ const UsersManager: React.FC = () => {
   };
 
   const loadSquads = async () => {
-    if (!requestHeaders || !currentGuildId) {
+    if (!currentGuildId) {
       return;
     }
 
     try {
-      const response = await fetch(`http://localhost:8000/api/admin/squads?guild_id=${currentGuildId}`, { headers: requestHeaders });
-      if (response.ok) {
-        const data = await response.json();
-        setSquads(data);
-      } else {
-        setSquads([]);
-      }
+      const response = await api.get<Squad[]>(`/admin/squads?guild_id=${currentGuildId}`);
+      setSquads(response.data);
     } catch (error) {
       console.error('Error loading squads', error);
       setSquads([]);
@@ -201,18 +172,13 @@ const UsersManager: React.FC = () => {
   };
 
   const loadPreferencesCatalog = async () => {
-    if (!requestHeaders) {
+    if (!hasToken) {
       return;
     }
 
     try {
-      const response = await fetch('http://localhost:8000/api/preferences', { headers: requestHeaders });
-      if (response.ok) {
-        const data = await response.json();
-        setPreferencesCatalog(data);
-      } else {
-        setPreferencesCatalog([]);
-      }
+      const response = await api.get<PreferenceOption[]>('/preferences');
+      setPreferencesCatalog(response.data);
     } catch (error) {
       console.error('Error loading preferences catalog', error);
       setPreferencesCatalog([]);
@@ -220,25 +186,13 @@ const UsersManager: React.FC = () => {
   };
 
   const updateGuildState = async (userId: string, payload: GuildStatePayload, successMessage: string) => {
-    if (!requestHeaders) {
+    if (!hasToken) {
       return;
     }
 
     try {
-      const response = await fetch(`http://localhost:8000/api/admin/users/${userId}`, {
-        method: 'PATCH',
-        headers: requestHeaders,
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const detail = errorData.detail || 'Update failed';
-        showMessage('error', detail);
-        return;
-      }
-
-      const result = await response.json();
+      const response = await api.patch(`/admin/users/${userId}`, payload);
+      const result = response.data;
       const updatedUser: ManagedUser | undefined = result.user;
       if (updatedUser) {
         setUsers((prev) => prev.map((user) => (user.id === updatedUser.id ? updatedUser : user)));
@@ -246,6 +200,11 @@ const UsersManager: React.FC = () => {
       showMessage('success', successMessage);
     } catch (error) {
       console.error('Error updating user', error);
+      const { detail } = parseApiError(error);
+      if (detail) {
+        showMessage('error', detail);
+        return;
+      }
       showMessage('error', 'Error updating user');
     }
   };
@@ -281,7 +240,7 @@ const UsersManager: React.FC = () => {
     return selectedPreferences.map((id) => lookup.get(id) || id);
   }, [preferencesCatalog, selectedPreferences]);
 
-  if (!token) {
+  if (!hasToken) {
     return <div>Access denied. Please login first.</div>;
   }
 

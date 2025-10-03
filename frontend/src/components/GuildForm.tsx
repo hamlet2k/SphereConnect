@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { theme } from '../theme';
 import { adminPageStyles } from './AdminPageStyles';
 import AdminMessage from './AdminMessage';
 import { useAdminMessage } from '../hooks/useAdminMessage';
+import api from '../api';
+import { parseApiError } from '../utils/errorUtils';
 
 interface GuildFormProps {
   onSuccess: (guild: any) => void;
@@ -23,6 +25,7 @@ const GuildForm: React.FC<GuildFormProps> = ({
 
   const [loading, setLoading] = useState(false);
   const { message, showMessage, clearMessage } = useAdminMessage();
+  const hasToken = useMemo(() => Boolean(localStorage.getItem('token')), []);
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({
@@ -46,27 +49,19 @@ const GuildForm: React.FC<GuildFormProps> = ({
         throw new Error('Guild name must be at least 3 characters');
       }
 
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:8000/api/admin/guilds', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(formData)
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        onSuccess(result);
-      } else if (response.status === 402) {
-        showMessage('error', 'Guild limit reached. Upgrade to add more guilds.');
-      } else {
-        const errorData = await response.json();
-        showMessage('error', errorData.detail || 'Failed to create guild');
+      if (!hasToken) {
+        throw new Error('Access denied. Please login first.');
       }
+
+      const response = await api.post('/admin/guilds', formData);
+      onSuccess(response.data);
     } catch (err: any) {
-      showMessage('error', err.message);
+      const { status, detail } = parseApiError(err);
+      if (status === 402) {
+        showMessage('error', 'Guild limit reached. Upgrade to add more guilds.');
+        return;
+      }
+      showMessage('error', detail || err.message || 'Failed to create guild');
     } finally {
       setLoading(false);
     }
@@ -161,6 +156,10 @@ const GuildForm: React.FC<GuildFormProps> = ({
       </form>
     </>
   );
+
+  if (!hasToken) {
+    return <div>Access denied. Please login first.</div>;
+  }
 
   if (modal) {
     return (

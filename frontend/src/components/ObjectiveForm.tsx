@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useObjectivesAPI, Objective, ObjectiveDescription } from '../contexts/ObjectivesAPI';
 import { theme } from '../theme';
+import api from '../api';
 
 interface ObjectiveFormProps {
   objective?: Objective;
@@ -42,48 +43,39 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
   const [newMetricValue, setNewMetricValue] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const hasToken = useMemo(() => Boolean(localStorage.getItem('token')), []);
 
   const loadCategories = useCallback(async () => {
+    if (!hasToken) {
+      return;
+    }
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:8000/api/categories?guild_id=${guildId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setAvailableCategories(data);
-      }
+      const response = await api.get(`/categories?guild_id=${guildId}`);
+      setAvailableCategories(response.data);
     } catch (err: any) {
       console.error('Error loading categories:', err);
     }
-  }, [guildId]);
+  }, [guildId, hasToken]);
 
   const loadRanks = useCallback(async () => {
+    if (!hasToken) {
+      return;
+    }
     try {
       console.log('Loading ranks for guild:', guildId);
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:8000/api/admin/ranks?guild_id=${guildId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Loaded ranks data:', data);
-        const processedRanks = data.map((rank: any) => ({
-          id: rank.id,
-          name: rank.name,
-          hierarchy_level: rank.hierarchy_level
-        }));
-        console.log('Processed ranks:', processedRanks);
-        setAvailableRanks(processedRanks);
-      } else {
-        console.error('Failed to load ranks:', response.status, response.statusText);
-      }
+      const response = await api.get(`/admin/ranks?guild_id=${guildId}`);
+      console.log('Loaded ranks data:', response.data);
+      const processedRanks = (response.data as any[]).map((rank: any) => ({
+        id: rank.id,
+        name: rank.name,
+        hierarchy_level: rank.hierarchy_level
+      }));
+      console.log('Processed ranks:', processedRanks);
+      setAvailableRanks(processedRanks);
     } catch (err: any) {
       console.error('Error loading ranks:', err);
     }
-  }, [guildId]);
+  }, [guildId, hasToken]);
 
   useEffect(() => {
     loadCategories();

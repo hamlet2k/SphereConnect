@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { theme } from '../theme';
+import api from '../api';
+import { parseApiError } from '../utils/errorUtils';
 
 interface Category {
   id: string;
@@ -32,6 +34,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const hasToken = useMemo(() => Boolean(localStorage.getItem('token')), []);
 
   useEffect(() => {
     if (category) {
@@ -57,50 +60,27 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
         throw new Error('Category name is required');
       }
 
-      const token = localStorage.getItem('token');
+      if (!hasToken) {
+        throw new Error('Access denied. Please login first.');
+      }
+
       let result: Category;
 
       if (category?.id) {
         // Update existing category
-        const response = await fetch(`http://localhost:8000/api/categories/${category.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            name: formData.name,
-            description: formData.description
-          })
+        await api.put(`/categories/${category.id}`, {
+          name: formData.name,
+          description: formData.description
         });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.detail || 'Failed to update category');
-        }
-
         result = { ...formData };
       } else {
         // Create new category
-        const response = await fetch('http://localhost:8000/api/categories', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            name: formData.name,
-            description: formData.description,
-            guild_id: guildId
-          })
+        const response = await api.post('/categories', {
+          name: formData.name,
+          description: formData.description,
+          guild_id: guildId
         });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.detail || 'Failed to create category');
-        }
-
-        const data = await response.json();
+        const data = response.data;
         result = {
           id: data.id,
           name: formData.name,
@@ -111,11 +91,16 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
 
       onSuccess(result);
     } catch (err: any) {
-      setError(err.message);
+      const { detail } = parseApiError(err);
+      setError(detail || err.message || 'Failed to save category');
     } finally {
       setLoading(false);
     }
   };
+
+  if (!hasToken) {
+    return <div>Access denied. Please login first.</div>;
+  }
 
   return (
     <div style={{
