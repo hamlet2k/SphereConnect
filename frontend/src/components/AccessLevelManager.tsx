@@ -166,29 +166,16 @@ function AccessLevelManager() {
       showMessage('error', detail || 'Error deleting access level');
     }
   };
-    setFormData(createInitialFormData());
-    return <div>Access denied. Please login first.</div>;
-  }
 
-        showMessage('error', 'Insufficient permissions to manage access levels. You need manage_rbac permission.');
-      } else {
-        const error = await response.json();
-        showMessage('error', error.detail || 'Failed to delete access level');
-      }
-    } catch (error) {
-      showMessage('error', 'Error deleting access level');
-    }
-  };
-
-  const handleDelete = (id: string) => {
-    requestConfirmation({
-      title: 'Delete Access Level',
-      message: 'Are you sure you want to delete this access level? This will permanently remove it and may affect user permissions.',
-      confirmLabel: 'Delete',
-      onConfirm: () => deleteAccessLevel(id)
-    });
-  };
-
+  const handleDelete = (id: string) => {
+    requestConfirmation({
+      title: 'Delete Access Level',
+      message: 'Are you sure you want to delete this access level?',
+      confirmLabel: 'Delete',
+      onConfirm: () => deleteAccessLevel(id)
+    });
+  };
+
   const handleActionToggle = (action: string) => {
     setFormData(prev => ({
       ...prev,
@@ -205,7 +192,7 @@ function AccessLevelManager() {
     clearMessage();
   };
 
-  if (!token) {
+  if (!hasToken) {
     return <div>Access denied. Please login first.</div>;
   }
 
