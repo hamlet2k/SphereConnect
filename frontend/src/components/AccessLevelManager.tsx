@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useGuild } from '../contexts/GuildContext';
 import { theme } from '../theme';
 import { adminPageStyles } from './AdminPageStyles';
@@ -6,6 +6,8 @@ import AdminMessage from './AdminMessage';
 import ConfirmModal from './ConfirmModal';
 import { useAdminMessage } from '../hooks/useAdminMessage';
 import { useConfirmModal } from '../hooks/useConfirmModal';
+import api from '../api';
+import { parseApiError } from '../utils/errorUtils';
 
 interface AccessLevel {
   id: string;
@@ -43,93 +45,73 @@ function AccessLevelManager() {
   const { confirmConfig, requestConfirmation, confirm: confirmModalConfirm, cancel: confirmModalCancel } = useConfirmModal();
 
   const { currentGuildId } = useGuild();
-  const token = localStorage.getItem('token');
+  const hasToken = useMemo(() => Boolean(localStorage.getItem('token')), []);
 
   useEffect(() => {
-    if (currentGuildId) {
+    if (currentGuildId && hasToken) {
       loadAccessLevels();
     }
-  }, [currentGuildId]);
+  }, [currentGuildId, hasToken]);
 
   const loadAccessLevels = async () => {
+    if (!currentGuildId || !hasToken) {
+      return;
+    }
     setLoading(true);
     try {
-      const headers = { 'Authorization': `Bearer ${token}` };
-      const response = await fetch(`http://localhost:8000/api/admin/access-levels?guild_id=${currentGuildId}`, { headers });
-
-      if (response.ok) {
-        const data = await response.json();
-        setAccessLevels(data);
-      } else if (response.status === 403) {
+      const response = await api.get<AccessLevel[]>(`/admin/access-levels?guild_id=${currentGuildId}`);
+      setAccessLevels(response.data);
+    } catch (error) {
+      const { status, detail } = parseApiError(error);
+      if (status === 403) {
         showMessage('error', 'Insufficient permissions to manage access levels. You need manage_rbac permission.');
         setAccessLevels([]);
       } else {
-        showMessage('error', 'Failed to load access levels');
+        showMessage('error', detail || 'Failed to load access levels');
       }
-    } catch (error) {
-      showMessage('error', 'Error loading access levels');
     } finally {
       setLoading(false);
     }
   };
 
   const submitAccessLevel = async () => {
+    if (!currentGuildId || !hasToken) {
+      return;
+    }
 
     try {
 
-      const headers = {
-
-        'Content-Type': 'application/json',
-
-        'Authorization': `Bearer ${token}`
-
+      const payload = {
+        ...formData,
+        guild_id: currentGuildId
       };
 
-      const url = editingLevel
+      const response = editingLevel
+        ? await api.patch(`/admin/access-levels/${editingLevel.id}`, payload)
+        : await api.post('/admin/access-levels', payload);
 
-        ? `http://localhost:8000/api/admin/access-levels/${editingLevel.id}`
+      const result = response.data as { message?: string };
 
-        : 'http://localhost:8000/api/admin/access-levels';
+      showMessage('success', result.message || `Access level ${editingLevel ? 'updated' : 'created'} successfully`);
 
-      const method = editingLevel ? 'PATCH' : 'POST';
+      setShowForm(false);
 
-      const body = JSON.stringify({
+      setEditingLevel(null);
 
-        ...formData,
+      setFormData({ name: '', user_actions: [] });
 
-        guild_id: currentGuildId
-
-      });
-
-      const response = await fetch(url, { method, headers, body });
-
-      if (response.ok) {
-
-        const result = await response.json();
-
-        showMessage('success', result.message || `Access level ${editingLevel ? 'updated' : 'created'} successfully`);
-
-        setShowForm(false);
-
-        setEditingLevel(null);
-
-        setFormData({ name: '', user_actions: [] });
-
-        loadAccessLevels();
-
-      } else if (response.status === 403) {
-
-        showMessage('error', 'Insufficient permissions to manage access levels. You need manage_rbac permission.');
-
-      } else {
-
-        const error = await response.json();
-
-        showMessage('error', error.detail || 'Failed to save access level');
-
-      }
+      loadAccessLevels();
 
     } catch (error) {
+      const { status, detail } = parseApiError(error);
+      if (status === 403) {
+        showMessage('error', 'Insufficient permissions to manage access levels. You need manage_rbac permission.');
+        return;
+      }
+      if (detail) {
+        showMessage('error', detail || 'Failed to save access level');
+        return;
+      }
 
       showMessage('error', 'Error saving access level');
 
@@ -169,19 +151,34 @@ function AccessLevelManager() {
     setShowForm(true);
   };
 
-  const deleteAccessLevel = async (levelId: string) => {
-    try {
-      const headers = { 'Authorization': `Bearer ${token}` };
-      const response = await fetch(`http://localhost:8000/api/admin/access-levels/${levelId}`, {
-        method: 'DELETE',
-        headers
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        showMessage('success', result.message || 'Access level deleted successfully');
-        loadAccessLevels();
-      } else if (response.status === 403) {
+  const deleteAccessLevel = async (levelId: string) => {
+    if (!hasToken) {
+      return;
+    }
+    try {
+      const response = await api.delete(`/admin/access-levels/${levelId}`);
+      const result = response.data as { message?: string };
+      showMessage('success', result.message || 'Access level deleted successfully');
+      loadAccessLevels();
+    } catch (error) {
+      const { status, detail } = parseApiError(error);
+      if (status === 403) {
+        showMessage('error', 'Insufficient permissions to manage access levels. You need manage_rbac permission.');
+        return;
+      }
+
+      if (detail) {
+        showMessage('error', detail || 'Failed to delete access level');
+        return;
+      }
+
+      showMessage('error', 'Error deleting access level');
+    }
+  };
+  if (!hasToken) {
+    return <div>Access denied. Please login first.</div>;
+  }
+
         showMessage('error', 'Insufficient permissions to manage access levels. You need manage_rbac permission.');
       } else {
         const error = await response.json();

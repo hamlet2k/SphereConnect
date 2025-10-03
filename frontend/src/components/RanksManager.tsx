@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useGuild } from '../contexts/GuildContext';
 import { theme } from '../theme';
 import { adminPageStyles } from './AdminPageStyles';
@@ -6,6 +6,8 @@ import AdminMessage from './AdminMessage';
 import ConfirmModal from './ConfirmModal';
 import { useAdminMessage } from '../hooks/useAdminMessage';
 import { useConfirmModal } from '../hooks/useConfirmModal';
+import api from '../api';
+import { parseApiError } from '../utils/errorUtils';
 
 interface Rank {
   id: string;
@@ -37,49 +39,44 @@ function RanksManager() {
   const { confirmConfig, requestConfirmation, confirm: confirmModalConfirm, cancel: confirmModalCancel } = useConfirmModal();
 
   const { currentGuildId } = useGuild();
-  const token = localStorage.getItem('token');
+  const hasToken = useMemo(() => Boolean(localStorage.getItem('token')), []);
 
   useEffect(() => {
-    if (currentGuildId) {
+    if (currentGuildId && hasToken) {
       loadRanks();
       loadAccessLevels();
     }
-  }, [currentGuildId]);
+  }, [currentGuildId, hasToken]);
 
   const loadRanks = async () => {
+    if (!currentGuildId || !hasToken) {
+      return;
+    }
     setLoading(true);
     try {
-      const headers = { 'Authorization': `Bearer ${token}` };
-      const response = await fetch(`http://localhost:8000/api/admin/ranks?guild_id=${currentGuildId}`, { headers });
-
-      if (response.ok) {
-        const data = await response.json();
-        setRanks(data);
-      } else if (response.status === 403) {
+      const response = await api.get(`/admin/ranks?guild_id=${currentGuildId}`);
+      setRanks(response.data);
+    } catch (error) {
+      const { status } = parseApiError(error);
+      if (status === 403) {
         showMessage('error', 'Insufficient permissions to manage ranks. You need manage_ranks permission.');
         setRanks([]);
-      } else {
-        showMessage('error', 'Failed to load ranks');
+        return;
       }
-    } catch (error) {
-      showMessage('error', 'Error loading ranks');
+      showMessage('error', 'Failed to load ranks');
     } finally {
       setLoading(false);
     }
   };
 
   const loadAccessLevels = async () => {
+    if (!currentGuildId || !hasToken) {
+      setAccessLevels([]);
+      return;
+    }
     try {
-      const headers = { 'Authorization': `Bearer ${token}` };
-      const response = await fetch(`http://localhost:8000/api/admin/access-levels?guild_id=${currentGuildId}`, { headers });
-
-      if (response.ok) {
-        const data = await response.json();
-        setAccessLevels(data);
-      } else {
-        // Access levels are optional for display, don't show error
-        setAccessLevels([]);
-      }
+      const response = await api.get(`/admin/access-levels?guild_id=${currentGuildId}`);
+      setAccessLevels(response.data);
     } catch (error) {
       // Access levels are optional for display, don't show error
       setAccessLevels([]);
@@ -87,70 +84,43 @@ function RanksManager() {
   };
 
   const submitRank = async () => {
+    if (!currentGuildId || !hasToken) {
+      return;
+    }
 
     try {
-
-      const headers = {
-
-        'Content-Type': 'application/json',
-
-        'Authorization': `Bearer ${token}`
-
+      const payload = {
+        ...formData,
+        guild_id: currentGuildId
       };
 
+      const response = editingRank
+        ? await api.patch(`/admin/ranks/${editingRank.id}`, payload)
+        : await api.post('/admin/ranks', payload);
 
+      const result = response.data as { message?: string };
 
-      const url = editingRank
+      showMessage('success', result.message || `Rank ${editingRank ? 'updated' : 'created'} successfully`);
 
-        ? `http://localhost:8000/api/admin/ranks/${editingRank.id}`
+      setShowForm(false);
 
-        : 'http://localhost:8000/api/admin/ranks';
+      setEditingRank(null);
 
+      setFormData({ name: '', phonetic: '', hierarchy_level: 1, access_levels: [] });
 
-
-      const method = editingRank ? 'PATCH' : 'POST';
-
-      const body = JSON.stringify({
-
-        ...formData,
-
-        guild_id: currentGuildId
-
-      });
-
-
-
-      const response = await fetch(url, { method, headers, body });
-
-
-
-      if (response.ok) {
-
-        const result = await response.json();
-
-        showMessage('success', result.message || `Rank ${editingRank ? 'updated' : 'created'} successfully`);
-
-        setShowForm(false);
-
-        setEditingRank(null);
-
-        setFormData({ name: '', phonetic: '', hierarchy_level: 1, access_levels: [] });
-
-        loadRanks();
-
-      } else if (response.status === 403) {
-
-        showMessage('error', 'Insufficient permissions to manage ranks. You need manage_ranks permission.');
-
-      } else {
-
-        const error = await response.json();
-
-        showMessage('error', error.detail || 'Failed to save rank');
-
-      }
+      loadRanks();
 
     } catch (error) {
+      const { status, detail } = parseApiError(error);
+      if (status === 403) {
+        showMessage('error', 'Insufficient permissions to manage ranks. You need manage_ranks permission.');
+        return;
+      }
+
+      if (detail) {
+        showMessage('error', detail || 'Failed to save rank');
+        return;
+      }
 
       showMessage('error', 'Error saving rank');
 
@@ -207,45 +177,38 @@ function RanksManager() {
 
     try {
 
-      const headers = { 'Authorization': `Bearer ${token}` };
+      await api.delete(`/admin/ranks/${id}`);
 
-      const response = await fetch(`http://localhost:8000/api/admin/ranks/${id}`, {
+      showMessage('success', 'Rank deleted successfully');
 
-        method: 'DELETE',
+      loadRanks();
 
-        headers
+    } catch (error) {
+      const { status, detail } = parseApiError(error);
 
-      });
-
-
-
-      if (response.ok) {
-
-        const result = await response.json();
-
-        showMessage('success', result.message || 'Rank deleted successfully');
-
-        loadRanks();
-
-      } else if (response.status === 403) {
+      if (status === 403) {
 
         showMessage('error', 'Insufficient permissions to manage ranks. You need manage_ranks permission.');
 
-      } else if (response.status === 409) {
-
-        const error = await response.json();
-
-        showMessage('error', error.detail || 'Cannot delete rank that is assigned to users');
-
-      } else {
-
-        const error = await response.json();
-
-        showMessage('error', error.detail || 'Failed to delete rank');
+        return;
 
       }
 
-    } catch (error) {
+      if (status === 409) {
+
+        showMessage('error', detail || 'Cannot delete rank that is assigned to users');
+
+        return;
+
+      }
+
+      if (detail) {
+
+        showMessage('error', detail || 'Failed to delete rank');
+
+        return;
+
+      }
 
       showMessage('error', 'Error deleting rank');
 
@@ -294,7 +257,7 @@ function RanksManager() {
     clearMessage();
   };
 
-  if (!token) {
+  if (!hasToken) {
     return <div>Access denied. Please login first.</div>;
   }
 
