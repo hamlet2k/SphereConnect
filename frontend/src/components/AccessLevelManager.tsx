@@ -41,7 +41,7 @@ function AccessLevelManager() {
     name: '',
     user_actions: [] as string[]
   });
-  const [formData, setFormData] = useState(createInitialFormData);
+  const [formData, setFormData] = useState(createInitialFormData());
   const { message, showMessage, clearMessage } = useAdminMessage();
   const { confirmConfig, requestConfirmation, confirm: confirmModalConfirm, cancel: confirmModalCancel } = useConfirmModal();
 
@@ -109,12 +109,7 @@ function AccessLevelManager() {
         showMessage('error', 'Insufficient permissions to manage access levels. You need manage_rbac permission.');
         return;
       }
-      if (detail) {
-        showMessage('error', detail || 'Failed to save access level');
-        return;
-      }
-
-      showMessage('error', 'Error saving access level');
+      showMessage('error', detail || 'Error saving access level');
 
     }
 
@@ -168,12 +163,7 @@ function AccessLevelManager() {
         return;
       }
 
-      if (detail) {
-        showMessage('error', detail || 'Failed to delete access level');
-        return;
-      }
-
-      showMessage('error', 'Error deleting access level');
+      showMessage('error', detail || 'Error deleting access level');
     }
   };
     setFormData(createInitialFormData());
