@@ -294,10 +294,11 @@ async def get_users(
         return response_payload
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("Admin API: unable to retrieve users")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to retrieve users: {str(e)}"
+            detail="Unable to retrieve users"
         )
 
 @router.patch("/users/{user_id}")
@@ -448,11 +449,12 @@ async def update_user_guild_state(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         db.rollback()
+        logger.exception("Admin API: unable to update user")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to update user: {str(e)}"
+            detail="Unable to update user"
         )
 
 # Rank Management Endpoints
@@ -484,10 +486,11 @@ async def get_ranks(
         ]
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("Admin API: unable to retrieve ranks")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to retrieve ranks: {str(e)}"
+            detail="Unable to retrieve ranks"
         )
 
 @router.post("/ranks")
@@ -522,11 +525,12 @@ async def create_rank(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         db.rollback()
+        logger.exception("Admin API: unable to create rank")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to create rank: {str(e)}"
+            detail="Unable to create rank"
         )
 
 @router.patch("/ranks/{rank_id}")
@@ -571,11 +575,12 @@ async def update_rank(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         db.rollback()
+        logger.exception("Admin API: unable to update rank")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to update rank: {str(e)}"
+            detail="Unable to update rank"
         )
 
 @router.delete("/ranks/{rank_id}")
@@ -629,11 +634,12 @@ async def delete_rank(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         db.rollback()
+        logger.exception("Admin API: unable to delete rank")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to delete rank: {str(e)}"
+            detail="Unable to delete rank"
         )
 
 # Objective Management Endpoints
@@ -675,10 +681,11 @@ async def get_objectives(
         ]
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("Admin API: unable to retrieve objectives")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to retrieve objectives: {str(e)}"
+            detail="Unable to retrieve objectives"
         )
 
 @router.post("/objectives")
@@ -716,11 +723,12 @@ async def create_objective(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         db.rollback()
+        logger.exception("Admin API: unable to create objective")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to create objective: {str(e)}"
+            detail="Unable to create objective"
         )
 
 # Task Management Endpoints
@@ -759,10 +767,11 @@ async def get_tasks(
         ]
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("Admin API: unable to retrieve tasks")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to retrieve tasks: {str(e)}"
+            detail="Unable to retrieve tasks"
         )
 
 @router.post("/tasks")
@@ -801,11 +810,12 @@ async def create_task(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         db.rollback()
+        logger.exception("Admin API: unable to create task")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to create task: {str(e)}"
+            detail="Unable to create task"
         )
 
 # Squad Management Endpoints
@@ -835,10 +845,11 @@ async def get_squads(
         ]
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("Admin API: unable to retrieve squads")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to retrieve squads: {str(e)}"
+            detail="Unable to retrieve squads"
         )
 
 @router.post("/squads")
@@ -872,11 +883,12 @@ async def create_squad(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         db.rollback()
+        logger.exception("Admin API: unable to create squad")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to create squad: {str(e)}"
+            detail="Unable to create squad"
         )
 
 # Access Level Management Endpoints
@@ -906,10 +918,11 @@ async def get_access_levels(
         ]
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("Admin API: unable to retrieve access levels")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to retrieve access levels: {str(e)}"
+            detail="Unable to retrieve access levels"
         )
 
 @router.post("/access-levels")
@@ -942,11 +955,12 @@ async def create_access_level(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         db.rollback()
+        logger.exception("Admin API: unable to create access level")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to create access level: {str(e)}"
+            detail="Unable to create access level"
         )
 
 @router.patch("/access-levels/{access_level_id}")
@@ -1002,11 +1016,12 @@ async def update_access_level(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         db.rollback()
+        logger.exception("Admin API: unable to update access level")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to update access level: {str(e)}"
+            detail="Unable to update access level"
         )
 
 @router.delete("/access-levels/{access_level_id}")
@@ -1041,11 +1056,12 @@ async def delete_access_level(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         db.rollback()
+        logger.exception("Admin API: unable to delete access level")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to delete access level: {str(e)}"
+            detail="Unable to delete access level"
         )
 
 # Objective Category Management Endpoints
@@ -1075,10 +1091,11 @@ async def get_objective_categories(
         ]
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("Admin API: unable to retrieve objective categories")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to retrieve objective categories: {str(e)}"
+            detail="Unable to retrieve objective categories"
         )
 
 @router.post("/objective-categories")
@@ -1112,11 +1129,12 @@ async def create_objective_category(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         db.rollback()
+        logger.exception("Admin API: unable to create objective category")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to create objective category: {str(e)}"
+            detail="Unable to create objective category"
         )
 
 # Guild Management Endpoints
@@ -1195,11 +1213,12 @@ async def create_guild(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         db.rollback()
+        logger.exception("Admin API: unable to create guild")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to create guild: {str(e)}"
+            detail="Unable to create guild"
         )
 
 @router.get("/guilds")
@@ -1243,10 +1262,11 @@ async def get_guilds(
         ]
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("Admin API: unable to retrieve guilds")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to retrieve guilds: {str(e)}"
+            detail="Unable to retrieve guilds"
         )
 
 @router.post("/users/{user_id}/kick")
@@ -1300,11 +1320,12 @@ async def kick_user(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         db.rollback()
+        logger.exception("Admin API: unable to kick user")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to kick user: {str(e)}"
+            detail="Unable to kick user"
         )
 
 @router.delete("/guilds/{guild_id}")
@@ -1410,12 +1431,12 @@ async def delete_guild(
         }
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Error deleting guild {guild_id}: {str(e)}", exc_info=True)
+    except Exception:
+        logger.exception("Admin API: unable to delete guild")
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to delete guild: {str(e)}"
+            detail="Unable to delete guild"
         )
 
 # User Access Management Endpoints
@@ -1479,11 +1500,12 @@ async def assign_user_access(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         db.rollback()
+        logger.exception("Admin API: unable to assign access level to user")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to assign user access: {str(e)}"
+            detail="Unable to assign access level"
         )
 
 @router.get("/user_access/{user_id}")
@@ -1525,10 +1547,11 @@ async def get_user_access_levels(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("Admin API: unable to retrieve user access levels")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to retrieve user access levels: {str(e)}"
+            detail="Unable to retrieve user access levels"
         )
 
 @router.delete("/user_access/{user_id}/{access_id}")
@@ -1579,11 +1602,12 @@ async def remove_user_access(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         db.rollback()
+        logger.exception("Admin API: unable to remove access level from user")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to remove user access: {str(e)}"
+            detail="Unable to remove access level"
         )
 
 # Guild Request Management Endpoints
@@ -1629,10 +1653,11 @@ async def get_guild_requests(
         return requests_data
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("Admin API: unable to retrieve guild requests")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to retrieve guild requests: {str(e)}"
+            detail="Unable to retrieve guild requests"
         )
 
 @router.patch("/guild_requests/{request_id}")
@@ -1695,11 +1720,12 @@ async def update_guild_request(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         db.rollback()
+        logger.exception("Admin API: unable to update guild request")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to update guild request: {str(e)}"
+            detail="Unable to update guild request"
         )
 
 # Invite Management Endpoints
@@ -1738,10 +1764,11 @@ async def get_invites(
         ]
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("Admin API: unable to retrieve invites")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to retrieve invites: {str(e)}"
+            detail="Unable to retrieve invites"
         )
 
 @router.delete("/invites/{invite_code}")
@@ -1776,9 +1803,10 @@ async def delete_invite(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         db.rollback()
+        logger.exception("Admin API: unable to delete invite")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unable to delete invite: {str(e)}"
+            detail="Unable to delete invite"
         )
