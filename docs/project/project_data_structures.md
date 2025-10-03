@@ -35,24 +35,32 @@ This file provides the **detailed entity definitions and data model** used in Sp
 ---
 
 ## 2. Users
-**Attributes:**
+### Platform Identity (self-managed)
 - `id`: UUID, primary key.
-- `guild_id`: UUID, FK to guilds.
 - `username`: TEXT, unique, required.
 - `email`: TEXT, unique, optional.
 - `name`: Display name.
-- `phonetic`: For voice recognition.
-- `availability`: Online/busy status.
-- `rank`: Assigned rank (e.g., Recruit, NCO).
-- `preferences`: Traits for AI assignment (e.g., mining, combat).
-- `password`: Hashed with bcrypt.
-- `pin`: 6-digit PIN for voice auth.
-- `squad_id`: FK to squads.
-- `current_guild_id`: UUID, switching context.
+- `password`: Bcrypt hash stored after `/api/auth/register` or `/api/users/{id}` self-updates.
+- `pin`: 6-digit voice PIN, managed on the future Profile page.
+- `phonetic`: Optional voice recognition alias.
 - `max_guilds`: INTEGER (default 3 for free tier).
-- `is_system_admin`: BOOLEAN, platform-level flag.
+- `is_system_admin`: BOOLEAN, platform flag.
 
-**See also**: [Registration](./project_flows.md#1-registration), [Login](./project_flows.md#2-login).
+### Guild State (admin-managed)
+- `guild_id`: UUID, the member’s origin guild (personal guild on registration).
+- `current_guild_id`: UUID, active guild context for UI/API scoping.
+- `rank`: UUID FK to `ranks.id`. Managed via `/api/admin/users/{id}` PATCH.
+- `squad_id`: UUID FK to `squads.id`. Optional assignment.
+- `availability`: Status indicator (online, standby, etc.).
+- `preferences`: Junction via `user_preferences` linking to the global `preferences` catalog (read-only to admins).
+- `access_levels`: Managed indirectly through `user_access` table or the guild-state PATCH endpoint.
+
+### Preferences Catalog
+- `preferences`: Global lookup table seeded with `combat`, `exploration`, `logistics`, `trade`, and `industry`.
+- `user_preferences`: Junction table (`user_id`, `preference_id`) representing each member’s chosen interests/skills.
+- Users update their preferences at `/api/users/{id}/preferences` (GET/PUT). Admins can filter listings with `preference_ids` but cannot mutate selections.
+
+**See also**: [Registration](./project_flows.md#1-registration), [Login](./project_flows.md#2-login), [User Management](./project_flows.md#7-user-management).
 
 ---
 
@@ -138,7 +146,7 @@ Note: Guild owners automatically receive the super_admin access level. This leve
 - `guild_id`: FK to guilds.
 - `name`: Mission name.
 - `description`: JSONB (brief, tactical, classified, metrics).
-- `preferences`: Traits linked to users.
+- `preferences`: (Legacy TEXT[]). When aligning with the global catalog, reference preference IDs for compatibility with user filtering.
 - `priority`: Urgency level.
 - `progress`: JSONB.
 - `tasks`: Array of task UUIDs.
