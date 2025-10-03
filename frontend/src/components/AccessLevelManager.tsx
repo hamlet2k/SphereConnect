@@ -37,10 +37,11 @@ function AccessLevelManager() {
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingLevel, setEditingLevel] = useState<AccessLevel | null>(null);
-  const [formData, setFormData] = useState({
+  const createInitialFormData = () => ({
     name: '',
     user_actions: [] as string[]
   });
+  const [formData, setFormData] = useState(createInitialFormData);
   const { message, showMessage, clearMessage } = useAdminMessage();
   const { confirmConfig, requestConfirmation, confirm: confirmModalConfirm, cancel: confirmModalCancel } = useConfirmModal();
 
@@ -98,7 +99,7 @@ function AccessLevelManager() {
 
       setEditingLevel(null);
 
-      setFormData({ name: '', user_actions: [] });
+      setFormData(createInitialFormData());
 
       loadAccessLevels();
 
@@ -175,7 +176,7 @@ function AccessLevelManager() {
       showMessage('error', 'Error deleting access level');
     }
   };
-  if (!hasToken) {
+    setFormData(createInitialFormData());
     return <div>Access denied. Please login first.</div>;
   }
 

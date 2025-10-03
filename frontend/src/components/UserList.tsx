@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import ConfirmModal from './ConfirmModal';
+import AdminMessage from './AdminMessage';
+import { useAdminMessage } from '../hooks/useAdminMessage';
 import { useConfirmModal } from '../hooks/useConfirmModal';
 import api from '../api';
 import { parseApiError } from '../utils/errorUtils';
@@ -29,9 +31,9 @@ const UserList: React.FC<UserListProps> = ({
 }) => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [editingUser, setEditingUser] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<User>>({});
+  const { message, showMessage, clearMessage } = useAdminMessage();
   const {
     confirmConfig,
     requestConfirmation,
@@ -52,14 +54,19 @@ const UserList: React.FC<UserListProps> = ({
     }
 
     setLoading(true);
-    setError('');
+    clearMessage();
 
     try {
-      const response = await api.get(`/admin/users?guild_id=${guildId}`);
+      const response = await api.get<User[]>(`/admin/users?guild_id=${guildId}`);
       setUsers(response.data);
     } catch (err: any) {
-      const { detail } = parseApiError(err);
-      setError(detail || err.message || 'Failed to load users');
+      const { status, detail } = parseApiError(err);
+      if (status === 403) {
+        showMessage('error', 'Insufficient permissions to manage users. You need manage_users permission.');
+        setUsers([]);
+        return;
+      }
+      showMessage('error', detail || err.message || 'Failed to load users');
     } finally {
       setLoading(false);
     }
@@ -83,13 +90,14 @@ const UserList: React.FC<UserListProps> = ({
       if (onUserUpdate) {
         onUserUpdate(userId, editForm);
       }
+      showMessage('success', 'User updated successfully');
     } catch (err: any) {
-      const { detail } = parseApiError(err);
-      if (detail) {
-        setError(detail);
+      const { status, detail } = parseApiError(err);
+      if (status === 403) {
+        showMessage('error', 'Insufficient permissions to manage users. You need manage_users permission.');
         return;
       }
-      setError(err.message || 'Failed to update user');
+      showMessage('error', detail || err.message || 'Failed to update user');
     }
   };
 
@@ -110,15 +118,21 @@ const UserList: React.FC<UserListProps> = ({
       if (onUserDelete) {
         onUserDelete(userId);
       }
+      showMessage('success', 'User deleted successfully');
     } catch (err: any) {
-      const { detail } = parseApiError(err);
-      setError(detail || err.message || 'Failed to delete user');
+      const { status, detail } = parseApiError(err);
+      if (status === 403) {
+        showMessage('error', 'Insufficient permissions to manage users. You need manage_users permission.');
+        return;
+      }
+      showMessage('error', detail || err.message || 'Failed to delete user');
     }
   };
 
   const handleCancel = () => {
     setEditingUser(null);
     setEditForm({});
+    clearMessage();
   };
 
   if (!hasToken) {
@@ -170,18 +184,12 @@ const UserList: React.FC<UserListProps> = ({
         </button>
       </div>
 
-      {error && (
-        <div
-          style={{
-            padding: '12px',
-            backgroundColor: '#fed7d7',
-            color: '#c53030',
-            borderRadius: '4px',
-            marginBottom: '16px'
-          }}
-        >
-          {error}
-        </div>
+      {message && (
+        <AdminMessage
+          type={message.type}
+          message={message.text}
+          onClose={clearMessage}
+        />
       )}
 
       <div style={{ overflowX: 'auto' }}>
