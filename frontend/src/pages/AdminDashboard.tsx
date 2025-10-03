@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGuild } from '../contexts/GuildContext';
 import { useAdminMessage } from '../hooks/useAdminMessage';
@@ -19,6 +19,8 @@ import CategoriesList from '../components/CategoriesList';
 import CategoryForm from '../components/CategoryForm';
 import AdminMessage from '../components/AdminMessage';
 import { ObjectivesAPIProvider, useObjectivesAPI, Objective } from '../contexts/ObjectivesAPI';
+import api from '../api';
+import { parseApiError } from '../utils/errorUtils';
 
 type ActiveTab = 'users' | 'ranks' | 'objectives' | 'tasks' | 'squads' | 'access-levels' | 'categories' | 'guilds' | 'invites' | 'guild-requests';
 
@@ -92,11 +94,59 @@ function AdminDashboardContent() {
 
   // Category states (removed modal, now inline)
 
-  const token = localStorage.getItem('token');
+  const hasToken = useMemo(() => Boolean(localStorage.getItem('token')), []);
   const user = JSON.parse(localStorage.getItem('user') || '{}');
 
+  const loadData = useCallback(async () => {
+    if (!hasToken) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      switch (activeTab) {
+        case 'users': {
+          const response = await api.get<User[]>(`/admin/users?guild_id=${currentGuildId}`);
+          setUsers(response.data);
+          break;
+        }
+        case 'ranks': {
+          const response = await api.get<Rank[]>(`/admin/ranks?guild_id=${currentGuildId}`);
+          setRanks(response.data);
+          break;
+        }
+        case 'objectives': {
+          const response = await api.get<Objective[]>(`/admin/objectives?guild_id=${currentGuildId}`);
+          setObjectives(response.data);
+          break;
+        }
+        case 'categories':
+          // Categories are loaded by the CategoriesList component itself
+          break;
+        case 'tasks': {
+          const response = await api.get<Task[]>(`/admin/tasks?guild_id=${currentGuildId}`);
+          setTasks(response.data);
+          break;
+        }
+        case 'guilds': {
+          if (guilds.length > 0) {
+            break;
+          }
+          const response = await api.get<Guild[]>(`/users/${user.id}/guilds`);
+          setGuilds(response.data);
+          break;
+        }
+      }
+    } catch (error) {
+      const { detail } = parseApiError(error);
+      showMessage('error', detail || 'Error loading data');
+    } finally {
+      setLoading(false);
+    }
+  }, [activeTab, currentGuildId, guilds.length, hasToken, showMessage, user.id]);
+
   useEffect(() => {
-    if (!token) {
+    if (!hasToken) {
       navigate('/login');
       return;
     }
@@ -107,81 +157,20 @@ function AdminDashboardContent() {
     // Load guilds for switcher
     const loadGuilds = async () => {
       try {
-        const headers = { 'Authorization': `Bearer ${token}` };
-        const guildsResponse = await fetch(`http://localhost:8000/api/users/${user.id}/guilds`, { headers });
-        if (guildsResponse.ok) {
-          const guildsData = await guildsResponse.json();
-          setGuilds(guildsData);
-        }
+        const response = await api.get<Guild[]>(`/users/${user.id}/guilds`);
+        setGuilds(response.data);
       } catch (error) {
         console.error('Error loading guilds:', error);
       }
     };
 
     loadGuilds();
-  }, [activeTab, token, navigate]);
+  }, [activeTab, hasToken, navigate, loadData, user.id]);
 
   // Clear message when switching tabs or guilds
   useEffect(() => {
     clearMessage();
   }, [activeTab, currentGuildId]);
-
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const headers = { 'Authorization': `Bearer ${token}` };
-
-      switch (activeTab) {
-        case 'users':
-          // Load users for the guild
-          const usersResponse = await fetch(`http://localhost:8000/api/admin/users?guild_id=${currentGuildId}`, { headers });
-          if (usersResponse.ok) {
-            const usersData = await usersResponse.json();
-            setUsers(usersData);
-          }
-          break;
-        case 'ranks':
-          const ranksResponse = await fetch(`http://localhost:8000/api/admin/ranks?guild_id=${currentGuildId}`, { headers });
-          if (ranksResponse.ok) {
-            const ranksData = await ranksResponse.json();
-            setRanks(ranksData);
-          }
-          break;
-        case 'objectives':
-          const objectivesResponse = await fetch(`http://localhost:8000/api/admin/objectives?guild_id=${currentGuildId}`, { headers });
-          if (objectivesResponse.ok) {
-            const objectivesData = await objectivesResponse.json();
-            setObjectives(objectivesData);
-          }
-          break;
-        case 'categories':
-          // Categories are loaded by the CategoriesList component itself
-          break;
-        case 'tasks':
-          const tasksResponse = await fetch(`http://localhost:8000/api/admin/tasks?guild_id=${currentGuildId}`, { headers });
-          if (tasksResponse.ok) {
-            const tasksData = await tasksResponse.json();
-            setTasks(tasksData);
-          }
-          break;
-        case 'guilds':
-          // Skip redundant API call if guilds are already loaded from the dropdown
-          if (guilds.length > 0) {
-            break;
-          }
-          const guildsResponse = await fetch(`http://localhost:8000/api/users/${user.id}/guilds`, { headers });
-          if (guildsResponse.ok) {
-            const guildsData = await guildsResponse.json();
-            setGuilds(guildsData);
-          }
-          break;
-      }
-    } catch (error) {
-      showMessage('error', 'Error loading data');
-    } finally {
-      setLoading(false);
-    }
-  }, [activeTab, token, currentGuildId]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -192,36 +181,27 @@ function AdminDashboardContent() {
 
   // Guild operation handlers
   const handleGuildSwitch = async (guildId: string) => {
+    if (!hasToken) {
+      return;
+    }
     try {
-      const response = await fetch(`http://localhost:8000/api/users/${user.id}/switch-guild`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ guild_id: guildId })
-      });
+      const response = await api.patch(`/users/${user.id}/switch-guild`, { guild_id: guildId });
+      const result = response.data as { message?: string };
 
-      if (response.ok) {
-        const result = await response.json();
-        // Fetch new guild details
-        const guildResponse = await fetch(`http://localhost:8000/api/guilds/${guildId}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (guildResponse.ok) {
-          const guildData = await guildResponse.json();
-          setCurrentGuild(guildId, guildData.name);
-        }
-        // Reload data for new guild
-        loadData();
-        showMessage('success', 'Successfully switched guild');
-      } else if (response.status === 402) {
-        showMessage('error', 'Guild limit reached. Upgrade to add more guilds.');
-      } else {
-        showMessage('error', 'Failed to switch guild');
-      }
+      const guildResponse = await api.get(`/guilds/${guildId}`);
+      const guildData = guildResponse.data as { name: string };
+      setCurrentGuild(guildId, guildData.name);
+
+      loadData();
+      showMessage('success', result?.message || 'Successfully switched guild');
     } catch (error) {
-      showMessage('error', 'Error switching guild');
+      const { status, detail } = parseApiError(error);
+      if (status === 402) {
+        showMessage('error', 'Guild limit reached. Upgrade to add more guilds.');
+        return;
+      }
+
+      showMessage('error', detail || 'Failed to switch guild');
     }
   };
 
@@ -234,31 +214,23 @@ function AdminDashboardContent() {
   };
 
   const handleInviteSubmit = async (guildId: string, inviteData: any) => {
+    if (!hasToken) {
+      setInviteLoading(false);
+      throw new Error('Not authenticated');
+    }
     setInviteLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8000/api/invites', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(inviteData)
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        // Reload guilds to update member counts
-        loadData();
-        return result;
-      } else if (response.status === 402) {
-        throw new Error('Member limit reached');
-      } else {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to create invite');
-      }
+      const response = await api.post('/invites', inviteData);
+      const result = response.data;
+      loadData();
+      return result;
     } catch (error) {
-      throw error;
+      const { status, detail } = parseApiError(error);
+      if (status === 402) {
+        throw new Error('Member limit reached');
+      }
+      throw new Error(detail || 'Failed to create invite');
     } finally {
       setInviteLoading(false);
     }
@@ -269,6 +241,10 @@ function AdminDashboardContent() {
   };
 
   const handleJoinSubmit = async (inviteCode: string) => {
+    if (!hasToken) {
+      setJoinLoading(false);
+      throw new Error('Not authenticated');
+    }
     setJoinLoading(true);
 
     try {
@@ -278,71 +254,48 @@ function AdminDashboardContent() {
       const requestBody = JSON.stringify({ invite_code: inviteCode });
       console.log("AdminDashboard: Request body:", requestBody);
 
-      const response = await fetch(`http://localhost:8000/api/users/${user.id}/join`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: requestBody
-      });
+      const response = await api.post(`/users/${user.id}/join`, { invite_code: inviteCode });
 
       console.log("AdminDashboard: Response status:", response.status);
-      console.log("AdminDashboard: Response headers:", Object.fromEntries(response.headers.entries()));
+      console.log("AdminDashboard: Response headers:", response.headers);
 
-      if (response.ok) {
-        const result = await response.json();
-        console.log("AdminDashboard: Join successful, result:", result);
-        // Reload guilds and switch to new guild
-        loadData();
-        if (result.current_guild_id) {
-          setCurrentGuild(result.current_guild_id, result.guild_name);
-        }
-        return result;
-      } else if (response.status === 402) {
-        const error = await response.json();
-        console.log("AdminDashboard: 402 error:", error);
-        throw new Error(error.detail || 'Member limit reached');
-      } else if (response.status === 422) {
-        console.log("AdminDashboard: 422 error - invalid invite code");
-        throw new Error('Invalid invite code');
-      } else {
-        const error = await response.json();
-        console.log("AdminDashboard: Other error:", error);
-        throw new Error(error.detail || 'Failed to join guild');
+      const result = response.data;
+      console.log("AdminDashboard: Join successful, result:", result);
+      loadData();
+      if (result.current_guild_id) {
+        setCurrentGuild(result.current_guild_id, result.guild_name);
       }
+      return result;
     } catch (error) {
       console.log("AdminDashboard: Exception caught:", error);
-      throw error;
+      const { status, detail } = parseApiError(error);
+      if (status === 402) {
+        throw new Error(detail || 'Member limit reached');
+      }
+      if (status === 422) {
+        throw new Error('Invalid invite code');
+      }
+      throw new Error(detail || 'Failed to join guild');
     } finally {
       setJoinLoading(false);
     }
   };
 
   const handleLeave = async (guildId: string) => {
+    if (!hasToken) {
+      return;
+    }
     try {
-      const response = await fetch(`http://localhost:8000/api/users/${user.id}/leave`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ guild_id: guildId })
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        showMessage('success', 'Successfully left guild and switched to personal guild');
-        // Reload guilds and switch to personal guild
-        loadData();
-        if (result.current_guild_id) {
-          setCurrentGuild(result.current_guild_id, result.guild_name);
-        }
-      } else {
-        showMessage('error', 'Failed to leave guild');
+      const response = await api.post(`/users/${user.id}/leave`, { guild_id: guildId });
+      const result = response.data as { current_guild_id?: string; guild_name: string };
+      showMessage('success', 'Successfully left guild and switched to personal guild');
+      loadData();
+      if (result.current_guild_id) {
+        setCurrentGuild(result.current_guild_id, result.guild_name);
       }
     } catch (error) {
-      showMessage('error', 'Error leaving guild');
+      const { detail } = parseApiError(error);
+      showMessage('error', detail || 'Failed to leave guild');
     }
   };
 
@@ -353,49 +306,39 @@ function AdminDashboardContent() {
   };
 
   const handleDelete = async (guildId: string) => {
+    if (!hasToken) {
+      return;
+    }
     try {
-      const response = await fetch(`http://localhost:8000/api/admin/guilds/${guildId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        showMessage('success', 'Guild deleted successfully');
-        // Force reload guilds to remove the deleted guild
-        try {
-          const headers = { 'Authorization': `Bearer ${token}` };
-          const guildsResponse = await fetch(`http://localhost:8000/api/users/${user.id}/guilds`, { headers });
-          if (guildsResponse.ok) {
-            const guildsData = await guildsResponse.json();
-            setGuilds(guildsData);
-          }
-        } catch (error) {
-          console.error('Error reloading guilds:', error);
-        }
-      } else if (response.status === 403) {
-        showMessage('error', 'Cannot delete personal guilds or guilds you do not own');
-      } else {
-        showMessage('error', 'Failed to delete guild');
+      await api.delete(`/admin/guilds/${guildId}`);
+      showMessage('success', 'Guild deleted successfully');
+      try {
+        const guildsResponse = await api.get<Guild[]>(`/users/${user.id}/guilds`);
+        setGuilds(guildsResponse.data);
+      } catch (error) {
+        console.error('Error reloading guilds:', error);
       }
     } catch (error) {
-      showMessage('error', 'Error deleting guild');
+      const { status, detail } = parseApiError(error);
+      if (status === 403) {
+        showMessage('error', 'Cannot delete personal guilds or guilds you do not own');
+        return;
+      }
+      showMessage('error', detail || 'Failed to delete guild');
     }
   };
 
   const handleGuildCreateSuccess = async (guild: any) => {
+    if (!hasToken) {
+      return;
+    }
     if (guild) {
       showMessage('success', 'Guild created successfully');
     }
     // Force reload guilds to show the new guild
     try {
-      const headers = { 'Authorization': `Bearer ${token}` };
-      const guildsResponse = await fetch(`http://localhost:8000/api/users/${user.id}/guilds`, { headers });
-      if (guildsResponse.ok) {
-        const guildsData = await guildsResponse.json();
-        setGuilds(guildsData);
-      }
+      const response = await api.get<Guild[]>(`/users/${user.id}/guilds`);
+      setGuilds(response.data);
     } catch (error) {
       console.error('Error reloading guilds:', error);
     }
@@ -553,7 +496,7 @@ function AdminDashboardContent() {
     }
   };
 
-  if (!token) {
+  if (!hasToken) {
     return <div>Access denied. Please login first.</div>;
   }
 

@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useGuild } from '../contexts/GuildContext';
 import { adminPageStyles } from './AdminPageStyles';
 import AdminMessage from './AdminMessage';
 import { useAdminMessage } from '../hooks/useAdminMessage';
+import api from '../api';
+import { parseApiError } from '../utils/errorUtils';
 
 interface GuildRequest {
   id: string;
@@ -19,86 +21,53 @@ function GuildRequestApproval() {
   const [loading, setLoading] = useState(false);
   const { message, showMessage, clearMessage } = useAdminMessage();
   const { currentGuildId } = useGuild();
-  const token = localStorage.getItem('token');
+  const hasToken = useMemo(() => Boolean(localStorage.getItem('token')), []);
 
   useEffect(() => {
-    if (currentGuildId) {
+    if (currentGuildId && hasToken) {
       loadRequests();
     }
-  }, [currentGuildId]);
+  }, [currentGuildId, hasToken]);
 
   const loadRequests = async () => {
-    if (!token || !currentGuildId) return;
+    if (!hasToken || !currentGuildId) return;
 
     setLoading(true);
     clearMessage();
     try {
-      const response = await fetch(`http://localhost:8000/api/admin/guild_requests?guild_id=${currentGuildId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setRequests(data);
-      } else {
-        showMessage('error', 'Failed to load guild requests');
-      }
+      const response = await api.get(`/admin/guild_requests?guild_id=${currentGuildId}`);
+      setRequests(response.data);
     } catch (error) {
-      showMessage('error', 'Error loading guild requests');
+      const { detail } = parseApiError(error);
+      showMessage('error', detail || 'Error loading guild requests');
     } finally {
       setLoading(false);
     }
   };
 
   const handleApprove = async (requestId: string) => {
-    if (!token) return;
+    if (!hasToken) return;
 
     try {
-      const response = await fetch(`http://localhost:8000/api/admin/guild_requests/${requestId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ status: 'approved' })
-      });
-
-      if (response.ok) {
-        showMessage('success', 'Request approved successfully');
-        loadRequests(); // Refresh the list
-      } else {
-        const error = await response.json();
-        showMessage('error', error.detail || 'Failed to approve request');
-      }
+      await api.patch(`/admin/guild_requests/${requestId}`, { status: 'approved' });
+      showMessage('success', 'Request approved successfully');
+      loadRequests();
     } catch (error) {
-      showMessage('error', 'Error approving request');
+      const { detail } = parseApiError(error);
+      showMessage('error', detail || 'Error approving request');
     }
   };
 
   const handleReject = async (requestId: string) => {
-    if (!token) return;
+    if (!hasToken) return;
 
     try {
-      const response = await fetch(`http://localhost:8000/api/admin/guild_requests/${requestId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ status: 'denied' })
-      });
-
-      if (response.ok) {
-        showMessage('success', 'Request rejected successfully');
-        loadRequests(); // Refresh the list
-      } else {
-        const error = await response.json();
-        showMessage('error', error.detail || 'Failed to reject request');
-      }
+      await api.patch(`/admin/guild_requests/${requestId}`, { status: 'denied' });
+      showMessage('success', 'Request rejected successfully');
+      loadRequests();
     } catch (error) {
-      showMessage('error', 'Error rejecting request');
+      const { detail } = parseApiError(error);
+      showMessage('error', detail || 'Error rejecting request');
     }
   };
 
@@ -110,6 +79,10 @@ function GuildRequestApproval() {
       default: return '#6b7280'; // gray
     }
   };
+
+  if (!hasToken) {
+    return <div>Access denied. Please login first.</div>;
+  }
 
   return (
     <div style={adminPageStyles.container as any}>

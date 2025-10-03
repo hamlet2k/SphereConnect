@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useGuild } from '../contexts/GuildContext';
 import { theme } from '../theme';
 import { adminPageStyles } from './AdminPageStyles';
@@ -6,6 +6,8 @@ import AdminMessage from './AdminMessage';
 import ConfirmModal from './ConfirmModal';
 import { useAdminMessage } from '../hooks/useAdminMessage';
 import { useConfirmModal } from '../hooks/useConfirmModal';
+import api from '../api';
+import { parseApiError } from '../utils/errorUtils';
 
 interface Category {
   id: string;
@@ -41,9 +43,10 @@ function CategoriesList() {
     name: '',
     description: ''
   });
+  const hasToken = useMemo(() => Boolean(localStorage.getItem('token')), []);
 
   const loadCategories = useCallback(async (options?: { preserveMessage?: boolean }) => {
-    if (!currentGuildId) return;
+    if (!currentGuildId || !hasToken) return;
 
     setLoading(true);
     if (!options?.preserveMessage) {
@@ -51,27 +54,19 @@ function CategoriesList() {
     }
 
     try {
-      const token = localStorage.getItem('token');
       const params = new URLSearchParams({ guild_id: currentGuildId });
       if (nameFilter) params.append('name', nameFilter);
       if (descriptionFilter) params.append('description', descriptionFilter);
 
-      const response = await fetch(`http://localhost:8000/api/categories?${params}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setCategories(data);
-      } else {
-        showListMessage('error', 'Failed to load categories');
-      }
+      const response = await api.get(`/categories?${params.toString()}`);
+      setCategories(response.data);
     } catch (err: any) {
-      showListMessage('error', err.message);
+      const { detail } = parseApiError(err);
+      showListMessage('error', detail || err.message || 'Failed to load categories');
     } finally {
       setLoading(false);
     }
-  }, [clearListMessage, currentGuildId, descriptionFilter, nameFilter, showListMessage]);
+  }, [clearListMessage, currentGuildId, descriptionFilter, hasToken, nameFilter, showListMessage]);
 
   useEffect(() => {
     loadCategories();
@@ -80,72 +75,38 @@ function CategoriesList() {
   const submitCategory = async () => {
 
     try {
-
-      const token = localStorage.getItem('token');
-
-      const url = editingCategory
-
-        ? `http://localhost:8000/api/categories/${editingCategory.id}`
-
-        : 'http://localhost:8000/api/categories';
-
-
-
-      const method = editingCategory ? 'PUT' : 'POST';
-
-      const body = JSON.stringify({
-
-        ...formData,
-
-        guild_id: currentGuildId
-
-      });
-
-
-
-      const response = await fetch(url, {
-
-        method,
-
-        headers: {
-
-          'Content-Type': 'application/json',
-
-          'Authorization': `Bearer ${token}`
-
-        },
-
-        body
-
-      });
-
-
-
-      if (response.ok) {
-
-        showListMessage('success', `Category ${editingCategory ? 'updated' : 'created'} successfully`);
-
-        clearFormMessage();
-
-        setShowForm(false);
-
-        setEditingCategory(null);
-
-        resetForm();
-
-        loadCategories({ preserveMessage: true });
-
-      } else {
-
-        const error = await response.json();
-
-        showListMessage('error', error.detail || 'Failed to save category');
-
+      if (!currentGuildId || !hasToken) {
+        throw new Error('Access denied. Please login first.');
       }
+
+      const payload = {
+        ...formData,
+        guild_id: currentGuildId
+      };
+
+      if (editingCategory) {
+        await api.put(`/categories/${editingCategory.id}`, payload);
+      } else {
+        await api.post('/categories', payload);
+      }
+
+      showListMessage('success', `Category ${editingCategory ? 'updated' : 'created'} successfully`);
+
+      clearFormMessage();
+
+      setShowForm(false);
+
+      setEditingCategory(null);
+
+      resetForm();
+
+      loadCategories({ preserveMessage: true });
 
     } catch (error: any) {
 
-      showListMessage('error', error.message || 'Error saving category');
+      const { detail } = parseApiError(error);
+
+      showListMessage('error', detail || error.message || 'Error saving category');
 
     }
 
@@ -197,36 +158,17 @@ function CategoriesList() {
   const deleteCategory = async (categoryId: string) => {
 
     try {
+      await api.delete(`/categories/${categoryId}`);
 
-      const token = localStorage.getItem('token');
+      showListMessage('success', 'Category deleted successfully');
 
-      const response = await fetch(`http://localhost:8000/api/categories/${categoryId}`, {
-
-        method: 'DELETE',
-
-        headers: { 'Authorization': `Bearer ${token}` }
-
-      });
-
-
-
-      if (response.ok) {
-
-        showListMessage('success', 'Category deleted successfully');
-
-        loadCategories({ preserveMessage: true });
-
-      } else {
-
-        const error = await response.json();
-
-        showListMessage('error', error.detail || 'Failed to delete category');
-
-      }
+      loadCategories({ preserveMessage: true });
 
     } catch (error: any) {
 
-      showListMessage('error', error.message || 'Error deleting category');
+      const { detail } = parseApiError(error);
+
+      showListMessage('error', detail || error.message || 'Error deleting category');
 
     }
 
@@ -261,6 +203,10 @@ function CategoriesList() {
     });
     clearFormMessage();
   };
+
+  if (!hasToken) {
+    return <div>Access denied. Please login first.</div>;
+  }
 
   return (
     <div style={adminPageStyles.container}>
