@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useObjectivesAPI, Objective } from '../contexts/ObjectivesAPI';
 import { useGuild } from '../contexts/GuildContext';
 import { theme } from '../theme';
+import api from '../api';
 
 interface Task {
   id: string;
@@ -34,6 +35,7 @@ const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
   const [error, setError] = useState('');
   const [categoryLookup, setCategoryLookup] = useState<{ [id: string]: string }>({});
   const [rankLookup, setRankLookup] = useState<{ [id: string]: string }>({});
+  const hasToken = useMemo(() => Boolean(localStorage.getItem('token')), []);
 
   useEffect(() => {
     loadObjective();
@@ -63,19 +65,16 @@ const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
       }
 
       try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`http://localhost:8000/api/categories?guild_id=${guildId}`, {
-          headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
-        });
-
-        if (response?.ok) {
-          const data = await response.json();
-          const lookup: { [id: string]: string } = {};
-          data.forEach((category: { id: string; name: string }) => {
-            lookup[category.id] = category.name;
-          });
-          setCategoryLookup(lookup);
+        if (!hasToken) {
+          return;
         }
+        const response = await api.get(`/categories?guild_id=${guildId}`);
+        const data = response.data as { id: string; name: string }[];
+        const lookup: { [id: string]: string } = {};
+        data.forEach((category) => {
+          lookup[category.id] = category.name;
+        });
+        setCategoryLookup(lookup);
       } catch (categoryError) {
         console.error('Error loading categories:', categoryError);
       }
@@ -88,19 +87,16 @@ const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
       }
 
       try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`http://localhost:8000/api/admin/ranks?guild_id=${guildId}`, {
-          headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
-        });
-
-        if (response?.ok) {
-          const data = await response.json();
-          const lookup: { [id: string]: string } = {};
-          data.forEach((rank: { id: string; name: string }) => {
-            lookup[rank.id] = rank.name;
-          });
-          setRankLookup(lookup);
+        if (!hasToken) {
+          return;
         }
+        const response = await api.get(`/admin/ranks?guild_id=${guildId}`);
+        const data = response.data as { id: string; name: string }[];
+        const lookup: { [id: string]: string } = {};
+        data.forEach((rank) => {
+          lookup[rank.id] = rank.name;
+        });
+        setRankLookup(lookup);
       } catch (rankError) {
         console.error('Error loading ranks:', rankError);
       }
@@ -162,6 +158,10 @@ const ObjectiveDetail: React.FC<ObjectiveDetailProps> = ({
       </div>
     );
   };
+
+  if (!hasToken) {
+    return <div>Access denied. Please login first.</div>;
+  }
 
   if (loading) {
     return (

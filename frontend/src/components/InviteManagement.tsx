@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useGuild } from '../contexts/GuildContext';
 import { theme } from '../theme';
 import { adminPageStyles } from './AdminPageStyles';
 import AdminMessage from './AdminMessage';
 import { useAdminMessage } from '../hooks/useAdminMessage';
 import InviteForm from './InviteForm';
+import api from '../api';
+import { parseApiError } from '../utils/errorUtils';
 
 interface Invite {
   id: string;
@@ -21,29 +23,26 @@ function InviteManagement() {
   const { message, showMessage, clearMessage } = useAdminMessage();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const { currentGuildId } = useGuild();
-  const token = localStorage.getItem('token');
+  const hasToken = useMemo(() => Boolean(localStorage.getItem('token')), []);
 
   useEffect(() => {
-    if (currentGuildId) {
+    if (currentGuildId && hasToken) {
       loadInvites();
     }
-  }, [currentGuildId]);
+  }, [currentGuildId, hasToken]);
 
   const loadInvites = async () => {
+    if (!currentGuildId || !hasToken) {
+      return;
+    }
     setLoading(true);
     clearMessage();
     try {
-      const headers = { 'Authorization': `Bearer ${token}` };
-      const response = await fetch(`http://localhost:8000/api/admin/invites?guild_id=${currentGuildId}`, { headers });
-
-      if (response.ok) {
-        const invitesData = await response.json();
-        setInvites(invitesData);
-      } else {
-        showMessage('error', 'Failed to load invites');
-      }
+      const response = await api.get<Invite[]>(`/admin/invites?guild_id=${currentGuildId}`);
+      setInvites(response.data);
     } catch (error) {
-      showMessage('error', 'Error loading invites');
+      const { detail } = parseApiError(error);
+      showMessage('error', detail || 'Failed to load invites');
     } finally {
       setLoading(false);
     }
@@ -56,21 +55,16 @@ function InviteManagement() {
   };
 
   const handleDeleteInvite = async (inviteCode: string) => {
+    if (!hasToken) {
+      return;
+    }
     try {
-      const headers = { 'Authorization': `Bearer ${token}` };
-      const response = await fetch(`http://localhost:8000/api/admin/invites/${inviteCode}`, {
-        method: 'DELETE',
-        headers
-      });
-
-      if (response.ok) {
-        setInvites(invites.filter(invite => invite.code !== inviteCode));
-        showMessage('success', 'Invite deleted successfully');
-      } else {
-        showMessage('error', 'Failed to delete invite');
-      }
+      await api.delete(`/admin/invites/${inviteCode}`);
+      setInvites(invites.filter(invite => invite.code !== inviteCode));
+      showMessage('success', 'Invite deleted successfully');
     } catch (error) {
-      showMessage('error', 'Error deleting invite');
+      const { detail } = parseApiError(error);
+      showMessage('error', detail || 'Failed to delete invite');
     }
   };
 
@@ -87,6 +81,10 @@ function InviteManagement() {
       showMessage('error', 'Failed to copy to clipboard');
     }
   };
+
+  if (!hasToken) {
+    return <div>Access denied. Please login first.</div>;
+  }
 
   return (
     <div style={adminPageStyles.container}>
@@ -116,26 +114,17 @@ function InviteManagement() {
             guildName="Current Guild"
             isOpen={showCreateForm}
             onInvite={async (guildId: string, inviteData: any) => {
-              const headers = {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-              };
-
-              const response = await fetch('http://localhost:8000/api/invites', {
-                method: 'POST',
-                headers,
-                body: JSON.stringify(inviteData)
-              });
-
-              if (response.ok) {
-                const result = await response.json();
+              try {
+                const response = await api.post('/invites', inviteData);
+                const result = response.data;
                 handleInviteSuccess(result);
                 return result;
-              } else if (response.status === 402) {
-                throw new Error('Member limit reached. Upgrade to create more invites.');
-              } else {
-                const error = await response.json();
-                throw new Error(error.detail || 'Failed to create invite');
+              } catch (error) {
+                const { status, detail } = parseApiError(error);
+                if (status === 402) {
+                  throw new Error('Member limit reached. Upgrade to create more invites.');
+                }
+                throw new Error(detail || 'Failed to create invite');
               }
             }}
             onClose={() => setShowCreateForm(false)}

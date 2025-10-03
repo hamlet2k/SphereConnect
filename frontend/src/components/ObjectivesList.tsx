@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useObjectivesAPI, Objective } from '../contexts/ObjectivesAPI';
 import { useGuild } from '../contexts/GuildContext';
 import { theme } from '../theme';
@@ -8,6 +8,7 @@ import AdminMessage from './AdminMessage';
 import ConfirmModal from './ConfirmModal';
 import { useAdminMessage } from '../hooks/useAdminMessage';
 import { useConfirmModal } from '../hooks/useConfirmModal';
+import api from '../api';
 
 interface ObjectivesListProps {
   onViewObjective: (objective: Objective) => void;
@@ -38,6 +39,7 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
   const [categories, setCategories] = useState<{[id: string]: string}>({});
   const [categoryOptions, setCategoryOptions] = useState<{id: string, name: string}[]>([]);
   const [ranks, setRanks] = useState<{[id: string]: string}>({});
+  const hasToken = useMemo(() => Boolean(localStorage.getItem('token')), []);
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState('');
@@ -53,7 +55,7 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
   } = useAdminMessage();
 
   const loadObjectives = useCallback(async () => {
-    if (!currentGuildId) return;
+    if (!currentGuildId || !hasToken) return;
 
     setLoading(true);
     clearBannerMessage();
@@ -76,54 +78,40 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [currentGuildId, getObjectives, statusFilter, categoryIdFilter]);
+  }, [currentGuildId, getObjectives, statusFilter, categoryIdFilter, hasToken]);
 
   const loadCategories = useCallback(async () => {
-    if (!currentGuildId) return;
+    if (!currentGuildId || !hasToken) return;
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:8000/api/categories?guild_id=${currentGuildId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      const response = await api.get(`/categories?guild_id=${currentGuildId}`);
+      const data = response.data as { id: string; name: string }[];
+      const lookup: {[id: string]: string} = {};
+      data.forEach((cat) => {
+        lookup[cat.id] = cat.name;
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        // Create lookup object for displaying names
-        const lookup: {[id: string]: string} = {};
-        data.forEach((cat: {id: string, name: string}) => {
-          lookup[cat.id] = cat.name;
-        });
-        setCategories(lookup);
-        setCategoryOptions(data);
-      }
+      setCategories(lookup);
+      setCategoryOptions(data);
     } catch (err: any) {
       console.error('Error loading categories:', err);
     }
-  }, [currentGuildId]);
+  }, [currentGuildId, hasToken]);
 
   const loadRanks = useCallback(async () => {
-    if (!currentGuildId) return;
+    if (!currentGuildId || !hasToken) return;
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:8000/api/admin/ranks?guild_id=${currentGuildId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      const response = await api.get(`/admin/ranks?guild_id=${currentGuildId}`);
+      const data = response.data as { id: string; name: string }[];
+      const lookup: {[id: string]: string} = {};
+      data.forEach((rank) => {
+        lookup[rank.id] = rank.name;
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        // Create lookup object for displaying names
-        const lookup: {[id: string]: string} = {};
-        data.forEach((rank: {id: string, name: string}) => {
-          lookup[rank.id] = rank.name;
-        });
-        setRanks(lookup);
-      }
+      setRanks(lookup);
     } catch (err: any) {
       console.error('Error loading ranks:', err);
     }
-  }, [currentGuildId]);
+  }, [currentGuildId, hasToken]);
 
   useEffect(() => {
     loadObjectives();
@@ -208,6 +196,10 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
 
   const resolveRankNames = (ids: string[]) =>
     ids.map(id => ranks[id] || id);
+
+  if (!hasToken) {
+    return <div>Access denied. Please login first.</div>;
+  }
 
   return (
     <div style={{
