@@ -263,10 +263,13 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
       };
 
       console.log('Submitting form data:', submitData);
+      console.log('Objective ID for update:', objective?.id);
 
       if (objective?.id) {
         // Update existing objective
+        console.log('Calling updateObjective with:', objective.id, submitData);
         result = await updateObjective(objective.id, submitData);
+        console.log('Update result:', result);
       } else {
         // Create new objective
         const createData = { ...submitData };

@@ -1527,7 +1527,7 @@ async def get_objective(
 @router.put("/objectives/{objective_id}")
 async def update_objective(
     objective_id: str,
-    update: ObjectiveUpdate,
+    objective_data: dict,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -1541,7 +1541,7 @@ async def update_objective(
             )
 
         # Log the update request for debugging
-        logger.info(f"PUT objective update request for {objective_id}: allowed_ranks={update.allowed_ranks}")
+        logger.info(f"PUT objective update request for {objective_id}: allowed_ranks={objective_data.get('allowed_ranks')}")
 
         obj_uuid = uuid.UUID(objective_id)
         objective = db.query(Objective).filter(
@@ -1559,20 +1559,20 @@ async def update_objective(
                 detail="Access denied: User does not belong to this guild"
             )
 
-        # Update fields
-        if update.description is not None:
-            objective.description = update.description
+        # Update fields from the objective_data dict
+        if 'description' in objective_data:
+            objective.description = objective_data['description']
 
-        if update.progress is not None:
-            objective.progress = update.progress
+        if 'progress' in objective_data:
+            objective.progress = objective_data['progress']
             # Progress tracking: update related tasks
             await update_tasks_on_objective_progress(db, objective)
 
-        if update.categories is not None:
+        if 'categories' in objective_data:
             # Clear existing categories and add new ones
             objective.categories.clear()
             guild_uuid = objective.guild_id
-            for category_id in update.categories:
+            for category_id in objective_data['categories']:
                 try:
                     category_uuid = uuid.UUID(category_id)
                     category = db.query(ObjectiveCategory).filter(
@@ -1590,19 +1590,26 @@ async def update_objective(
                     if category:
                         objective.categories.append(category)
 
-        if update.priority is not None:
-            objective.priority = update.priority
+        if 'priority' in objective_data:
+            objective.priority = objective_data['priority']
 
-        if update.allowed_ranks is not None:
-            logger.info(f"Updating allowed_ranks for objective {objective_id}: {update.allowed_ranks}")
+        if 'allowed_ranks' in objective_data:
+            logger.info(f"Updating allowed_ranks for objective {objective_id}: {objective_data['allowed_ranks']}")
             # Convert string UUIDs to UUID objects for database storage
             try:
-                objective.allowed_ranks = [uuid.UUID(rank_id) for rank_id in update.allowed_ranks]
+                objective.allowed_ranks = [uuid.UUID(rank_id) for rank_id in objective_data['allowed_ranks']]
             except ValueError as e:
                 raise HTTPException(status_code=400, detail=f"Invalid rank ID format: {str(e)}")
 
-        db.commit()
-        db.refresh(objective)
+        try:
+            db.commit()
+            logger.info(f"Database commit successful for objective {objective_id}")
+            db.refresh(objective)
+            logger.info(f"Objective {objective_id} updated successfully. New allowed_ranks: {objective.allowed_ranks}")
+        except Exception as commit_error:
+            logger.error(f"Database commit failed for objective {objective_id}: {str(commit_error)}")
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"Failed to save objective changes: {str(commit_error)}")
 
         # Return the updated objective data
         return {
