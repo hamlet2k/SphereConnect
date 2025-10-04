@@ -19,6 +19,7 @@ import CategoriesList from '../components/CategoriesList';
 import CategoryForm from '../components/CategoryForm';
 import AdminMessage from '../components/AdminMessage';
 import { ObjectivesAPIProvider, useObjectivesAPI, Objective } from '../contexts/ObjectivesAPI';
+import { DEBUG_OVERLAY_ENABLED } from '../hooks/useDebugOverlay';
 
 type ActiveTab = 'users' | 'ranks' | 'objectives' | 'tasks' | 'squads' | 'access-levels' | 'categories' | 'guilds' | 'invites' | 'guild-requests';
 
@@ -94,6 +95,28 @@ function AdminDashboardContent() {
 
   const token = localStorage.getItem('token');
   const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+  useEffect(() => {
+    if (!DEBUG_OVERLAY_ENABLED || typeof window === 'undefined') {
+      return;
+    }
+
+    (window as any).__SPHERECONNECT_ACTIVE_ADMIN_TAB = activeTab;
+    const event = new CustomEvent('sphereconnect-admin-tab-change', { detail: activeTab });
+    window.dispatchEvent(event);
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!DEBUG_OVERLAY_ENABLED || typeof window === 'undefined') {
+      return;
+    }
+
+    return () => {
+      delete (window as any).__SPHERECONNECT_ACTIVE_ADMIN_TAB;
+      const event = new CustomEvent('sphereconnect-admin-tab-change', { detail: null });
+      window.dispatchEvent(event);
+    };
+  }, []);
 
   useEffect(() => {
     if (!token) {
