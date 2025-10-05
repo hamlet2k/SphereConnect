@@ -61,7 +61,6 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
 
   const loadRanks = useCallback(async () => {
     try {
-      console.log('Loading ranks for guild:', guildId);
       const token = localStorage.getItem('token');
       const response = await fetch(`http://localhost:8000/api/admin/ranks?guild_id=${guildId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -69,16 +68,12 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
 
       if (response.ok) {
         const data = await response.json();
-        console.log('Loaded ranks data:', data);
         const processedRanks = data.map((rank: any) => ({
           id: rank.id,
           name: rank.name,
           hierarchy_level: rank.hierarchy_level
         }));
-        console.log('Processed ranks:', processedRanks);
         setAvailableRanks(processedRanks);
-      } else {
-        console.error('Failed to load ranks:', response.status, response.statusText);
       }
     } catch (err: any) {
       console.error('Error loading ranks:', err);
@@ -262,8 +257,6 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
         })
       };
 
-      console.log('Submitting form data:', submitData);
-
       if (objective?.id) {
         // Update existing objective
         result = await updateObjective(objective.id, submitData);
@@ -404,15 +397,8 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
                     <input
                       type="checkbox"
                       checked={
-                        (() => {
-                          const isChecked = formData.allowed_ranks.includes(rank.id) ||
-                            (typeof formData.allowed_ranks[0] === 'string' && formData.allowed_ranks.includes(rank.name));
-                          console.log(`Checkbox for ${rank.name} (${rank.id}): ${isChecked ? 'CHECKED' : 'UNCHECKED'}`);
-                          console.log(`formData.allowed_ranks:`, formData.allowed_ranks);
-                          console.log(`Checking if includes rank.id (${rank.id}):`, formData.allowed_ranks.includes(rank.id));
-                          console.log(`Checking if includes rank.name (${rank.name}):`, formData.allowed_ranks.includes(rank.name));
-                          return isChecked;
-                        })()
+                        formData.allowed_ranks.includes(rank.id) ||
+                        (typeof formData.allowed_ranks[0] === 'string' && formData.allowed_ranks.includes(rank.name))
                       }
                       onChange={(e) => {
                         const checked = e.target.checked;

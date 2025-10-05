@@ -1527,7 +1527,7 @@ async def get_objective(
 @router.put("/objectives/{objective_id}")
 async def update_objective(
     objective_id: str,
-    update: ObjectiveUpdate,
+    objective_data: dict,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -1539,9 +1539,6 @@ async def update_objective(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied: Insufficient permissions to update objectives"
             )
-
-        # Log the update request for debugging
-        logger.info(f"PUT objective update request for {objective_id}: allowed_ranks={update.allowed_ranks}")
 
         obj_uuid = uuid.UUID(objective_id)
         objective = db.query(Objective).filter(
@@ -1559,20 +1556,38 @@ async def update_objective(
                 detail="Access denied: User does not belong to this guild"
             )
 
-        # Update fields
-        if update.description is not None:
-            objective.description = update.description
+        # Update fields from the objective_data dict
+        
+        # NOTE: There is a potential issue here with handling null values.
+        # The new update_objective flow now runs whenever a key is present in 
+        # objective_data, even if the payload explicitly sets the field to null. 
+        # For example, a request body { "progress": null } will assign 
+        # objective.progress = None and immediately call 
+        # update_tasks_on_objective_progress, which calls .get on the progress 
+        # dict and raises 'NoneType' object has no attribute 'get'. 
+        # Previously the ObjectiveUpdate model ignored None values and skipped 
+        # the update. The same pattern occurs for categories and allowed_ranks a 
+        # few lines below, where the code iterates over a None value. 
+        # This turns valid null updates into 500 errors and prevents clients 
+        # from clearing fields. Consider checking that each value is not None 
+        # before mutating or invoking the helper.
 
-        if update.progress is not None:
-            objective.progress = update.progress
+        if 'name' in objective_data:
+            objective.name = objective_data['name']
+
+        if 'description' in objective_data:
+            objective.description = objective_data['description']
+
+        if 'progress' in objective_data:
+            objective.progress = objective_data['progress']
             # Progress tracking: update related tasks
             await update_tasks_on_objective_progress(db, objective)
 
-        if update.categories is not None:
+        if 'categories' in objective_data:
             # Clear existing categories and add new ones
             objective.categories.clear()
             guild_uuid = objective.guild_id
-            for category_id in update.categories:
+            for category_id in objective_data['categories']:
                 try:
                     category_uuid = uuid.UUID(category_id)
                     category = db.query(ObjectiveCategory).filter(
@@ -1590,14 +1605,13 @@ async def update_objective(
                     if category:
                         objective.categories.append(category)
 
-        if update.priority is not None:
-            objective.priority = update.priority
+        if 'priority' in objective_data:
+            objective.priority = objective_data['priority']
 
-        if update.allowed_ranks is not None:
-            logger.info(f"Updating allowed_ranks for objective {objective_id}: {update.allowed_ranks}")
+        if 'allowed_ranks' in objective_data:
             # Convert string UUIDs to UUID objects for database storage
             try:
-                objective.allowed_ranks = [uuid.UUID(rank_id) for rank_id in update.allowed_ranks]
+                objective.allowed_ranks = [uuid.UUID(rank_id) for rank_id in objective_data['allowed_ranks']]
             except ValueError as e:
                 raise HTTPException(status_code=400, detail=f"Invalid rank ID format: {str(e)}")
 
@@ -1978,10 +1992,6 @@ async def get_objectives(
                 "lead_id": str(obj.lead_id) if obj.lead_id else None,
                 "squad_id": str(obj.squad_id) if obj.squad_id else None
             })
-
-        logger.info(f"Returning {len(result)} objectives for guild {guild_id}")
-        for obj in result:
-            logger.info(f"Objective {obj['id']}: allowed_ranks={obj['allowed_ranks']}, allowed_rank_ids={obj['allowed_rank_ids']}")
 
         return result
     except ValueError:

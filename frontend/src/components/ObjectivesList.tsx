@@ -64,12 +64,6 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
       if (categoryIdFilter) filters.category_id = categoryIdFilter;
 
       const data = await getObjectives(currentGuildId, filters);
-      console.log('Loaded objectives:', data);
-      data.forEach((obj, index) => {
-        console.log(`Objective ${index}:`, obj);
-        console.log(`Objective ${index} allowed_ranks:`, obj.allowed_ranks);
-        console.log(`Objective ${index} allowed_rank_ids:`, obj.allowed_rank_ids);
-      });
       setObjectives(data);
     } catch (err: any) {
       showBannerMessage('error', err.message);
@@ -160,9 +154,6 @@ const ObjectivesList: React.FC<ObjectivesListProps> = ({
   };
 
   const handleEditObjective = (objective: Objective) => {
-    console.log('Editing objective:', objective);
-    console.log('Objective allowed_ranks:', objective.allowed_ranks);
-    console.log('Objective allowed_rank_ids:', objective.allowed_rank_ids);
     setEditingObjective(objective);
     setShowForm(true);
     clearFormFeedback();
