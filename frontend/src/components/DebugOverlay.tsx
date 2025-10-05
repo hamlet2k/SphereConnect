@@ -11,6 +11,7 @@ import { useLocation } from 'react-router-dom';
 import api, { ApiRequestLog, apiDebugStore } from '../api';
 import { useGuild } from '../contexts/GuildContext';
 import { DEBUG_OVERLAY_ENABLED, useDebugOverlay } from '../hooks/useDebugOverlay';
+import DebugJsonViewer from './DebugJsonViewer';
 
 interface AuthSnapshot {
   token: string | null;
@@ -152,116 +153,6 @@ const copyTextToClipboard = async (value: string): Promise<boolean> => {
   } catch (err) {
     return false;
   }
-};
-
-interface JsonInspectorProps {
-  value: any;
-  style?: CSSProperties;
-  onCopy?: (value: string) => void | Promise<void>;
-}
-
-const JsonInspector: React.FC<JsonInspectorProps> = ({ value, style, onCopy }) => {
-  const renderLine = useCallback(
-    (line: string, lineIndex: number): React.ReactNode => {
-      const regex = /("([^"]*id[^"]*)":\s*)("([^"]+)"|-?\d+(?:\.\d+)?)/gi;
-      let lastIndex = 0;
-      let matchIndex = 0;
-      const parts: React.ReactNode[] = [];
-      let match: RegExpExecArray | null;
-
-      while ((match = regex.exec(line)) !== null) {
-        if (match.index > lastIndex) {
-          parts.push(line.slice(lastIndex, match.index));
-        }
-
-        const prefix = match[1];
-        const valueWithFormatting = match[3];
-        const copyValue = match[4] ?? match[3];
-
-        parts.push(prefix);
-        parts.push(
-          <span
-            key={`json-id-${lineIndex}-${matchIndex}`}
-            role="button"
-            tabIndex={0}
-            style={{ cursor: 'pointer', color: '#93C5FD', textDecoration: 'underline dotted' }}
-            title="Copy ID"
-            onClick={(event) => {
-              event.stopPropagation();
-              if (onCopy) {
-                const maybePromise = onCopy(String(copyValue));
-                if (maybePromise && typeof (maybePromise as PromiseLike<unknown>).then === 'function') {
-                  (maybePromise as PromiseLike<unknown>).then(undefined, () => {});
-                }
-              }
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                event.stopPropagation();
-                if (onCopy) {
-                  const maybePromise = onCopy(String(copyValue));
-                  if (maybePromise && typeof (maybePromise as PromiseLike<unknown>).then === 'function') {
-                    (maybePromise as PromiseLike<unknown>).then(undefined, () => {});
-                  }
-                }
-              }
-            }}
-          >
-            {valueWithFormatting}
-          </span>
-        );
-
-        lastIndex = regex.lastIndex;
-        matchIndex += 1;
-      }
-
-      if (lastIndex < line.length) {
-        parts.push(line.slice(lastIndex));
-      }
-
-      if (parts.length === 0) {
-        return line;
-      }
-
-      return parts;
-    },
-    [onCopy]
-  );
-
-  const content = useMemo(() => {
-    if (value === undefined) {
-      return 'undefined';
-    }
-
-    const json = JSON.stringify(value, null, 2);
-    if (typeof json !== 'string') {
-      return 'null';
-    }
-
-    const lines = json.split('\n');
-    return lines.map((line, index) => (
-      <React.Fragment key={index}>
-        {renderLine(line, index)}
-        {index < lines.length - 1 ? '\n' : null}
-      </React.Fragment>
-    ));
-  }, [renderLine, value]);
-
-  return (
-    <pre
-      style={{
-        margin: 0,
-        whiteSpace: 'pre-wrap',
-        wordBreak: 'break-word',
-        fontFamily: 'monospace',
-        fontSize: '0.85rem',
-        ...style
-      }}
-    >
-      {content}
-    </pre>
-  );
 };
 
 const inlineCopyableStyle: CSSProperties = {
@@ -527,6 +418,20 @@ const DebugOverlayInner: React.FC = () => {
     document.addEventListener('mouseup', handleDragEnd);
   }, [handleDragEnd, handleDragMove]);
 
+  const handleHeaderDoubleClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (draggingRef.current) {
+        draggingRef.current = false;
+        document.removeEventListener('mousemove', handleDragMove);
+        document.removeEventListener('mouseup', handleDragEnd);
+      }
+      setIsMinimized((prev) => !prev);
+    },
+    [handleDragEnd, handleDragMove]
+  );
+
   const handleResizeMove = useCallback((event: MouseEvent) => {
     if (!resizingRef.current) {
       return;
@@ -731,15 +636,15 @@ const DebugOverlayInner: React.FC = () => {
       </div>
       <div style={{ marginBottom: 8 }}>
         <strong>User:</strong>
-        <div style={{ fontFamily: 'monospace', fontSize: '0.85rem', marginTop: 4 }}>
+        <div style={{ marginTop: 4 }}>
           {authSnapshot.user ? (
-            <JsonInspector
+            <DebugJsonViewer
               value={{
                 id: authSnapshot.user?.id,
                 username: authSnapshot.user?.username,
                 email: authSnapshot.user?.email
               }}
-              onCopy={handleCopyValue}
+              onCopyValue={handleCopyValue}
             />
           ) : (
             <span>No user loaded</span>
@@ -756,9 +661,9 @@ const DebugOverlayInner: React.FC = () => {
       </div>
       <div style={{ marginBottom: 8 }}>
         <strong>Last API Call:</strong>
-        <div style={{ fontFamily: 'monospace', fontSize: '0.85rem', marginTop: 4 }}>
+        <div style={{ marginTop: 4 }}>
           {(apiDebugState.lastResponse || apiDebugState.lastRequest) ? (
-            <JsonInspector
+            <DebugJsonViewer
               value={{
                 method: (apiDebugState.lastResponse || apiDebugState.lastRequest)?.method,
                 url: (apiDebugState.lastResponse || apiDebugState.lastRequest)?.url,
@@ -766,7 +671,7 @@ const DebugOverlayInner: React.FC = () => {
                 durationMs: apiDebugState.lastResponse?.durationMs,
                 errorMessage: apiDebugState.lastResponse?.errorMessage
               }}
-              onCopy={handleCopyValue}
+              onCopyValue={handleCopyValue}
             />
           ) : (
             <span>No requests logged yet</span>
@@ -803,15 +708,15 @@ const DebugOverlayInner: React.FC = () => {
       </div>
       <div style={{ marginBottom: 8 }}>
         <strong>Access Levels:</strong>
-        <JsonInspector value={userAccessEntries || []} onCopy={handleCopyValue} />
+        <DebugJsonViewer value={userAccessEntries || []} onCopyValue={handleCopyValue} />
       </div>
       <div style={{ marginBottom: 8 }}>
         <strong>UserAccess Entry:</strong>
-        <JsonInspector value={guildUserEntry || {}} onCopy={handleCopyValue} />
+        <DebugJsonViewer value={guildUserEntry || {}} onCopyValue={handleCopyValue} />
       </div>
       <div style={{ marginBottom: 8 }}>
         <strong>Flags:</strong>
-        <JsonInspector value={guildFlags} onCopy={handleCopyValue} />
+        <DebugJsonViewer value={guildFlags} onCopyValue={handleCopyValue} />
       </div>
       <div style={{ marginBottom: 8 }}>
         <strong>Preferences JSON:</strong>
@@ -822,9 +727,9 @@ const DebugOverlayInner: React.FC = () => {
       {guildDetails && (
         <details style={{ marginTop: 8 }}>
           <summary style={{ cursor: 'pointer' }}>Guild Raw Payload</summary>
-          <JsonInspector
+          <DebugJsonViewer
             value={guildDetails}
-            onCopy={handleCopyValue}
+            onCopyValue={handleCopyValue}
             style={{ marginTop: 8, fontSize: '0.8rem' }}
           />
         </details>
@@ -848,10 +753,10 @@ const DebugOverlayInner: React.FC = () => {
             ) : (
               <div style={{ marginTop: 8, maxHeight: 180, overflowY: 'auto' }}>
                 {history.map((entry: ApiRequestLog) => (
-                  <JsonInspector
+                  <DebugJsonViewer
                     key={entry.id}
                     value={entry}
-                    onCopy={handleCopyValue}
+                    onCopyValue={handleCopyValue}
                     style={{
                       background: '#0B1120',
                       padding: '8px',
@@ -871,10 +776,10 @@ const DebugOverlayInner: React.FC = () => {
             ) : (
               <div style={{ marginTop: 8, maxHeight: 140, overflowY: 'auto' }}>
                 {refreshEvents.map((event) => (
-                  <JsonInspector
+                  <DebugJsonViewer
                     key={event.id}
                     value={event}
-                    onCopy={handleCopyValue}
+                    onCopyValue={handleCopyValue}
                     style={{
                       background: '#0B1120',
                       padding: '8px',
@@ -889,14 +794,14 @@ const DebugOverlayInner: React.FC = () => {
           </div>
           <div>
             <strong>Authentication Context Snapshot</strong>
-            <JsonInspector
+            <DebugJsonViewer
               value={{
                 user: authSnapshot.user,
                 token: authSnapshot.token,
                 refreshToken: authSnapshot.refreshToken,
                 permissionCache: authSnapshot.permissionCache
               }}
-              onCopy={handleCopyValue}
+              onCopyValue={handleCopyValue}
               style={{
                 marginTop: 8,
                 background: '#0B1120',
@@ -923,9 +828,9 @@ const DebugOverlayInner: React.FC = () => {
     }
 
     return (
-      <JsonInspector
+      <DebugJsonViewer
         value={contextData}
-        onCopy={handleCopyValue}
+        onCopyValue={handleCopyValue}
         style={{
           margin: 0,
           fontSize: '0.8rem',
@@ -1016,6 +921,7 @@ const DebugOverlayInner: React.FC = () => {
       <div
         style={headerStyle}
         onMouseDown={handleDragStart}
+        onDoubleClick={handleHeaderDoubleClick}
       >
         <div style={headerTitleStyle}>
           SphereConnect Debug Overlay
