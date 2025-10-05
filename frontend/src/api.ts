@@ -1,5 +1,88 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 
+export interface ApiRequestLog {
+  id: number;
+  method: string;
+  url: string;
+  status?: number;
+  statusText?: string;
+  timestamp: number;
+  durationMs?: number;
+  errorMessage?: string;
+}
+
+export interface TokenRefreshEvent {
+  id: number;
+  timestamp: number;
+  status: 'success' | 'failure';
+  message?: string;
+}
+
+export interface ApiDebugState {
+  lastRequest: ApiRequestLog | null;
+  lastResponse: ApiRequestLog | null;
+  requestHistory: ApiRequestLog[];
+  tokenRefreshEvents: TokenRefreshEvent[];
+}
+
+const apiDebugState: ApiDebugState = {
+  lastRequest: null,
+  lastResponse: null,
+  requestHistory: [],
+  tokenRefreshEvents: []
+};
+
+type DebugSubscriber = () => void;
+
+const debugSubscribers = new Set<DebugSubscriber>();
+
+const notifyDebugSubscribers = () => {
+  debugSubscribers.forEach((listener) => {
+    try {
+      listener();
+    } catch (err) {
+      // Swallow subscriber errors to avoid breaking API requests in production.
+      if (process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console
+        console.warn('Debug overlay subscriber error', err);
+      }
+    }
+  });
+};
+
+export const apiDebugStore = {
+  subscribe(listener: DebugSubscriber) {
+    debugSubscribers.add(listener);
+    return () => {
+      debugSubscribers.delete(listener);
+    };
+  },
+  getState(): ApiDebugState {
+    return apiDebugState;
+  }
+};
+
+interface DebuggableAxiosConfig extends InternalAxiosRequestConfig {
+  metadata?: {
+    requestLog?: ApiRequestLog;
+  };
+  _retry?: boolean;
+}
+
+const buildRequestUrl = (config: InternalAxiosRequestConfig) => {
+  const requestUrl = config.url || '';
+  if (!config.baseURL) {
+    return requestUrl;
+  }
+  if (/^https?:/i.test(requestUrl)) {
+    return requestUrl;
+  }
+  return `${config.baseURL}${requestUrl}`;
+};
+
+let requestCounter = 0;
+let tokenRefreshCounter = 0;
+
 const api: AxiosInstance = axios.create({
   baseURL: 'http://localhost:8000/api',
 });
@@ -12,6 +95,23 @@ api.interceptors.request.use(
       config.headers = config.headers || {};
       config.headers['Authorization'] = `Bearer ${token}`;
     }
+
+    const debugConfig = config as DebuggableAxiosConfig;
+    const requestLog: ApiRequestLog = {
+      id: ++requestCounter,
+      method: (config.method || 'GET').toUpperCase(),
+      url: buildRequestUrl(config),
+      timestamp: Date.now()
+    };
+
+    debugConfig.metadata = {
+      ...(debugConfig.metadata || {}),
+      requestLog
+    };
+
+    apiDebugState.lastRequest = requestLog;
+    notifyDebugSubscribers();
+
     return config;
   },
   (error) => Promise.reject(error)
@@ -41,11 +141,65 @@ const processQueue = (error: any, token: string | null = null) => {
 };
 
 api.interceptors.response.use(
-  (response: AxiosResponse) => response,
+  (response: AxiosResponse) => {
+    const debugConfig = response.config as DebuggableAxiosConfig;
+    const requestLog = debugConfig.metadata?.requestLog;
+    if (requestLog) {
+      const completedLog: ApiRequestLog = {
+        ...requestLog,
+        status: response.status,
+        statusText: response.statusText,
+        durationMs: Date.now() - requestLog.timestamp
+      };
+
+      debugConfig.metadata = {
+        ...(debugConfig.metadata || {}),
+        requestLog: completedLog
+      };
+
+      apiDebugState.lastResponse = completedLog;
+      apiDebugState.requestHistory = [completedLog, ...apiDebugState.requestHistory].slice(0, 20);
+      notifyDebugSubscribers();
+    }
+
+    return response;
+  },
   async (error) => {
-    const originalRequest = error.config;
+    const originalRequest = (error.config || {}) as DebuggableAxiosConfig;
+
+    const finalizeWithErrorLog = () => {
+      const baseConfig = (originalRequest as InternalAxiosRequestConfig) || error.config;
+      const requestLog = originalRequest?.metadata?.requestLog || (baseConfig
+        ? {
+            id: ++requestCounter,
+            method: (baseConfig.method || 'GET').toUpperCase(),
+            url: buildRequestUrl(baseConfig),
+            timestamp: Date.now()
+          }
+        : null);
+
+      if (requestLog) {
+        const erroredLog: ApiRequestLog = {
+          ...requestLog,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          durationMs: Date.now() - requestLog.timestamp,
+          errorMessage: error.message
+        };
+
+        originalRequest.metadata = {
+          ...(originalRequest.metadata || {}),
+          requestLog: erroredLog
+        };
+
+        apiDebugState.lastResponse = erroredLog;
+        apiDebugState.requestHistory = [erroredLog, ...apiDebugState.requestHistory].slice(0, 20);
+        notifyDebugSubscribers();
+      }
+    };
 
     if (error.response?.status === 401 && !originalRequest._retry) {
+      finalizeWithErrorLog();
       if (isRefreshing) {
         // If refresh is in progress, queue the request
         return new Promise((resolve, reject) => {
@@ -85,18 +239,39 @@ api.interceptors.response.use(
         // Process queued requests
         processQueue(null, access_token);
 
+        const refreshEvent: TokenRefreshEvent = {
+          id: ++tokenRefreshCounter,
+          timestamp: Date.now(),
+          status: 'success',
+          message: 'Access token refreshed via /auth/refresh'
+        };
+        apiDebugState.tokenRefreshEvents = [refreshEvent, ...apiDebugState.tokenRefreshEvents].slice(0, 20);
+        notifyDebugSubscribers();
+
         return api(originalRequest);
       } catch (refreshError) {
         // Refresh failed, clear tokens and redirect
         localStorage.clear();
         window.location.href = '/login';
         processQueue(refreshError, null);
+
+        const refreshEvent: TokenRefreshEvent = {
+          id: ++tokenRefreshCounter,
+          timestamp: Date.now(),
+          status: 'failure',
+          message: refreshError instanceof Error ? refreshError.message : 'Token refresh failed'
+        };
+        apiDebugState.tokenRefreshEvents = [refreshEvent, ...apiDebugState.tokenRefreshEvents].slice(0, 20);
+        notifyDebugSubscribers();
+
+        finalizeWithErrorLog();
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
       }
     }
 
+    finalizeWithErrorLog();
     return Promise.reject(error);
   }
 );
