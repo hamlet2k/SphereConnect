@@ -1557,6 +1557,21 @@ async def update_objective(
             )
 
         # Update fields from the objective_data dict
+        
+        # NOTE: There is a potential issue here with handling null values.
+        # The new update_objective flow now runs whenever a key is present in 
+        # objective_data, even if the payload explicitly sets the field to null. 
+        # For example, a request body { "progress": null } will assign 
+        # objective.progress = None and immediately call 
+        # update_tasks_on_objective_progress, which calls .get on the progress 
+        # dict and raises 'NoneType' object has no attribute 'get'. 
+        # Previously the ObjectiveUpdate model ignored None values and skipped 
+        # the update. The same pattern occurs for categories and allowed_ranks a 
+        # few lines below, where the code iterates over a None value. 
+        # This turns valid null updates into 500 errors and prevents clients 
+        # from clearing fields. Consider checking that each value is not None 
+        # before mutating or invoking the helper.
+
         if 'name' in objective_data:
             objective.name = objective_data['name']
 
